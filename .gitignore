@@ -1,0 +1,14 @@
+# Hugo default output directory
+public/
+
+# Hugo cache and resources
+resources/
+.hugo_build.lock
+
+# OS files
+.DS_Store
+
+# Go module files
+go.sum
+
+
