@@ -8,7 +8,3 @@ resources/
 # OS files
 .DS_Store
 
-# Go module files
-go.sum
-
-
