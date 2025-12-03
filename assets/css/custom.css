@@ -1,0 +1,9 @@
+/* Center feature grid when it has fewer items */
+.hextra-feature-grid {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  margin: 0 auto !important;
+}
+
+
