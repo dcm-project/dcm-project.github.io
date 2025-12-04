@@ -21,7 +21,7 @@ communicate with the DCM Control Plane.
 
 # Non-Goals
 
-* Implementing details of registration API  
+* Implementation details of the registration API 
 * Service Provider authentication/Authorization  
 * Service catalog schema  
 * DCM Control Plane definition  
@@ -37,11 +37,11 @@ within the DCM system. The Registration Handler component implements the
 provider registration endpoints of the Service Provider API.  
 The registration phase provides to the DCM Control Plane the SP endpoint,
 metadata and capabilities, so it can route requests to the appropriate SP.  
-The registration call can be initiated either by the SP itself during start up
+The registration call can be initiated either by the SP itself during startup
 phase or by a third party (e.g. platform admins) on behalf of the SP. Both
 approaches use the same registration API.
 
-The *initial implementation* will focus only on the **self registration flow**.
+The *initial implementation* will focus only on the **self-registration flow**.
 
 The *Service Provider API* is located in the Egress layer and defines the
 contract between the DCM Control Plane and Service Providers. It includes
@@ -80,7 +80,7 @@ height: auto;">
 * Admins predefine Service Catalog offerings (e.g., "VM", "GPU")  
 * Each Service Provider must implement Service Provider API contract at a
   reachable endpoint    
-* Each Service Provider must be configured with the registration Handler URL
+* Each Service Provider must be configured with the Registration Handler URL
   during the deployment (via config file or env var).  
 * A registration call must be made to the Service Provider API (Registration
   Handler endpoint) for each resource type the SP supports.   
@@ -91,7 +91,7 @@ height: auto;">
      [https://provider-1.local/api](https://provider-1.local/api))  
   3. Metadata (zone, region, resource constraints)  
   4. Operations supported for this resource type (e.g., *“create”, “delete”*)  
-  5. References catalog service kind this provider can fulfill (e.g, “vm”,
+  5. References the catalog service kinds this provider can fulfill (e.g., “vm”,
      “container”)  
 * The Registration Handler processes and validates the metadata  
 * The Registration Handler internally updates both:  
@@ -99,8 +99,8 @@ height: auto;">
      1. SP endpoint  
      2. metadata  
   2. Service Catalog with:  
-     1. available SPs  
-     2. SPs capabilities/catalog offering references  
+     1. available SPs
+     2. SP capabilities/catalog offering references  
 * When user requests a catalog offering, Control Plane matches it to registered
   SPs that can fulfill it and calls the selected SP endpoint (endpoint must be
   reachable)
@@ -132,10 +132,10 @@ ADR, which focuses on the Service Provider registration mechanism.
 
 The registration endpoint is idempotent. If an SP's capabilities change
 (typically due to a new version following a restart), the SP (or admin) can call
-the same registration endpoint again. The Registration Handler will  update the
+the same registration endpoint again. The Registration Handler will update the
 existing SP entry rather than creating a duplicate.
 
-* SP capabilities changes   
+* SP capabilities change
 * SP restarts and re-registers using the same Service Provider API registration
   endpoint  
 * The Registration Handler detects that the SP already exists (same providerID)  
@@ -229,12 +229,12 @@ height: auto;">
 ### Registration Flow
 
 1. SP deploys and implements Services API that are listening on a network
-   endpoint  
-2. Discovery Scanner periodically scans ip addresses/ports/dns names (?)
-   invoking the `GET /discover`  
-3. SP replies with metadata payload  
-4. Control Plane validates response and authenticate the SP identity  
-5. CP updates Service Registry with SP endpoints and metadata  
+   endpoint
+2. Discovery Scanner periodically scans IP addresses/ports/DNS names (?)
+   invoking the `GET /discover`
+3. SP replies with metadata payload
+4. Control Plane validates the response and authenticates the SP identity
+5. CP updates Service Registry with SP endpoints and metadata
 6. CP update Service CAtalog with SP offered services
 
 ### Advantages
@@ -243,10 +243,10 @@ height: auto;">
   No explicit registration step is needed from the Service Provider (SP).  
 * Centralized Control  
   The Control Plane manages the discovery process, providing a centralized view
-  and timing control.  
-* Passive SPs  
-  SPs are passive; they wait to be discovered instead of actively registering.  
-* Automatic Change Detection  
+  and timing control.
+* Passive SPs
+  SPs are passive; they wait to be discovered instead of actively registering.
+* Automatic Change Detection
   Changes to SP endpoints can be automatically detected via re-scanning,
   provided the endpoint is reachable.
 
