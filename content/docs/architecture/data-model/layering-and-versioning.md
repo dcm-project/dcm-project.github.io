@@ -31,6 +31,76 @@ The layering model enables:
 
 ---
 
+## 1a. Layers vs Policies — The Clear Distinction
+
+Layers and policies are the two foundational mechanisms of DCM's assembly process. They are complementary and distinct — understanding the difference is critical to using DCM correctly.
+
+### Layers Are Data
+
+A layer is a **declarative, immutable, versioned unit of data**. It carries static configuration values, organizational defaults, compliance metadata, and contextual information. A layer answers the question: **"what values should these fields have?"**
+
+Layers are **passive** — they declare values but do not execute logic. They do not evaluate the payload, make branching decisions, or enforce rules. The assembly process merges them in priority order. Layers come first.
+
+**What belongs in a layer:**
+- Infrastructure defaults (DNS servers, NTP servers, MTU values)
+- Organizational context (data center location, rack assignment, environment tier)
+- Service-specific configuration defaults (VM sizing defaults, storage class preferences)
+- Compliance metadata (data classification labels, retention tags, jurisdiction markers)
+- Provider-specific configuration (provider default settings, tooling parameters)
+- Business context (cost center defaults, environment labels, team tags)
+
+### Policies Are Logic
+
+A policy is an **executable rule** that evaluates the assembled payload and takes action. A policy answers the question: **"given this data, is it valid? what should change? should this proceed?"**
+
+Policies **execute** — they run logic (OPA Rego, DCM native rules, Mode 4 black box calls). They can read every layer-provided value, validate correctness, transform fields, inject derived values, and gate requests. Policies come after layers — they operate on the assembled result.
+
+**What belongs in a policy:**
+- Validation rules ("this field must be present and within these bounds")
+- Compliance enforcement ("all resources must have a classification label")
+- Derived value injection ("inject cost center from OIDC claims")
+- Placement constraints ("must be in EU sovereignty zone")
+- Approval gates ("resources above X size require manager approval")
+- Security enforcement ("encryption must be enabled — if not, enable it or reject")
+
+### The Flow Is Strictly Unidirectional
+
+```
+Steps 1-4: LAYERS assembled → merged payload produced
+  │  Layers contribute field values
+  │  Higher priority layers override lower priority
+  │  Immutable fields locked at this stage
+  │
+  ▼
+Steps 5-9: POLICIES execute → payload evaluated and acted upon
+  │  Policies read assembled payload
+  │  Transformation: modify/inject derived fields
+  │  Validation: verify correctness
+  │  GateKeeper: approve or reject
+  │
+  ▼
+Provider-ready payload dispatched
+```
+
+Policies cannot set static configuration — that is a layer's job. A policy that finds itself repeatedly injecting the same static value into every request should be refactored: that value belongs in a layer.
+
+Layers cannot enforce rules — that is a policy's job. A layer that contains conditional logic or rule evaluation is being misused — that logic belongs in a policy.
+
+### The Decision Rule for Practitioners
+
+> "Is this a **value** that should appear in the payload? → **Layer**  
+> Is this a **rule** about whether the payload is correct? → **Policy**  
+> Is this a **value derived by evaluating** the payload? → **Policy** (Transformation type)"
+
+### The Analogy
+
+- Layers are the **ingredients** — pre-measured, pre-arranged, versioned
+- Policies are the **chef** — decides what to do with the ingredients, can add derived elements, makes judgment calls, can reject the dish entirely
+
+Both are necessary. Neither replaces the other.
+
+---
+
 ## 2. What is a Layer?
 
 A Layer is a **declarative, immutable, versioned unit of data** that contributes some or all of its fields to a merged payload. Layers do not execute — they declare. The assembly process is what merges them.
@@ -206,23 +276,139 @@ Every layer has a formal identity model with three components that together make
 
 ### 4.1 Layer Domain
 
-The **Layer Domain** is the organizational and architectural home of a layer. It declares ownership, storage location, and authorization scope — who can create and modify this layer, and which other layers it can override.
+The **Layer Domain** mirrors the Policy domain model exactly. It declares ownership, storage location, and authorization scope. The same domain hierarchy, the same authority model, the same override precedence.
 
 | Domain | Meaning | Authorization | Can Override |
 |--------|---------|--------------|-------------|
-| `system` | DCM built-in layers, shipped with DCM | DCM maintainers only | Nothing above system |
-| `platform` | Platform team layers, apply across all tenants | Platform team | tenant, service, provider |
-| `tenant` | Tenant-specific layers | Tenant Admin | service, provider within tenant |
+| `system` | DCM built-in layers — ship with DCM | DCM maintainers only | Nothing above system |
+| `platform` | Platform team layers — apply across all Tenants | Platform team | tenant, service, provider |
+| `tenant` | Tenant-specific layers — scoped to one Tenant | Tenant Admin | service, provider within Tenant |
 | `service` | Service Provider contributed layers | Service Provider owner | provider |
 | `provider` | Provider Catalog Item layers | Provider owner | Nothing above provider |
+| `request` | Consumer-declared values in the request itself | Consumer | Nothing above request — lowest authority |
 
 A lower-domain layer cannot override a higher-domain layer. A `tenant` layer cannot override a `platform` layer. This is enforced at ingestion — the conflict detection pipeline checks domain authority before allowing a merge.
 
-### 4.2 Layer Handle
+**Domain mirrors policy authority:** Just as system-domain policies have highest authority in the Policy Engine, system-domain layers have highest authority in the assembly process. The same mental model applies to both.
 
-The **Layer Handle** is the human-readable, stable identifier for a layer within DCM. It complements the UUID (machine-meaningful) with a reference that humans can use in conversation, documentation, policy declarations, and audit records.
+### 4.2 Layer Groups — DCMGroup with group_class: layer_grouping
 
-**Format:** `{domain}/{layer_type}/{name}`
+Just as Policy Groups organize policies into cohesive concern-based collections, **Layer Groups** organize layers. A Layer Group is a `DCMGroup` with `group_class: layer_grouping` — a versioned, audited, GitOps-managed collection of related layers.
+
+Layer Groups enable:
+- **Discovery** — "show me all layers related to PCI compliance"
+- **Composition** — include a group in a profile rather than listing individual layers
+- **Governance** — activate or deactivate a concern's worth of layers in one operation
+
+```yaml
+# A Layer Group — DCMGroup with group_class: layer_grouping
+dcm_group:
+  artifact_metadata:
+    uuid: <uuid>
+    handle: "platform/layer-groups/pci-network-standards"
+    version: "1.0.0"
+    status: active
+  group_class: layer_grouping
+  concern_tags: [pci-dss, networking, standards]
+  members:
+    - member_uuid: <layer-uuid>
+      member_type: layer
+      member_role: network_segmentation_defaults
+    - member_uuid: <layer-uuid>
+      member_type: layer
+      member_role: firewall_baseline
+    - member_uuid: <layer-uuid>
+      member_type: layer
+      member_role: tls_minimum_version
+```
+
+### 4.3 The Full Layer Structure
+
+Every layer carries: identity, domain and authority, compatibility metadata, per-field override metadata, and usage context. This mirrors the richness of a Policy registration.
+
+```yaml
+layer:
+  artifact_metadata:
+    uuid: <uuid>
+    handle: "platform/core/default-dns-config"
+    version: "1.2.0"
+    status: active
+    owned_by:
+      display_name: "Platform Infrastructure Team"
+      notification_endpoint: <endpoint>
+    created_via: pr   # pr | api | migration | system
+
+  # DOMAIN AND AUTHORITY
+  domain: platform
+  priority:
+    value: "500.20.0"
+    label: "platform.networking.dns"
+    category: platform
+    rationale: "Platform DNS infrastructure — primary and secondary resolvers"
+
+  # CONCERN TAGS — for discoverability and grouping
+  concern_tags: [networking, dns, platform-defaults]
+
+  # COMPATIBILITY METADATA — what this layer applies to
+  compatibility:
+    resource_types: [Compute.VirtualMachine, Compute.Container]
+    resource_type_versions: "^1.0.0"
+    provider_types: []              # empty = all providers
+    profile_constraints: []         # empty = all profiles; or: [standard, prod, fsi]
+    domains_applicable: [platform, tenant, service, provider]  # which domains may use this
+
+  # CONDITIONAL INCLUSION (Q23) — activation condition
+  activation_condition:
+    # Layer only included if this condition evaluates true during Step 2 (Layer Resolution)
+    field: tenant.tags
+    operator: not_contains          # equals|not_equals|exists|not_exists|contains|in|not_in
+    value: custom-dns
+    # Compound conditions:
+    # conditions:
+    #   operator: and   # and | or
+    #   rules:
+    #     - field: request.gpu_requested
+    #       operator: equals
+    #       value: true
+    #     - field: ingress.actor.roles
+    #       operator: contains
+    #       value: developer
+
+  # FIELDS — with per-field override metadata
+  fields:
+    dns_servers:
+      value: [10.0.0.53, 10.0.0.54]
+      metadata:
+        override: allow             # allow | constrained | immutable
+        basis_for_value: "Platform DNS infrastructure — primary and secondary"
+        provenance_note: "Set by platform infrastructure team per INFRA-2024-089"
+    dns_search_domain:
+      value: corp.example.com
+      metadata:
+        override: immutable         # lower layers cannot override this field
+        locked_by_policy_uuid: <uuid>
+        basis_for_value: "Corporate domain — cannot be customized per SECURITY-2024-034"
+
+  # USAGE CONTEXT — human documentation embedded in the artifact
+  usage:
+    description: "Default DNS configuration for all platform VMs and containers"
+    applies_when: "All requests unless consumer declares layer exclusion or tenant has custom-dns tag"
+    excludes_when: "Tenant has custom_dns tag; consumer declares explicit layer exclusion"
+    supersedes: []                  # handles of layers this replaces
+    conflicts_with: []              # handles of layers this conflicts with — detected at ingestion
+
+  # SOURCE OF TRUTH
+  scm_location:
+    repository: https://git.corp.example.com/dcm-layers
+    path: platform/core/default-dns-config/v1.2.0.yaml
+    commit: <sha>
+```
+
+### 4.4 Layer Handle
+
+The **Layer Handle** is the human-readable, stable identifier for a layer within DCM.
+
+**Format:** `{domain}/{concern_or_type}/{name}`
 
 **Examples:**
 ```
@@ -234,24 +420,18 @@ service/service/kubevirt-vm-defaults
 provider/service/cloudnativepg-database-config
 ```
 
-**Rules:**
-- Unique within DCM — enforced at ingestion
-- Stable across versions — the handle does not change when a new version is published
-- URL-safe characters only — lowercase, hyphens, forward slashes
-- The Git file path mirrors the handle structure exactly
-
 **Git path from handle:**
 ```
-{layer_store_root}/{domain}/{layer_type}/{name}/v{Major}.{Minor}.{Revision}.yaml
+{layer_store_root}/{domain}/{concern_or_type}/{name}/v{Major}.{Minor}.{Revision}.yaml
 
 # Example:
 dcm-layers/platform/core/security-cpu-limits/v1.2.0.yaml
 dcm-layers/tenant/{tenant-uuid}/service/payments-vm-standards/v1.0.0.yaml
 ```
 
-### 4.3 Priority Schema
+### 4.5 Priority Schema
 
-The **Priority Schema** is the deterministic ordering mechanism for resolving conflicts between layers of the same type and scope. It uses a hierarchical dotted-notation system that supports infinite differentiation — new priority values can always be inserted between any two existing values.
+The **Priority Schema** is the deterministic ordering mechanism for resolving conflicts between layers of the same type and scope.
 
 **Format:** `{integer}.{integer}.{integer}...` — unlimited depth
 
@@ -260,18 +440,11 @@ The **Priority Schema** is the deterministic ordering mechanism for resolving co
 ```
 900.10    beats    800.10    (900 > 800 at segment 1)
 900.20    beats    900.10    (20 > 10 at segment 2)
-900.10.5  beats    900.10    (longer path with matching prefix — 5 at segment 3 > nothing)
+900.10.5  beats    900.10    (longer path with matching prefix)
 900.10.10 beats    900.10.5  (10 > 5 at segment 3)
 ```
 
-**Infinite insertability — symmetric in both directions:**
-Between `900.10` and `900.20` insert `900.15`. Between existing values or above the current maximum — there is no ceiling. You can always go higher. This is the key advantage over a lower-wins model which would have a hard floor at 1.
-
-**Priority Label:** Semantic context for the numeric value — human-readable, does not affect ordering.
-
 **Reference Priority Taxonomy (advisory — not enforced by DCM):**
-
-DCM ships a reference taxonomy as documentation and starter templates. Organizations adopt, adapt, or ignore it — DCM resolves conflicts purely by numeric comparison. The taxonomy is a suggested convention, not a system constraint.
 
 | Suggested Range | Category | Rationale |
 |-----------------|----------|-----------|
@@ -285,20 +458,7 @@ DCM ships a reference taxonomy as documentation and starter templates. Organizat
 | `200.*` | Site | Location-specific overrides |
 | `100.*` | Custom | Implementor-defined — lowest standard category |
 
-Higher number = higher priority. An organization that needs a mandate above all standard categories simply uses `1000.*` or above — no renumbering required. An organization that prioritizes sovereignty above compliance would simply swap their `700.*` and `900.*` ranges.
-
-**Priority in a layer definition:**
-
-```yaml
-priority:
-  value: "800.30.10"
-  label: "security.container.cpu_limits"
-  category: security
-  rationale: >
-    CPU limit enforcement for container workloads per
-    CISO mandate SEC-2024-047. Overrides platform defaults
-    to ensure no container can exceed approved limits.
-```
+Higher number = higher priority. Organizations adopt, adapt, or ignore this taxonomy — DCM resolves conflicts purely by numeric comparison.
 
 ---
 
@@ -1421,16 +1581,165 @@ The layer chain of a Realized Entity is always traceable — given a Realized St
 
 ---
 
-## 13. Open Questions
+## 13. Layer Gaps — Q21 through Q24
+
+### 13.1 Consumer Layer Exclusion (Q21)
+
+Consumers may explicitly exclude specific layers from their request. Each exclusion carries a mandatory human-readable reason recorded in provenance and the audit trail.
+
+```yaml
+request:
+  resource_type: Compute.VirtualMachine
+  layer_exclusions:
+    - layer_handle: "platform/networking/default-dns-config"
+      reason: "This VM uses custom DNS — default config conflicts with application requirements"
+    - layer_uuid: <uuid>
+      reason: "Dev environment — monitoring layer not required"
+```
+
+**Exclusion mechanics:**
+- Excluded layers are removed from the candidate set during **Step 2 (Layer Resolution)** before priority ordering
+- Excluded layers produce no fields in the assembled payload
+- If a validation policy requires a field that would have been injected by an excluded layer, the validation fails with a clear message identifying the excluded layer
+- Exclusion is different from override — exclusion removes the entire layer; override changes specific field values
+
+**Policy enforcement:** GateKeeper policies may declare specific layers non-excludable:
+
+```yaml
+policy:
+  type: gatekeeper
+  rule: >
+    If request.layer_exclusions CONTAINS layer.concern_tags CONTAINS "security-baseline"
+    THEN gatekeep: "Security baseline layers cannot be excluded"
+  immutable_ceiling: absolute
+```
+
+### 13.2 Service Layer Versioning (Q22)
+
+Service Layers are **independently versioned artifacts** — not coupled to Service Provider versions. Service Providers declare semver-compatible version constraints for the layers they use.
+
+```yaml
+# Service Provider registration — layer compatibility declarations
+provider_registration:
+  layer_compatibility:
+    - layer_handle: "layers/vm-compute-defaults"
+      compatible_versions: "^1.0.0"    # any 1.x version
+    - layer_handle: "layers/vm-networking-config"
+      compatible_versions: "~1.2"      # any 1.2.x revision
+```
+
+**Version lifecycle:** Service Layers follow the standard five-status artifact lifecycle. A deprecated Service Layer continues to work for existing realizations until retired. If a provider bumps to a new major version and updates its compatibility declaration, the old layer version is no longer used for new requests via that provider but continues to work for existing realizations.
+
+**Cache invalidation:** Service Layer Cache entries carry the layer version. When the registered layer version increments, the cache entry is invalidated and refreshed before the next assembly.
+
+### 13.3 Conditional Layer Inclusion (Q23)
+
+Layers may declare an `activation_condition` — a field comparison evaluated during **Step 2 (Layer Resolution)**. Layers whose condition evaluates false are excluded from the candidate set.
+
+```yaml
+layer:
+  handle: "platform/compute/gpu-config"
+  activation_condition:
+    field: request.gpu_requested
+    operator: equals
+    value: true
+```
+
+**Compound conditions:**
+```yaml
+activation_condition:
+  conditions:
+    operator: and   # and | or
+    rules:
+      - field: request.gpu_requested
+        operator: equals
+        value: true
+      - field: request.resource_class
+        operator: in
+        value: [ml-training, gpu-compute]
+```
+
+**Condition field scope** — activation conditions may reference:
+- Request fields (`request.gpu_requested`)
+- Tenant attributes (`tenant.tags`, `tenant.profile`)
+- Resource type fields (`resource_type.version`)
+- Core Layer fields already resolved in Step 1 (`core_layers.location_region`)
+- Ingress fields (`ingress.actor.roles`) — enabling role-specific layers
+
+**Condition vs consumer exclusion:** Conditional inclusion is declared by the layer author and evaluated automatically. Consumer exclusion (Q21) is declared at request time by the consumer. Both result in the layer being absent from the candidate set — but for different reasons, recorded differently in provenance.
+
+### 13.4 Layer Chain and Service Dependencies (Q24)
+
+Each service dependency executes its **own independent layer chain** during assembly. Dependencies do not share the parent request's layer chain.
+
+**Dependencies inherit from parent (read-only context):**
+- Tenant UUID and sovereignty context
+- Parent's resolved placement fields (declared by Resource Type Specification as `propagated_to_dependencies`)
+- Parent's resolved identity fields (hostname, etc.)
+- Active Profile
+
+**Dependencies do NOT inherit:**
+- Parent consumer declarations
+- Resource-type-specific layers (each type has its own)
+- Provider-specific layers (each provider has its own)
+
+**Dependency assembly flow:**
+```
+Parent request: Compute.VirtualMachine
+  │
+  ▼  Steps 1-4: Parent layer chain → parent_assembled_payload
+  │
+  ▼  Step 5: Pre-placement policies on parent
+  │
+  ▼  Step 6: Placement loop — parent provider selected
+  │           Also identifies required dependency providers
+  │
+  ▼  For each dependency (parallel where ordering allows):
+  │  ├── Network.IPAddress → own layer chain (Steps 1-4)
+  │  │     Context: inherits parent resolved placement fields
+  │  ├── Network.Port → own layer chain (Steps 1-4)
+  │  │     Context: inherits parent + IP resolution result
+  │  └── DNS.Record → own layer chain (Steps 1-4)
+  │         Context: inherits parent + IP + Port results
+  │
+  ▼  Steps 7-9: Post-placement, storage, dispatch
+       Parent + all dependency payloads dispatched together
+```
+
+**Layer exclusions on dependencies** — consumers may declare per-dependency exclusions:
+```yaml
+request:
+  resource_type: Compute.VirtualMachine
+  dependencies:
+    - resource_type: Network.IPAddress
+      layer_exclusions:
+        - layer_handle: "layers/ip-default-ttl-config"
+          reason: "Custom TTL required — excluding default"
+```
+
+---
+
+## 13a. Layer System Policies
+
+| Policy | Rule |
+|--------|------|
+| `LAY-001` | Consumers may declare `layer_exclusions` in their request. Each exclusion must carry a human-readable reason recorded in provenance. GateKeeper policies may declare specific layers non-excludable. Excluded layers produce no fields in the assembled payload. |
+| `LAY-002` | Service Layers are independently versioned artifacts. Service Providers declare layer compatibility using semver constraints. Service Layer Cache entries carry the layer version and are invalidated when the registered version changes. |
+| `LAY-003` | Service Layers may declare `activation_condition` evaluated during Step 2 (Layer Resolution). Layers whose conditions evaluate false are excluded from the candidate set. Condition evaluation results are recorded in the assembly provenance. Conditions may reference request fields, tenant attributes, resource type fields, resolved core layer fields, and ingress fields. |
+| `LAY-004` | Each service dependency executes its own independent layer chain during assembly. Dependencies inherit the parent's resolved placement and identity fields as declared by the Resource Type Specification. Dependencies do not inherit parent consumer declarations, resource-type-specific layers, or provider-specific layers. Layer exclusions may be declared per-dependency. |
+
+---
+
+## 14. Open Questions
 
 | # | Question | Impact | Status |
 |---|----------|--------|--------|
 | 1 | How are conflicting Service Layers at the same precedence level resolved? | Assembly determinism | ✅ Resolved — priority schema + conflict detection at ingestion |
 | 2 | Should Core Layers be ordered within their precedence level? | Merge determinism | ✅ Resolved — priority schema provides deterministic ordering |
-| 3 | Can a consumer explicitly exclude a layer from their request? | Consumer control vs. standardization | ❓ Unresolved |
-| 4 | How are Service Layers registered and versioned relative to Service Provider registration? | Provider contract | ❓ Unresolved |
-| 5 | Should assembly support conditional layer inclusion? | Assembly flexibility | ❓ Unresolved |
-| 6 | How does the layer chain interact with service dependencies? | Dependency model | ❓ Unresolved |
+| 3 | Can a consumer explicitly exclude a layer from their request? | Consumer control vs. standardization | ✅ Resolved — layer_exclusions with mandatory reason; GateKeeper can lock layers as non-excludable (LAY-001) |
+| 4 | How are Service Layers registered and versioned relative to Service Provider registration? | Provider contract | ✅ Resolved — independently versioned; provider declares semver compatibility; cache invalidation on version change (LAY-002) |
+| 5 | Should assembly support conditional layer inclusion? | Assembly flexibility | ✅ Resolved — activation_condition on layers; evaluated in Step 2; references request, tenant, resource type, core layer, and ingress fields (LAY-003) |
+| 6 | How does the layer chain interact with service dependencies? | Dependency model | ✅ Resolved — each dependency has its own layer chain; inherits parent resolved placement context; no consumer declaration inheritance (LAY-004) |
 | 7 | Should `override_preference` be declarable in layer definitions as a hint to the Policy Engine? | Override control | ❓ Unresolved |
 | 8 | When `override_preference: immutable` is set by a Global policy, can a higher-priority Global policy still override it? | Override control precedence | ❓ Unresolved |
 | 9 | Should the `constraint_schema` on a constrained field be visible to consumers in the Service Catalog UI? | Consumer experience | ❓ Unresolved |

@@ -271,250 +271,72 @@ All DCM capabilities — catalog, requests, entities, policies, audit, observabi
 
 ## SECTION 6 — DATA LAYERS AND THE ASSEMBLY PROCESS
 
-### 6.1 What is a Layer?
-A Layer is a **declarative, immutable, versioned unit of data** that contributes fields to a merged payload. Layers do not execute — they declare. Every layer has a UUID, follows universal versioning, is immutable once published, carries a parent entity reference, and contributes field-level provenance metadata for every field it sets.
+### 6.1 Layers vs Policies — The Clear Distinction
 
-### 6.2 Layer Types
+**Layers are data.** They carry static configuration, defaults, metadata, and context assembled into the request payload. A layer answers: "what values should these fields have?" Layers are passive — they declare values but do not execute logic. They come first in assembly (Steps 1-4).
 
-| Layer Type | Scope | Ownership | Purpose |
-|------------|-------|-----------|---------|
-| **Base Layer** | Type-agnostic or type-scoped | DCM platform / implementor | Foundation entity — minimum required fields and defaults. Every chain starts here. |
-| **Core Layers** | Type-agnostic by default | Infrastructure teams / implementors | Organizational, infrastructure, and contextual data applicable across all resource types (DC, Zone, Rack, Region, Environment) |
-| **Intermediate / Customization Layers** | Type-agnostic or type-scoped | Organizational teams / domain owners | Organizational hierarchy and deployment context overrides stacked between Core and Service Layers |
-| **Service Layers** | **Must be type-scoped** | Service Providers / service domain teams | Service-specific configuration for a specific Resource Type. Invalid without declared type scope. |
-| **Request Layer** | Scoped to requested Resource Type | Consumer | Consumer's declared intent. Becomes Intent State on submission. Has higher precedence than all data layers. |
-| **Policy Layers** | Scoped by policy domain | Policy creators / security / compliance | Governance layer — operates on the assembled payload after data layers are merged |
+**Policies are logic.** They evaluate the assembled payload and enforce rules, inject derived values, and make decisions. A policy answers: "given this data, is it valid? what should change? should this proceed?" Policies execute — they run code. They come after layers (Steps 5-9).
 
-### 6.3 Service Layer Type Scope
-Service Layers must declare their Resource Type scope and scope inheritance behavior:
-```yaml
-type_scope:
-  resource_type_uuid: <uuid>
-  resource_type_fully_qualified_name: <Category.ResourceType>
-  scope_inheritance: <exact|descendants>
-  # exact: applies only to the declared Resource Type
-  # descendants: applies to the declared type and all child types via inheritance
+**The flow is strictly unidirectional:**
+```
+Steps 1-4: LAYERS assembled → merged payload produced (data)
+Steps 5-9: POLICIES execute → payload evaluated and acted upon (logic)
 ```
 
-### 6.4 Precedence Order
-From lowest to highest precedence:
-```
-1. Base Layer                    (foundation defaults)
-2. Core Layers                   (organizational and infrastructure context)
-3. Intermediate/Customization    (organizational hierarchy overrides)
-4. Service Layers                (service-specific configuration)
-5. Request Layer                 (consumer intent — overrides all data layers)
-6. Transformation Policies       (enrich / modify — additive)
-7. Validation Policies           (pass/fail — no field modification)
-8. GateKeeper Policies           (highest authority — overrides everything including consumer input)
-```
+**The decision rule:** Value that should appear in payload → Layer. Rule about whether payload is correct → Policy. Value derived by evaluating payload → Policy (Transformation type).
 
-### 6.5 Policy Layer Behavior
-- **Validation** — checks data against rules, does not modify. Pass/fail. Failure rejects the request.
-- **Transformation** — enriches or modifies the payload. Adds missing fields, applies standards. Recorded in provenance.
-- **GateKeeper** — highest authority. Can override any field including consumer-declared values. Used for sovereignty constraints, security mandates, and hard compliance rules. All overrides recorded in provenance.
+**What belongs in layers:** infrastructure defaults, organizational context, service configuration defaults, compliance metadata, business context labels.
 
-### 6.6 Assembly Process (Nine Steps)
-1. **Intent Capture** — Request Layer stored as Intent State. No modification.
-2. **Layer Resolution** — Processor identifies applicable layers by Resource Type and organizational context.
-3. **Layer Merge** — Layers merged in precedence order. Each field records source layer UUID in provenance.
-4. **Request Layer Application** — Consumer values applied. Overrides recorded in provenance.
-5. **Pre-Placement Policies** (`placement_phase: pre`) — Transformation → Validation → GateKeeper. Produces placement constraints.
-6. **Placement Engine — Placement Loop** — Iterates candidate providers. Per candidate: Reserve Query (atomic: verify + metadata + hold) → Loop Policy Phase. Confirmed on first passing candidate. See Section 6.12.
-7. **Post-Placement Policies** (`placement_phase: post`) — Transformation → Validation → GateKeeper. Has access to placement block including selected provider and all returned metadata.
-8. **Requested State Storage** — Complete payload stored: resource fields + placement block + policy gap records + enrichment_status.
-9. **Provider Dispatch** — Dispatched to selected provider via API Gateway. Hold confirmed by dispatch.
+**What belongs in policies:** validation rules, compliance enforcement, derived value injection, placement constraints, approval gates, security enforcement.
 
-### 6.7 Key Rules
-- Core Layers are type-agnostic — applied to every request regardless of Resource Type
-- Service Layers must be type-scoped — only applied when request Resource Type matches declared scope
-- A Service Layer without a declared type scope is invalid and must be rejected
-- Conflicting fields at same precedence: resolved by priority if declared; CONFLICT ERROR if not declared or equal
-- Conflicts detected at **ingestion time** — not assembly time — all active layers are pre-validated conflict-free
-- All layer modifications are recorded in field-level provenance
+A policy that repeatedly injects the same static value into every request → that value belongs in a layer. A layer that contains conditional logic → that logic belongs in a policy.
 
-### 6.8 Layer Identity — Domain, Handle, Priority
+### 6.2 Layer Domain Model (mirrors Policy domain)
 
-**Layer Domain** — organizational home and authorization:
-
-| Domain | Scope | Can Override |
-|--------|-------|-------------|
-| `system` | DCM built-in | Nothing above |
-| `platform` | All tenants | tenant, service, provider |
-| `tenant` | Single tenant | service, provider within tenant |
+| Domain | Authority | Can Override |
+|--------|----------|-------------|
+| `system` | DCM built-in — highest | Nothing above system |
+| `platform` | Platform team | tenant, service, provider |
+| `tenant` | Tenant Admin | service, provider within Tenant |
 | `service` | Service Provider | provider |
-| `provider` | Catalog Item | Nothing above |
+| `provider` | Provider owner | Nothing above provider |
+| `request` | Consumer — lowest | Nothing above request |
 
-**Layer Handle** — `{domain}/{layer_type}/{name}` — human-readable stable ID, unique in DCM, mirrors Git path.
-Example: `platform/core/security-cpu-limits` → `dcm-layers/platform/core/security-cpu-limits/v1.2.0.yaml`
+### 6.3 The Full Layer Structure
 
-**Priority Schema** — deterministic conflict resolution:
-- Format: `{int}.{int}.{int}...` — unlimited depth, higher value = higher priority
-- `900.10` beats `800.10`; `900.20` beats `900.10`; no ceiling — infinite upward insertability
-- Priority label: semantic context only, does not affect ordering
-- Reference taxonomy (advisory, not enforced): 900=Compliance, 800=Security, 700=Sovereignty, 600=Operations, 500=Platform, 400=Service, 300=Organization, 200=Site, 100=Custom
-- Organizations needing authority above all standard categories use `1000.*` or higher — no renumbering required
+Every layer carries: artifact_metadata (standard), domain + priority (authority), concern_tags (discoverability), compatibility (resource_types, versions, profile_constraints), activation_condition (Q23 — conditional inclusion), fields with per-field override metadata (override: allow/constrained/immutable, basis_for_value), and usage context (description, applies_when, excludes_when, conflicts_with).
 
-**Immutable ceiling model (Q51 resolved):**
-- `override: immutable` (default) — protected by execution order; first policy to lock wins during this execution
-- `override: immutable` + `immutable_ceiling: absolute` — protected against all future policies; attempted overrides are rejected and logged in audit
+**activation_condition** — layer only included if condition evaluates true during Step 2. Conditions reference: request fields, tenant attributes, resource type fields, resolved core layer fields, ingress fields. Enables role-specific layers, GPU-only layers, PCI-scope-only layers.
 
-### 6.9 Artifact Metadata Standard
+### 6.4 Layer Groups
 
-**Every DCM artifact** carries a universal artifact metadata block. Universal — not optional, not per-artifact.
+Layer Groups are `DCMGroup` with `group_class: layer_grouping` — cohesive collections of related layers. Same model as Policy Groups. Enables discovery ("show me all PCI compliance layers"), composition, and governance.
 
-**Five artifact statuses:**
+### 6.5 Consumer Layer Exclusion (Q21)
 
-| Status | Applied? | Shadow? | Key Behavior |
-|--------|---------|---------|-------------|
-| `developing` | No | No | Dev mode only |
-| `proposed` | No | Yes (policies) | Shadow output captured for validation |
-| `active` | Yes | Yes (audit) | Live and governing |
-| `deprecated` | Yes (warning) | Yes | Replacement available |
-| `retired` | No | No | Terminal — cannot be used |
+Consumers declare `layer_exclusions` with mandatory reason. Excluded layers removed in Step 2, produce no fields, cannot satisfy validation requirements. GateKeeper policies may declare layers non-excludable (LAY-001).
 
-**Key fields:** `created_by` (audit — who submitted), `owned_by` (accountability — who gets notified), `created_via` (pr/api/migration/system — audit quality), `modifications` (append-only history)
+### 6.6 Service Layer Versioning (Q22)
 
-**Contact — two modes:** UUID+display_name when IdP registered; display_name+email in standalone/air-gapped mode. Both fully supported.
+Service Layers independently versioned. Providers declare semver compatibility constraints (`^1.0.0`, `~1.2`). Cache entries carry version — invalidated when registered version changes (LAY-002).
 
-**Proposed shadow (policies):** Shadow output captured per request as `proposed_evaluation_record` — what the policy would have done, never applied. Feeds Validation Dashboard.
+### 6.7 Conditional Layer Inclusion (Q23)
 
-**Notifications to `owned_by.notification_endpoint`:** layer conflict, deprecation, provider deregistered, policy violation, drift, high-impact shadow, approaching sunset.
+`activation_condition` on layer evaluated in Step 2. False → layer excluded. Conditions reference request, tenant, resource type, core layer, and ingress fields. Recorded in assembly provenance (LAY-003).
 
-### 6.10 Field Override Control — Two Categories
+### 6.8 Dependency Layer Chains (Q24)
 
-**Structural Rules (Request Payload Processor — non-overridable DCM System behavior):**
-- Layer immutability — a published version cannot be modified
-- A child layer cannot remove a parent field — only override its value
-- Layer precedence order is fixed — Base → Core → Intermediate → Service → Request → Policy
-- Circular references and typeless Service Layers are always rejected
+Each service dependency has its own independent layer chain. Inherits parent's resolved placement fields (read-only). Does NOT inherit parent consumer declarations or type-specific layers. Layer exclusions declarable per-dependency (LAY-004).
 
-**Business Rules (Policy Engine — configurable):**
-The Policy Engine is the **sole authority** for field override control. It sets override control metadata on fields using the standard policy mechanism. Data layers and the Request Payload Processor never set override control.
+### 6.9 The Nine-Step Assembly Process
 
-### 6.11 Field Override Control — Three Levels
+Step 1 (Intent Capture) → Step 2 (Layer Resolution — with exclusions and activation_conditions) → Step 3 (Layer Merge — priority ordering, field-level provenance) → Step 4 (Request Layer Application) → Step 5 (Pre-Placement Policies: Transformation → Validation → GateKeeper) → Step 6 (Placement Engine Loop: reserve query + loop policy phase per candidate) → Step 7 (Post-Placement Policies) → Step 8 (Requested State Storage) → Step 9 (Provider Dispatch)
 
-**Design Principle: Simple by default, powerful when needed. Use only the level you need.**
-
-**Level 1 — No declaration (default)**
-Field is fully overridable by any actor. Zero configuration. Covers the majority of fields.
-
-**Level 2 — Simple declaration**
-Single `override` property — sufficient for most governed fields:
-- `override: allow` — explicit allow (same as default, self-documenting)
-- `override: constrained` — any actor can override within `constraint_schema`
-- `override: immutable` — no actor can override at any level
-
-**Level 3 — Matrix declaration**
-Full per-actor permission matrix for fields requiring nuanced governance:
-
-```yaml
-override_matrix:
-  default: allow
-  inheritance: restrict_only
-  actors:
-    - actor: policy.global    # can_expand: true
-    - actor: policy.tenant    # can_expand: true (within global ceiling)
-    - actor: policy.user      # can_expand: false
-    - actor: consumer_request # can_expand: false
-    - actor: process_resource # permission: deny by default
-    - actor: provider         # can_expand: false
-    - actor: sre_override     # can_expand: false
-    - actor: admin_override   # can_expand: true (within scope)
-  trusted_grants:
-    - granted_to_uuid: <uuid>
-      actor_type: process_resource
-      permission: allow
-      granted_by_policy_uuid: <uuid>
-      expires: <ISO 8601 — optional>
-```
-
-**Where declared:** Resource Type Specification sets the ceiling. Catalog Item can only restrict further. Policy Engine applies at runtime within those bounds.
-
-**Expansion rules:** `policy.global`, `policy.tenant`, `admin_override` can grant expansion. `policy.user`, `consumer_request`, `provider` can never expand. `process_resource` and `sre_override` denied by default — require trusted grant.
-
-**Actor extensibility:** Custom actors default to `deny`, require explicit grants, follow universal versioning and deprecation model.
-
-### 6.12 Placement Engine and Placement Loop
-
-The **Placement Engine** is a distinct named control plane component — a peer to the Policy Engine, not subordinate to it. It takes the policy-processed payload and placement constraints, builds a scored candidate list, and iterates until placement is confirmed or candidates are exhausted.
-
-**Input:** assembled payload + placement constraints + provider registry + topology data
-**Output:** `selected_provider_uuid` + placement block written to Requested State
-
-**Placement loop per candidate:**
-```
-Reserve Query → Loop Policy Phase
-  confirmed/partial → policies → pass/warn → PLACEMENT CONFIRMED
-  insufficient/refused → next candidate
-  policy reject_candidate → release hold, next candidate
-  policy gatekeep → release hold, ABORT, reject request
-No candidates → on_exhaustion: reject | escalate | manual_placement
-```
-
-**Reserve Query — single atomic call (primary placement query):**
-- Verifies provider can satisfy placement constraints
-- Returns all available metadata in one response
-- Places a resource hold for `hold_ttl_seconds`
-- Response: `confirmed | partial | insufficient | refused`
-- `partial` = hold confirmed but some requested metadata unavailable
-
-**Non-hold queries (outside the loop):**
-`capacity_query | metadata_query | constraint_verification` — informational, no side effects
-
-### 6.13 Policy Placement Phase and Required Context
-
-**`placement_phase` on every policy:**
-- `pre` — steps 5 (before provider known) — default
-- `loop` — step 6 (inside loop, evaluates reserve query response)
-- `post` — step 7 (after placement confirmed, provider known)
-- `both` — pre and post (not loop)
-
-**`required_context` for missing metadata:**
-```yaml
-policy:
-  placement_phase: loop
-  required_context:
-    - field: placement.provider_metadata.sovereignty_certifications
-      if_absent: gatekeep     # block if this field is missing
-    - field: placement.provider_metadata.patch_level
-      if_absent: warn         # proceed with warning
-    - field: placement.topology.rack
-      if_absent: skip         # not applicable if absent
-```
-
-**Missing metadata behavior:**
-| Situation | Behavior | Audit Record |
-|-----------|---------|-------------|
-| Field absent, `required_context: gatekeep` | Release hold, abort loop, reject request | Policy rejection with missing field detail |
-| Field absent, `required_context: warn` | Record warning, proceed | Warning in Requested State |
-| Field absent, `required_context: skip` | Not evaluated | Skipped in provenance |
-| Field absent, no policy declares it | `implicit_approval` | `policy_gap_record` |
-
-### 6.14 Policy Gap Record and Implicit Approval
-
-When a field is absent and no active policy has declared `required_context` for it, the result is **implicit approval** — not unknown, not unchecked, but explicitly recorded:
-
-```yaml
-policy_gap_record:
-  request_uuid: <uuid>
-  field: patch_level
-  field_value: null
-  evaluation_result: implicit_approval
-  reason: "No active policy declared required_context for this field."
-  provider_uuid: <uuid>
-  recorded_at: <ISO 8601>
-  resolution_expected: <realized_payload | discovery>
-```
-
-Provider is expected to complete missing metadata in:
-1. **Realized payload** — provider returns full metadata on realization
-2. **Discovery loop** — periodic discovery fills remaining gaps
-
-The realized entity's `enrichment_status: pending | partial | complete` tracks metadata completeness.
-
-
----
+### 6.10 Layer System Policies
+- `LAY-001` — Consumer layer exclusions with mandatory reason; GateKeeper can lock layers as non-excludable
+- `LAY-002` — Service Layers independently versioned; semver compatibility on provider; cache invalidation on version change
+- `LAY-003` — activation_condition on layers evaluated in Step 2; results recorded in provenance
+- `LAY-004` — Each dependency has own layer chain; inherits parent resolved placement; no consumer declaration inheritance
 
 ## SECTION 7 — RESOURCE TYPE HIERARCHY AND SERVICE CATALOG
 
@@ -1851,7 +1673,198 @@ AUTH-001 through AUTH-010 — see doc 19. Key: AUTH-008 (no anonymous access in 
 
 ---
 
-## SECTION 27 — PERSONAS
+## SECTION 27 — REGISTRY GOVERNANCE
+
+### 27.1 The Three-Tier Registry
+
+| Tier | Name | Maintained By | Contains |
+|------|------|--------------|---------|
+| 1 | DCM Core | DCM Project team | Universal types (Compute.VirtualMachine, Network.VLAN, etc.) |
+| 2 | Verified Community | Named community maintainers | Technology-specific types (OpenStack.HeatStack, KubeVirt.VirtualMachine) |
+| 3 | Organization | Deploying organization | Organization-specific/proprietary types |
+
+### 27.2 The Federated Registry Model
+Not centralized, not fully distributed — federated:
+```
+DCM Project Registry (origin) → Organization Registry (local mirror) → Air-gapped Registry (offline copy)
+```
+Every DCM deployment has exactly one active **Registry Provider** (sub-type of Information Provider). Air-gapped deployments use signed bundles verified against the organization's public key — no external connectivity required.
+
+### 27.3 PR-Based Proposal Workflow (Q9)
+Resource Type proposals are Pull Requests against the registry repository. Automated gates before review: schema validation, FQN conflict check, dependency resolution, breaking change detection, test case coverage. Shadow validation in `proposed` status is mandatory before `active` promotion.
+
+**Review periods by change type:** Revision=3 days, Minor/Tier2=7 days, Tier1=14 days, Breaking=21 days, Deprecation=30 days, Emergency=waived (7-day shadow minimum).
+
+### 27.4 Deprecation Lifecycle — Default Policies (Q11)
+Deprecation lifecycle is governed by **default DCM system policies** (REG-DP-001 through REG-DP-007), overridable via standard policy priority. FSI/sovereign profiles lock sunset periods as immutable.
+
+| Policy | Default | Overridable? |
+|--------|---------|-------------|
+| `REG-DP-001` | 30-day notification before deprecation | Yes |
+| `REG-DP-002` | Sunset: Tier 1=P12M, Tier 2=P6M | Yes (locked in fsi/sovereign) |
+| `REG-DP-003` | Migration window: P90D after retirement | Yes |
+| `REG-DP-004` | Successor type required in deprecation notice | Yes |
+| `REG-DP-005` | Retired types reject new requests | **No — structural** |
+| `REG-DP-006` | Existing realizations → DEPRECATED_RUNTIME | Yes |
+| `REG-DP-007` | Emergency migration floor: P30D | **No — floor** |
+
+DEPRECATED_RUNTIME: eligible for modify/decommission; not eligible for rehydration using deprecated type; drift detection continues.
+
+### 27.5 Version Resolution Policy (Q12)
+Strictly enforced — no silent resolution to different version. DCM never auto-upgrades across major versions.
+
+`version_policy` options: `exact` | `compatible` (^major) | `latest_minor` (~minor) | `latest`
+
+Profile defaults: minimal=latest, dev/standard/prod=compatible, fsi/sovereign=exact.
+
+### 27.6 Provider Tie-Breaking Hierarchy (Q13)
+When multiple providers satisfy all placement criteria equally:
+1. **Policy preference** — Transformation policy injected preference_score or preferred_provider_uuid
+2. **Provider priority** — numeric field on registration (default: 50; higher = preferred)
+3. **Tenant affinity** — Policy Group declares preferred providers for resource types
+4. **Cost analysis** — if Cost Analysis has current data AND cost is determinable and comparable (skip if not)
+5. **Least loaded** — capacity utilization from reserve_query (skip if data unavailable)
+6. **Consistent hash** — SHA-256(request_uuid + resource_type + sorted_candidate_uuids); deterministic, never round-robin
+
+Cost ranks above operational load because it is a business decision. 5% threshold — candidates within 5% cost are treated as equal.
+
+### 27.7 Registry Provider — Policy Governed (Q14)
+The Registry Provider is fully policy-governed. Policies act on registry sync, activation, bundle import, and version upgrades. Profile-appropriate registry policy groups activated by default:
+
+| Group | Profile | Behavior |
+|-------|---------|---------|
+| `system/group/registry-minimal` | minimal | Advisory; pull everything; warn only |
+| `system/group/registry-dev` | dev | Warn on unverified sources; Tier 1+2 |
+| `system/group/registry-standard` | standard | Block unverified; sovereignty filter |
+| `system/group/registry-prod` | prod | Vendor allowlist; audit all syncs; major version manual approval |
+| `system/group/registry-fsi` | fsi | Exact pinning; immutable sunset; dual-approval syncs |
+| `system/group/registry-sovereign` | sovereign | Signed bundles only; offline; no external connectivity |
+
+### 27.8 System Policies
+REG-001 through REG-007 and REG-DP-001 through REG-DP-007 — see doc 20.
+
+---
+
+## SECTION 28 — STORAGE ARCHITECTURE
+
+### 28.1 Git Repository Structure (Q79)
+Handle-based directory structure. Four repos: Intent, Requested, Layers, Policies. Minimal/dev may use monorepo; standard+ use separate repos. `main` is authoritative. Tenant isolation under `{tenant-uuid}` directories. DCM service account handles all Git reads/writes — no direct Tenant Git access.
+
+```
+dcm-intent/tenants/{tenant-uuid}/requests/{request-uuid}/intent.yaml
+dcm-requested/tenants/{tenant-uuid}/requests/{request-uuid}/requested-payload.yaml
+dcm-layers/{domain}/{type}/{name}/v{Major}.{Minor}.{Revision}.yaml
+dcm-policies/{domain}/{type}/{name}/v{Major}.{Minor}.{Revision}.yaml
+```
+
+### 28.2 Multi-Region Replication (Q80)
+Declared capability on Storage Provider registration. Active Profile determines minimum requirements:
+- minimal/dev: 1 replica, no multi-region
+- standard: 3 replicas, strong/bounded consistency
+- prod/fsi/sovereign: 3-5 replicas, strong consistency, geo-replicated
+- sovereign: multi-region required but within sovereignty boundary only
+
+(STO-001)
+
+### 28.3 Storage Provider Failure Handling (Q81)
+Per store type — policy-governed:
+- **Commit Log:** quorum unavailable → abort operation (no silent changes)
+- **GitOps Stores:** unavailable → queue writes locally (max size + max age); explicit reject on exhaustion
+- **Event Stream:** producer queues locally; consumer resumes from last offset on recovery
+- **Audit Store:** two-stage model — accumulates in Commit Log; operations not blocked
+- **Search Index:** non-authoritative; degrades gracefully; full rebuild on recovery
+
+(STO-002)
+
+### 28.4 Search Index — Separate Sub-Type (Q82)
+Separate Storage Provider sub-type — distinct from GitOps stores. Non-authoritative, rebuildable from authoritative stores. Consistency lag declared (e.g., PT5M). API queries may specify `freshness: authoritative` to bypass index. (STO-003)
+
+### 28.5 Audit Store — Specialized Sub-Type (Q83)
+Specialized Storage Provider sub-type — NOT the same as Event Stream. Properties: append-only with immutability enforcement, hash chain integrity, reference-based retention tracking, compliance-grade multi-dimensional queries. Event Stream is the delivery channel; Audit Store is the compliance destination. (STO-004)
+
+---
+
+## SECTION 29 — PROVIDER SOVEREIGNTY DECLARATIONS
+
+### 29.1 Obligation
+Every provider registration (Service, Information, Message Bus, Policy, Auth Provider) MUST include a `sovereignty_declaration` block. Contractual obligation — not optional metadata.
+
+### 29.2 What Sovereignty Declaration Covers
+- **operating_jurisdictions** — countries and legal jurisdictions where provider physically operates
+- **legal_frameworks** — applicable frameworks (GDPR, HIPAA, FedRAMP, ITAR, etc.)
+- **data_residency_guarantee** — data never leaves declared jurisdictions (true/false)
+- **data_transit_jurisdictions** — jurisdictions data transits through during operations
+- **external_dependencies** — external connectivity requirements, air_gap_capable flag, external services with data sharing details
+- **sub_processors** — third-party sub-processors with jurisdiction and data handled
+- **government_access_risk** — which governments can legally compel access
+- **certifications** — current certifications with validity periods (ISO-27001, SOC2, PCI-DSS, FedRAMP)
+- **audit_rights** — customer audit rights and notice periods
+- **change_notification** — mandatory notification events and SLA (e.g., PT24H)
+
+### 29.3 Change Notification and DCM Response
+Provider MUST notify DCM when any sovereignty data changes. DCM treats sovereignty changes as discovered drift → Policy Engine re-evaluation:
+- **No violations:** update record, emit webhook event, notify Tenants (informational)
+- **Violations found:** for each affected resource, policy declares action:
+  - `notify_only` — inform Tenant; no automatic action
+  - `pause` — suspend resource; Tenant must act
+  - `migrate` — Provider-Portable Rehydration to compliant provider (sequential)
+  - `emergency_migrate` — parallel provisioning before decommission
+
+Sovereignty violation record created in Audit Store. Notifications: Tenant owner, platform admin, data_protection_officer.
+
+### 29.4 Auto-Migration
+Policy declares `migrate` or `emergency_migrate` → DCM uses Provider-Portable Rehydration. Non-compliant provider excluded from placement candidate set. Full audit trail linking violation record to migration request. (SOV-001 through SOV-005)
+
+---
+
+## SECTION 30 — GIT PR INGRESS
+
+### 30.1 Concept
+DCM supports `git_pr_merge` and `git_pr_open` as ingress surfaces. Teams submit standard DCM resource definition YAML as Pull Requests. DCM's Git Request Watcher monitors designated repositories.
+
+### 30.2 Git Actor Identity Resolution
+**DCM trusts the Git server's authentication assertion — not user-declared Git configuration.** Git `user.email` self-declaration is ignored — spoofing vector.
+
+Resolution methods (all go through registered Auth Provider):
+- `oidc_subject_lookup` — Git server OAuth subject → OIDC Auth Provider → DCM actor
+- `ldap_username_lookup` — Git server username → LDAP/AD Auth Provider → DCM actor
+- `ssh_key_fingerprint` — key fingerprint → DCM SSH key registry → DCM actor
+- `webhook_service_account` — CI/CD service account → registered webhook actor
+
+**The resolved actor has IDENTICAL roles, groups, and tenant scope to the same user logging in via web UI.** Git PR ingress does not grant different permissions than any other surface. Same Auth Provider, same group mappings, same tenant scope enforcement.
+
+**Unresolvable identity → explicit PR rejection comment** with actionable guidance. Never silently ignored.
+
+### 30.3 PR Lifecycle
+1. PR opened → DCM resolves author → Auth Provider → shadow policy evaluation posted as PR comments
+2. Human review + Git branch protection approvals
+3. PR merged → actor re-verified at merge time (not assumed from PR open) → full nine-step assembly → realization result posted as PR comment
+4. Realized state committed to `realized/` directory (optional)
+
+### 30.4 The git_context in ingress block
+```yaml
+ingress:
+  surface: git_pr_merge
+  actor: <fully resolved DCM actor — same as web UI login>
+  git_context:
+    repository / pr_number / pr_url / merge_commit
+    pr_author / pr_reviewers / pr_approved_by
+    # pr_approved_by: DCM resolves reviewer Git identities via same Auth Provider
+```
+
+### 30.5 Policy Use Cases
+- Require specific approvers in pr_approved_by before processing
+- Require MFA for Git PR merges in prod Tenants
+- Restrict resource types submittable via Git PR
+- Require actor to be in authorized Tenant group
+- Post shadow evaluation results as PR comments
+
+### 30.6 System Policies
+GIT-001 through GIT-008 — see doc 18. AUTH-011 — Git identity resolution uses registered Auth Provider; same role/group/tenant scope as any other ingress.
+
+---
+
+## SECTION 31 — PERSONAS
 
 | Persona | Primary Concern |
 |---------|----------------|
@@ -1868,7 +1881,7 @@ AUTH-001 through AUTH-010 — see doc 19. Key: AUTH-008 (no anonymous access in 
 
 ---
 
-## SECTION 28 — TERMINOLOGY GLOSSARY
+## SECTION 32 — TERMINOLOGY GLOSSARY
 
 | Term | Definition |
 |------|-----------|
@@ -2047,7 +2060,7 @@ AUTH-001 through AUTH-010 — see doc 19. Key: AUTH-008 (no anonymous access in 
 
 ---
 
-## SECTION 29 — OPEN QUESTIONS
+## SECTION 33 — OPEN QUESTIONS
 
 These items are explicitly unresolved. Do not make assumptions about them — flag them and ask for guidance.
 
@@ -2144,7 +2157,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ---
 
-## SECTION 30 — DOCUMENTATION STRUCTURE
+## SECTION 34 — DOCUMENTATION STRUCTURE
 
 DCM documentation follows a hierarchical structure:
 
@@ -2192,7 +2205,7 @@ content/
 
 ---
 
-## SECTION 31 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 35 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, follow these instructions:
 
@@ -2241,6 +2254,18 @@ When working on this project, follow these instructions:
 67. **Composite groups default to targeting all member types** — always declare member_type_filter when writing policies that target a composite group unless genuinely intending to govern all member types simultaneously
 68. **Nested tenant governance: most restrictive wins** — a child policy that is more restrictive than a parent policy wins; parent policies cascade where the child has no policy; this is the same principle as save_overrides_destroy and field override control
 69. **former_group_membership records are permanent** — group destruction does not erase membership history; queries against membership history are valid at any time via provenance store; use this for compliance and audit queries about past associations
+89. **Provider sovereignty is a contractual obligation** — every provider registration requires sovereignty_declaration; changes must be notified within declared SLA; DCM treats sovereignty changes as drift and re-evaluates placement; auto-migration available via Provider-Portable Rehydration
+90. **Git PR ingress actors resolve through the same Auth Provider as all other users** — DCM trusts the Git server's authentication assertion; git config user.email is ignored (spoofing vector); the resolved actor has IDENTICAL roles/groups/tenant scope to web UI login for the same user; unresolvable identities are always rejected with an actionable PR comment
+91. **Storage Provider sub-types are distinct** — Search Index (non-authoritative, rebuildable, consistency lag declared) and Audit Store (append-only, hash chain, reference-based retention, compliance queries) are separate sub-types; never treat them as interchangeable
+92. **GitOps stores use handle-based directory structure** — deterministic path from artifact identity; main is authoritative; monorepo acceptable for minimal/dev; separate repos for standard+
+85. **Layers are data, policies are logic — never conflate them** — if a policy repeatedly injects the same static value, that value belongs in a layer; if a layer contains conditional evaluation logic, that logic belongs in a policy; the flow is strictly unidirectional (layers Steps 1-4, policies Steps 5-9)
+86. **Layer domains mirror policy domains** — system > platform > tenant > service > provider > request; same authority model, same override precedence; lower cannot override higher
+87. **Layer Groups use DCMGroup group_class: layer_grouping** — same universal group model as policy_collection; enables discovery, composition, and governance of related layers
+88. **activation_condition enables conditional layer inclusion** — evaluated in Step 2; can reference request fields, tenant attributes, resource type, resolved core layer fields, and ingress fields; condition false = layer excluded = recorded in provenance
+81. **Registry governance is PR-based and policy-governed** — proposals are Pull Requests with automated validation gates; shadow validation in proposed status is mandatory before active; the Registry Provider is fully policy-governed with profile-appropriate policy groups
+82. **Deprecation defaults are policies — not hard-coded values** — REG-DP-001 through REG-DP-007 are overridable via standard priority; FSI/sovereign profiles lock sunset periods as immutable; REG-DP-005 (retired rejects new requests) is structural and never overridable
+83. **Version constraints are strictly enforced — no silent upgrades** — DCM never auto-upgrades across major versions; version_policy governs flexibility within that constraint; profile sets the default policy
+84. **Cost analysis ranks above least-loaded in tie-breaking** — cost is a business decision; but only if Cost Analysis has current data and cost is determinable; skip silently if not; consistent hash is always the final deterministic tiebreaker
 75. **Eight provider types — not five** — Message Bus Provider (6), Credential Provider (7), and Auth Provider (8) complete the ecosystem; all follow the same base contract
 76. **The ingress block is the policy surface for all access control** — every request carries surface, protocol, authenticated_via, actor.roles, actor.auth_provider_type, mfa_verified, and external_identity claims; GateKeeper policies act on all of these
 77. **No anonymous access in any profile** — minimal profile uses static API key (30 seconds to set up); the authentication ladder is about setup effort, not whether auth exists; AUTH-008 is non-negotiable
