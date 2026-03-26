@@ -519,19 +519,173 @@ Entities whose `on_expiry` action fails to execute enter `PENDING_EXPIRY_ACTION`
 
 ---
 
+## 9a. Lifecycle Time Constraints — Process Resources (Q28)
+
+Process Resource entities must declare a maximum execution time. This is a mandatory field — not optional. A Process Resource with no execution time limit creates operational blindness (DCM cannot know if it is hung).
+
+```yaml
+process_resource_entity:
+  resource_type: Process.AnsiblePlaybook
+  execution_constraints:
+    max_execution_time: PT2H          # mandatory — ISO 8601 duration
+    expected_completion: PT30M        # advisory — when we expect completion
+    grace_period: PT15M               # grace period after max before action fires
+    on_max_exceeded: <escalate|terminate|notify>
+    # escalate:  notify platform admin and provider; human decides
+    # terminate: DCM instructs provider to terminate the process
+    # notify:    notify consumer and wait; no automatic action
+    escalation_recipient: <actor-uuid>
+```
+
+The Lifecycle Constraint Enforcer handles this — process execution time is a `lifecycle_constraint.ttl` with `reference_point: realization_timestamp`. The `on_max_exceeded` action maps to the standard `on_expiry` lifecycle action vocabulary.
+
+**Profile-governed default `on_max_exceeded`:**
+
+| Profile | Default Action |
+|---------|---------------|
+| `minimal` | `notify` |
+| `dev` | `notify` |
+| `standard` | `escalate` |
+| `prod` | `escalate` |
+| `fsi` | `terminate` |
+| `sovereign` | `terminate` |
+
+---
+
+## 9b. Billing State and SUSPENDED Entities (Q29)
+
+DCM carries billing state as a first-class field — the Cost Analysis component consumes it. Organizations declare billing behavior via policy — DCM does not decide what is billable.
+
+```yaml
+entity:
+  lifecycle_state: SUSPENDED
+  billing_state: <billable|non_billable|reduced_rate>
+  billing_metadata:
+    billing_rate_multiplier: 0.3       # 30% of normal rate if reduced_rate
+    billing_reason: "Reserved capacity — suspended but resources held"
+    billing_policy_uuid: <uuid>        # policy that determined this billing state
+    billable_components: [storage, ip_address]   # which sub-resources are billed
+    non_billable_components: [compute]
+```
+
+**Three billing models for SUSPENDED:**
+- **`billable`** — resources reserved and capacity held (stopped VM still consuming reserved IP and storage)
+- **`non_billable`** — resources fully released on suspension (spot/ephemeral resource)
+- **`reduced_rate`** — partial resources held (storage retained, compute released)
+
+Policy injects `billing_state` and `billing_metadata` during state transitions. A GateKeeper can declare: "all suspended VMs in the payments Tenant are billed at 30% — compute released but storage and IP retained."
+
+---
+
+## 9c. Bare Metal Indivisibility (Q26)
+
+Bare metal Whole Allocation uses the same `shareability.allowed: false` mechanism as any non-shareable resource (REL-017), plus an explicit `allocation_model` declaration:
+
+```yaml
+resource_type_spec:
+  fully_qualified_name: Compute.BareMetal
+  allocation_model: whole_unit         # whole_unit | fractional | pooled
+  shareability:
+    allowed: false                     # structural lock — cannot be changed by policy
+    indivisibility_reason: "Physical hardware — cannot be partitioned"
+  capacity:
+    unit: server
+    minimum_allocation: 1
+    maximum_allocation: 1              # whole unit only
+
+# Provider contract obligations for bare metal:
+provider_contract_obligations:
+  - Report full physical identity in realized payload (serial_number, hardware_profile)
+  - Exclusive placement hold during reserve_query — no concurrent holds on same server
+  - Notify DCM immediately if any sharing attempt is detected (drift trigger)
+```
+
+---
+
+## 9d. Capacity Confidence — Automatic Actions (Q27)
+
+Capacity confidence ratings trigger policy-governed automatic actions. Policy determines the action per confidence level; the active Profile sets defaults.
+
+```yaml
+capacity_confidence_policy:
+  HIGH:
+    action: proceed
+    max_data_age: PT5M
+  MEDIUM:
+    action: proceed_with_warning      # default — overridable by policy
+    max_data_age: PT30M
+  LOW:
+    action: refresh_before_placement  # default — trigger Mode 1 query
+    max_data_age: PT1H
+    trigger_mode1_query: true
+```
+
+**Profile-governed defaults:**
+
+| Profile | HIGH | MEDIUM | LOW |
+|---------|------|--------|-----|
+| `minimal` | proceed | proceed | proceed_with_warning |
+| `dev` | proceed | proceed | refresh_before_placement |
+| `standard` | proceed | proceed_with_warning | refresh_before_placement |
+| `prod` | proceed | refresh_before_placement | reject |
+| `fsi` | proceed | refresh_before_placement | reject |
+| `sovereign` | proceed | refresh_before_placement | reject |
+
+---
+
+## 9e. Ownership Transfer Count (Q25)
+
+Ownership transfers are unlimited by default. Each transfer is immutably recorded with a monotonically incrementing `transfer_number`. Policy may declare a maximum per resource type.
+
+```yaml
+ownership_transfer_record:
+  transfer_uuid: <uuid>
+  transfer_number: 3              # monotonically incrementing — never resets
+  from_tenant_uuid: <uuid>
+  to_tenant_uuid: <uuid>
+  authorized_by: <actor>
+  transfer_timestamp: <ISO 8601>
+  reason: <human-readable — mandatory>
+  policy_uuid: <uuid>
+```
+
+Policy-governed maximum when needed:
+```yaml
+policy:
+  type: gatekeeper
+  rule: >
+    If resource.ownership_transfer_count > 5
+    AND resource_type == Compute.VirtualMachine
+    THEN gatekeep: "VM has exceeded 5 ownership transfers — manual review required"
+```
+
+---
+
 ## 10. Open Questions
 
 | # | Question | Impact | Status |
 |---|----------|--------|--------|
-| 1 | For Hybrid Transfer — what is the maximum number of ownership transfers allowed, or is it unlimited? | Operational complexity | ❓ Unresolved |
-| 2 | For Whole Allocation of bare metal — how is the indivisibility enforced at the provider level? | Provider contract | ❓ Unresolved |
-| 3 | Should capacity confidence ratings trigger automatic actions (e.g., LOW confidence triggers a Mode 1 query)? | Capacity model | ❓ Unresolved |
-| 4 | For Process Resources — should there be a maximum execution time after which DCM escalates? | Operational governance | ❓ Unresolved |
-| 5 | How does the SUSPENDED state interact with cost analysis — is a suspended Entity still billable? | Cost model | ❓ Unresolved |
+| 1 | For Hybrid Transfer — what is the maximum number of ownership transfers allowed, or is it unlimited? | Operational complexity | ✅ Resolved — unlimited by default; policy may declare maximum; monotonically incrementing transfer_number (ENT-001) |
+| 2 | For Whole Allocation of bare metal — how is the indivisibility enforced at the provider level? | Provider contract | ✅ Resolved — allocation_model: whole_unit; shareability.allowed: false; exclusive hold; provider reports physical identity (ENT-002) |
+| 3 | Should capacity confidence ratings trigger automatic actions? | Capacity model | ✅ Resolved — policy-governed actions per confidence level; LOW triggers Mode 1 query by default in standard+; profile-governed (ENT-003) |
+| 4 | For Process Resources — should there be a maximum execution time? | Operational governance | ✅ Resolved — mandatory max_execution_time; enforced by Lifecycle Constraint Enforcer; profile-governed on_max_exceeded (ENT-004) |
+| 5 | How does the SUSPENDED state interact with cost analysis? | Cost model | ✅ Resolved — billing_state field (billable/non_billable/reduced_rate); policy injects on state transition; Cost Analysis consumes (ENT-005) |
 
 ---
 
-## 11. Related Concepts
+## 11. DCM System Policies — Entity and Dependency Gaps
+
+| Policy | Rule |
+|--------|------|
+| `ENT-001` | Ownership transfer count is unlimited by default. Policy may declare a maximum transfer count per resource type. Each transfer is immutably recorded with a monotonically incrementing transfer_number and mandatory reason field. |
+| `ENT-002` | Bare metal resources declare `allocation_model: whole_unit` and `shareability.allowed: false`. Placement holds are exclusive. Providers must report the server's physical identity in the realized payload and notify DCM of any sharing attempt. |
+| `ENT-003` | Capacity confidence ratings trigger policy-governed automatic actions. LOW confidence triggers a Mode 1 Information Provider query by default in standard+ profiles. Profile determines the default action per confidence level. |
+| `ENT-004` | Process Resource entities must declare `max_execution_time`. This field is mandatory. Execution time is enforced by the Lifecycle Constraint Enforcer. Profile governs the default `on_max_exceeded` action. |
+| `ENT-005` | Entity `billing_state` (billable, non_billable, or reduced_rate) is a first-class field injected by policy during state transitions. The Cost Analysis component consumes `billing_state` for cost attribution. DCM does not decide billing policy — it carries the billing signal. |
+
+---
+
+
 
 - **DCM Tenant** — the mandatory ownership boundary for all Resource/Service Entities
 - **Four States** — Intent, Requested, Realized, Discovered — the state lifecycle of a Resource/Service Request and Entity

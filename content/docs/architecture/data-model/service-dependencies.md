@@ -12,9 +12,9 @@ weight: 6
 
 
 **Document Status:** 🔄 In Progress  
-**Related Documents:** [Entity Relationships](../entity-relationships/) | [Resource Type Hierarchy](../resource-type-hierarchy/) | [Resource/Service Entities](../resource-service-entities/)
+**Related Documents:** [Entity Relationships](09-entity-relationships.md) | [Resource Type Hierarchy](05-resource-type-hierarchy.md) | [Resource/Service Entities](06-resource-service-entities.md)
 
-> **Note:** The dependency graph data structure has been superseded by the universal Entity Relationship model defined in [Entity Relationships](../entity-relationships/). This document retains content specific to dependency declaration, rehydration ordering, and failure handling — all of which operate on the Entity Relationship Graph defined in that document.
+> **Note:** The dependency graph data structure has been superseded by the universal Entity Relationship model defined in [Entity Relationships](09-entity-relationships.md). This document retains content specific to dependency declaration, rehydration ordering, and failure handling — all of which operate on the Entity Relationship Graph defined in that document.
 
 ---
 
@@ -351,19 +351,130 @@ catalog_item:
 
 ---
 
+## 11a. Dependency Graph Versioning (Q30)
+
+Dependency graphs are versioned as properties of their parent catalog item — not as independent artifacts. When the dependency graph changes, the catalog item version increments following standard semver semantics:
+
+| Change | Semver Impact | Reason |
+|--------|--------------|--------|
+| Dependency version constraint tightened | Revision bump | Compatible — narrower constraint |
+| New optional dependency added | Minor bump | Compatible — additive |
+| New required dependency added | **Major bump** | Breaking — consumers must update |
+| Required dependency removed | **Major bump** | Breaking — consumers may depend on it |
+| Dependency type changed | **Major bump** | Breaking — structural change |
+
+**At request time:** The catalog item version determines the dependency graph. A consumer pinning to `catalog_item_version: "1.5.3"` gets exactly the dependency graph declared in that version.
+
+**For existing realizations:** The dependency graph version is captured in the Requested State assembly provenance. Rehydration with `re_evaluate: false` replays from the Requested State. Rehydration with `re_evaluate: true` uses the current dependency graph for the selected version.
+
+---
+
+## 11b. Dependency Graph Storage (Q31)
+
+The dependency graph is embedded in assembly provenance — not a separate entity.
+
+| Level | What is stored | Where |
+|-------|---------------|-------|
+| Declared dependency graph | Part of Resource Type Specification | GitOps Layer/Policy Store |
+| Resolved dependency graph | `placement.yaml` in Requested State | GitOps Requested Store |
+| Realized dependency graph | Realized State events per dependency | Event Stream / Realized Store |
+
+```yaml
+# In placement.yaml — resolved dependency graph
+dependency_resolution:
+  - dependency_role: storage
+    resource_type: Storage.Block
+    resolved_provider_uuid: <uuid>
+    resolved_catalog_item_version: "1.2.0"
+    reserved_entity_uuid: <uuid>
+    reservation_hold_uuid: <uuid>
+  - dependency_role: networking
+    resource_type: Network.IPAddress
+    resolved_provider_uuid: <uuid>
+    reserved_entity_uuid: <uuid>
+```
+
+The full dependency chain is always traceable from the Requested State record — no separate entity needed.
+
+---
+
+## 11c. Dependency Graph Depth (Q33)
+
+Dependency graph depth is limited to a profile-governed maximum. Circular dependency detection is always enforced regardless of depth configuration.
+
+```yaml
+dependency_depth_policy:
+  max_depth: 10                  # configurable via Policy Group
+  on_max_exceeded: reject        # reject with clear error identifying depth + chain
+  cycle_detection: always        # non-configurable — always enforced
+```
+
+**Profile-governed defaults:**
+
+| Profile | Default Max Depth | Rationale |
+|---------|-----------------|-----------|
+| `minimal` | 20 | Home lab — free composition |
+| `dev` | 15 | Development — generous |
+| `standard` | 10 | Production baseline |
+| `prod` | 10 | Production |
+| `fsi` | 7 | Tight — complex dependencies harder to audit |
+| `sovereign` | 7 | Maximum control |
+
+In practice, well-designed service compositions rarely exceed 5-6 levels. Depth 10 provides headroom without allowing pathological compositions.
+
+---
+
+## 11d. Meta Provider Composition Visibility (Q34)
+
+Meta Providers declare how their internal composition is exposed to DCM. This determines whether sub-resources are DCM entities subject to standard lifecycle management, or opaque to DCM.
+
+```yaml
+meta_provider_registration:
+  composition_visibility:
+    mode: <opaque|transparent|selective>
+    # opaque:      Consumer sees only top-level service entity
+    #              Sub-resources not visible in DCM
+    # transparent: All sub-resources registered as DCM entities
+    #              Full dependency graph visible; drift detection on all
+    # selective:   Provider declares which sub-resources are DCM-visible
+    dcm_visible_sub_resources:    # if selective
+      - resource_type: Compute.VirtualMachine
+        role: control_plane_node
+      - resource_type: Network.LoadBalancer
+        role: api_endpoint
+```
+
+**Drift detection interaction:**
+- `opaque` — drift detection only on what the Meta Provider reports via realized payload; sub-resources are provider's responsibility
+- `transparent` — drift detection on all sub-resources as full DCM entities
+- `selective` — drift detection on declared DCM-visible sub-resources only
+
+---
+
 ## 12. Open Questions
 
 | # | Question | Impact | Status |
 |---|----------|--------|--------|
-| 1 | How are dependency graphs versioned — does a new version of a catalog item invalidate existing dependency graphs? | Versioning model | ❓ Unresolved |
-| 2 | Should the dependency graph be stored as a separate entity or embedded in the request payload? | Data model structure | ❓ Unresolved |
-| 3 | How are cross-tenant dependencies handled — where one tenant's resource depends on another tenant's resource? | Multi-tenancy | ❓ Unresolved |
-| 4 | Should there be a maximum dependency graph depth to prevent runaway transitive dependencies? | Operational complexity | ❓ Unresolved |
-| 5 | How does the dependency graph interact with the Meta Provider model — where one provider orchestrates others? | Provider model | ❓ Unresolved |
+| 1 | How are dependency graphs versioned — does a new version of a catalog item invalidate existing dependency graphs? | Versioning model | ✅ Resolved — versioned as part of catalog item; semver semantics; captured in assembly provenance (ENT-006) |
+| 2 | Should the dependency graph be stored as a separate entity or embedded in the request payload? | Data model structure | ✅ Resolved — embedded in assembly provenance; declared in Resource Type Spec; resolved in placement.yaml (ENT-007) |
+| 3 | How are cross-tenant dependencies handled? | Multi-tenancy | ✅ Resolved — governed by REL-010/011/012 and DEP-001/002/003; see Entity Relationships doc |
+| 4 | Should there be a maximum dependency graph depth? | Operational complexity | ✅ Resolved — profile-governed max (10 standard/prod, 7 fsi/sovereign); circular detection always enforced (ENT-008) |
+| 5 | How does the dependency graph interact with the Meta Provider model? | Provider model | ✅ Resolved — composition_visibility (opaque/transparent/selective); transparent/selective registers sub-resources as DCM entities (ENT-009) |
 
 ---
 
-## 13. Related Concepts
+## 13. DCM System Policies — Dependency Gaps
+
+| Policy | Rule |
+|--------|------|
+| `ENT-006` | Dependency graphs are versioned as properties of their parent catalog item. New required dependency or removed dependency is a major (breaking) version bump. The dependency graph version used in a realization is captured in assembly provenance. |
+| `ENT-007` | The declared dependency graph is embedded in the Resource Type Specification. The resolved dependency graph is embedded in the Requested State assembly provenance (placement.yaml). No separate dependency graph entity is required. |
+| `ENT-008` | Dependency graph depth is limited to a profile-governed maximum (default: 10 for standard/prod; 7 for fsi/sovereign). Requests exceeding the maximum depth are rejected with a clear error. Circular dependency detection is always enforced regardless of depth configuration. |
+| `ENT-009` | Meta Providers declare composition_visibility as opaque, transparent, or selective. Transparent and selective modes register sub-resources as DCM entities subject to standard lifecycle management and drift detection. Opaque mode delegates sub-resource management entirely to the provider. |
+
+---
+
+
 
 - **Resource Type Specification** — declares type-level dependencies for a Resource Type
 - **Provider Catalog Item** — declares provider-specific additional dependencies

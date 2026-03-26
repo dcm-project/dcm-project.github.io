@@ -1864,7 +1864,61 @@ GIT-001 through GIT-008 — see doc 18. AUTH-011 — Git identity resolution use
 
 ---
 
-## SECTION 31 — PERSONAS
+## SECTION 31 — ENTITY AND DEPENDENCY GAPS
+
+### 31.1 Ownership Transfers (Q25)
+Ownership transfers are **unlimited by default**. Each transfer is immutably recorded with a monotonically incrementing `transfer_number` and mandatory reason field. Policy may declare a maximum per resource type via GateKeeper. ENT-001.
+
+### 31.2 Bare Metal Indivisibility (Q26)
+`Compute.BareMetal` declares `allocation_model: whole_unit` and `shareability.allowed: false` (structural lock). Placement holds are exclusive — no concurrent holds on the same server. Provider must report full physical identity (serial_number, hardware_profile) in realized payload and notify DCM of any sharing attempt. ENT-002.
+
+### 31.3 Capacity Confidence Actions (Q27)
+Confidence ratings trigger policy-governed automatic actions:
+- `HIGH` → proceed (all profiles)
+- `MEDIUM` → proceed_with_warning (minimal/dev) or refresh_before_placement (prod/fsi/sovereign)
+- `LOW` → proceed_with_warning (minimal), refresh_before_placement (dev/standard), reject (prod/fsi/sovereign)
+
+LOW confidence triggers a Mode 1 Information Provider query before finalizing placement in standard+ profiles. Policy Group overrides per resource type. ENT-003.
+
+### 31.4 Process Resource Execution Time (Q28)
+`max_execution_time` is **mandatory** on Process Resource entities. Enforced by the Lifecycle Constraint Enforcer as a standard TTL. Profile governs default `on_max_exceeded`:
+- minimal/dev: `notify`
+- standard/prod: `escalate`
+- fsi/sovereign: `terminate`
+
+ENT-004.
+
+### 31.5 SUSPENDED State Billing (Q29)
+`billing_state` is a first-class field on all entities: `billable | non_billable | reduced_rate`. Policy injects `billing_state` and `billing_metadata` (rate_multiplier, billable_components) during state transitions. Cost Analysis component consumes the field — DCM carries the billing signal, policy decides the billing model. ENT-005.
+
+### 31.6 Dependency Graph Versioning (Q30)
+Dependency graphs versioned as part of their parent catalog item — not independently. New required dependency or removed dependency = **major (breaking) version bump**. New optional dependency = minor bump. Constraint change = revision bump. Dependency graph version captured in assembly provenance. ENT-006.
+
+### 31.7 Dependency Graph Storage (Q31)
+Not a separate entity. Three levels:
+- Declared graph: embedded in Resource Type Specification (GitOps)
+- Resolved graph: embedded in `placement.yaml` in Requested State
+- Realized graph: Realized State events per dependency
+
+ENT-007.
+
+### 31.8 Dependency Graph Depth (Q33)
+Profile-governed maximum: minimal=20, dev=15, standard/prod=10, fsi/sovereign=7. Requests exceeding max depth rejected with clear error. Circular dependency detection always enforced regardless of depth configuration. ENT-008.
+
+### 31.9 Meta Provider Composition Visibility (Q34)
+Meta Providers declare `composition_visibility`:
+- `opaque` — consumer sees only top-level service; sub-resources not in DCM; drift on realized payload only
+- `transparent` — all sub-resources registered as DCM entities; full drift detection
+- `selective` — provider declares which sub-resources are DCM-visible
+
+ENT-009.
+
+### 31.10 System Policies
+ENT-001 through ENT-009 — see docs 06 and 07.
+
+---
+
+## SECTION 32 — PERSONAS
 
 | Persona | Primary Concern |
 |---------|----------------|
@@ -1881,7 +1935,7 @@ GIT-001 through GIT-008 — see doc 18. AUTH-011 — Git identity resolution use
 
 ---
 
-## SECTION 32 — TERMINOLOGY GLOSSARY
+## SECTION 33 — TERMINOLOGY GLOSSARY
 
 | Term | Definition |
 |------|-----------|
@@ -2060,7 +2114,7 @@ GIT-001 through GIT-008 — see doc 18. AUTH-011 — Git identity resolution use
 
 ---
 
-## SECTION 33 — OPEN QUESTIONS
+## SECTION 34 — OPEN QUESTIONS
 
 These items are explicitly unresolved. Do not make assumptions about them — flag them and ask for guidance.
 
@@ -2157,7 +2211,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ---
 
-## SECTION 34 — DOCUMENTATION STRUCTURE
+## SECTION 35 — DOCUMENTATION STRUCTURE
 
 DCM documentation follows a hierarchical structure:
 
@@ -2205,7 +2259,7 @@ content/
 
 ---
 
-## SECTION 35 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 36 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, follow these instructions:
 
@@ -2254,6 +2308,10 @@ When working on this project, follow these instructions:
 67. **Composite groups default to targeting all member types** — always declare member_type_filter when writing policies that target a composite group unless genuinely intending to govern all member types simultaneously
 68. **Nested tenant governance: most restrictive wins** — a child policy that is more restrictive than a parent policy wins; parent policies cascade where the child has no policy; this is the same principle as save_overrides_destroy and field override control
 69. **former_group_membership records are permanent** — group destruction does not erase membership history; queries against membership history are valid at any time via provenance store; use this for compliance and audit queries about past associations
+93. **Process Resource max_execution_time is mandatory** — it is not optional metadata; enforced by the Lifecycle Constraint Enforcer; profile governs the default on_max_exceeded action (notify/escalate/terminate)
+94. **Dependency graphs are embedded, not separate entities** — declared graph in Resource Type Specification; resolved graph in placement.yaml (Requested State); realized graph in Realized State events; no separate dependency graph artifact needed
+95. **Billing state is first-class — not metadata** — DCM carries the billing_state field; policy determines the billing model per resource type and state; Cost Analysis consumes it; organizations decide what is billable
+96. **Meta Provider composition_visibility governs DCM's view** — opaque means DCM only sees what the provider reports; transparent means all sub-resources are full DCM entities with drift detection; selective is the middle ground
 89. **Provider sovereignty is a contractual obligation** — every provider registration requires sovereignty_declaration; changes must be notified within declared SLA; DCM treats sovereignty changes as drift and re-evaluates placement; auto-migration available via Provider-Portable Rehydration
 90. **Git PR ingress actors resolve through the same Auth Provider as all other users** — DCM trusts the Git server's authentication assertion; git config user.email is ignored (spoofing vector); the resolved actor has IDENTICAL roles/groups/tenant scope to web UI login for the same user; unresolvable identities are always rejected with an actionable PR comment
 91. **Storage Provider sub-types are distinct** — Search Index (non-authoritative, rebuildable, consistency lag declared) and Audit Store (append-only, hash chain, reference-based retention, compliance queries) are separate sub-types; never treat them as interchangeable
