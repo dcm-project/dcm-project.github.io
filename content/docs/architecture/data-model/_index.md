@@ -25,4 +25,6 @@ realization, operation, and decommission.
   {{< card link="information-providers" title="Information Providers" icon="globe" subtitle="External data providers, information types, lookup model, and verification." >}}
   {{< card link="storage-providers" title="Storage Providers" icon="archive" subtitle="Storage provider contracts for GitOps stores, event streams, audit, and observability." >}}
   {{< card link="audit-provenance-observability" title="Audit, Provenance, and Observability" icon="eye" subtitle="The three distinct concerns of audit, data lineage, and operational observability." >}}
+  {{< card link="ingestion-model" title="Ingestion Model" icon="inbox-in" subtitle="Unified V1 migration and brownfield ingestion: ingest, enrich, promote. Transitional Tenant and ING system policies." >}}
+  {{< card link="policy-profiles" title="Policy Organization" icon="collection" subtitle="Policy Groups, Profiles, and Providers. Built-in profiles from minimal to sovereign. Lifecycle constraints. Cross-tenancy authorization." >}}
 {{< /cards >}}

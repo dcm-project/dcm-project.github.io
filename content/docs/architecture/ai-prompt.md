@@ -314,14 +314,16 @@ From lowest to highest precedence:
 - **Transformation** — enriches or modifies the payload. Adds missing fields, applies standards. Recorded in provenance.
 - **GateKeeper** — highest authority. Can override any field including consumer-declared values. Used for sovereignty constraints, security mandates, and hard compliance rules. All overrides recorded in provenance.
 
-### 6.6 Assembly Process (Seven Steps)
-1. **Intent Capture** — Request Layer stored as Intent State in Intent Store. No modification.
+### 6.6 Assembly Process (Nine Steps)
+1. **Intent Capture** — Request Layer stored as Intent State. No modification.
 2. **Layer Resolution** — Processor identifies applicable layers by Resource Type and organizational context.
 3. **Layer Merge** — Layers merged in precedence order. Each field records source layer UUID in provenance.
-4. **Request Layer Application** — Consumer values applied last in data layer merge. Overrides recorded in provenance.
-5. **Transformation Policies** — Enrich and modify payload. Provenance recorded per field.
-6. **Validation Policies** — Check payload. Failures reject request with reason.
-7. **GateKeeper Policies** — Hard overrides applied. Provenance recorded. Payload stored as Requested State.
+4. **Request Layer Application** — Consumer values applied. Overrides recorded in provenance.
+5. **Pre-Placement Policies** (`placement_phase: pre`) — Transformation → Validation → GateKeeper. Produces placement constraints.
+6. **Placement Engine — Placement Loop** — Iterates candidate providers. Per candidate: Reserve Query (atomic: verify + metadata + hold) → Loop Policy Phase. Confirmed on first passing candidate. See Section 6.12.
+7. **Post-Placement Policies** (`placement_phase: post`) — Transformation → Validation → GateKeeper. Has access to placement block including selected provider and all returned metadata.
+8. **Requested State Storage** — Complete payload stored: resource fields + placement block + policy gap records + enrichment_status.
+9. **Provider Dispatch** — Dispatched to selected provider via API Gateway. Hold confirmed by dispatch.
 
 ### 6.7 Key Rules
 - Core Layers are type-agnostic — applied to every request regardless of Resource Type
@@ -432,6 +434,85 @@ override_matrix:
 **Expansion rules:** `policy.global`, `policy.tenant`, `admin_override` can grant expansion. `policy.user`, `consumer_request`, `provider` can never expand. `process_resource` and `sre_override` denied by default — require trusted grant.
 
 **Actor extensibility:** Custom actors default to `deny`, require explicit grants, follow universal versioning and deprecation model.
+
+### 6.12 Placement Engine and Placement Loop
+
+The **Placement Engine** is a distinct named control plane component — a peer to the Policy Engine, not subordinate to it. It takes the policy-processed payload and placement constraints, builds a scored candidate list, and iterates until placement is confirmed or candidates are exhausted.
+
+**Input:** assembled payload + placement constraints + provider registry + topology data
+**Output:** `selected_provider_uuid` + placement block written to Requested State
+
+**Placement loop per candidate:**
+```
+Reserve Query → Loop Policy Phase
+  confirmed/partial → policies → pass/warn → PLACEMENT CONFIRMED
+  insufficient/refused → next candidate
+  policy reject_candidate → release hold, next candidate
+  policy gatekeep → release hold, ABORT, reject request
+No candidates → on_exhaustion: reject | escalate | manual_placement
+```
+
+**Reserve Query — single atomic call (primary placement query):**
+- Verifies provider can satisfy placement constraints
+- Returns all available metadata in one response
+- Places a resource hold for `hold_ttl_seconds`
+- Response: `confirmed | partial | insufficient | refused`
+- `partial` = hold confirmed but some requested metadata unavailable
+
+**Non-hold queries (outside the loop):**
+`capacity_query | metadata_query | constraint_verification` — informational, no side effects
+
+### 6.13 Policy Placement Phase and Required Context
+
+**`placement_phase` on every policy:**
+- `pre` — steps 5 (before provider known) — default
+- `loop` — step 6 (inside loop, evaluates reserve query response)
+- `post` — step 7 (after placement confirmed, provider known)
+- `both` — pre and post (not loop)
+
+**`required_context` for missing metadata:**
+```yaml
+policy:
+  placement_phase: loop
+  required_context:
+    - field: placement.provider_metadata.sovereignty_certifications
+      if_absent: gatekeep     # block if this field is missing
+    - field: placement.provider_metadata.patch_level
+      if_absent: warn         # proceed with warning
+    - field: placement.topology.rack
+      if_absent: skip         # not applicable if absent
+```
+
+**Missing metadata behavior:**
+| Situation | Behavior | Audit Record |
+|-----------|---------|-------------|
+| Field absent, `required_context: gatekeep` | Release hold, abort loop, reject request | Policy rejection with missing field detail |
+| Field absent, `required_context: warn` | Record warning, proceed | Warning in Requested State |
+| Field absent, `required_context: skip` | Not evaluated | Skipped in provenance |
+| Field absent, no policy declares it | `implicit_approval` | `policy_gap_record` |
+
+### 6.14 Policy Gap Record and Implicit Approval
+
+When a field is absent and no active policy has declared `required_context` for it, the result is **implicit approval** — not unknown, not unchecked, but explicitly recorded:
+
+```yaml
+policy_gap_record:
+  request_uuid: <uuid>
+  field: patch_level
+  field_value: null
+  evaluation_result: implicit_approval
+  reason: "No active policy declared required_context for this field."
+  provider_uuid: <uuid>
+  recorded_at: <ISO 8601>
+  resolution_expected: <realized_payload | discovery>
+```
+
+Provider is expected to complete missing metadata in:
+1. **Realized payload** — provider returns full metadata on realization
+2. **Discovery loop** — periodic discovery fills remaining gaps
+
+The realized entity's `enrichment_status: pending | partial | complete` tracks metadata completeness.
+
 
 ---
 
@@ -738,6 +819,101 @@ All relationships form a traversable graph. Used for: rehydration (full graph tr
 ### 11.10 Supersedes Dependency Graph
 The Entity Relationship model unifies the previously separate dependency graph concept. The dependency graph IS the relationship graph at pre-realization time — same structure, different lifecycle state.
 
+### 11.11 Lifecycle Policy Conflict Resolution (Q57 resolved)
+Lifecycle policy fields on relationships are **just fields**. They carry the same `override` metadata, the same provenance obligations, and resolve under the same Policy Engine authority hierarchy as any other DCM field. No special case — minimum variance.
+
+**Priority schema governs conflicts within a tier.** Highest numeric priority runs first. First policy to set `override: immutable` on a lifecycle policy field locks it. `immutable_ceiling: absolute` applies for compliance mandates that must survive future policy changes.
+
+**Ingestion conflict detection applies.** Two policies declaring conflicting lifecycle policies without priority differentiation → CONFLICT ERROR at ingestion.
+
+**DCM System Policies:**
+- `REL-008` — A `constituent` relationship lifecycle policy may not be set to `ignore` for `on_related_destroy`
+- `REL-009` — Lifecycle policy conflicts between policies are resolved by the standard Policy Engine authority hierarchy — no special case
+
+### 11.12 Relationship Type × Nature Matrix (valid combinations)
+
+The two relationship dimensions form an explicit matrix. Invalid combinations are rejected by the Policy Engine at request time (REL-013).
+
+| | `constituent` | `operational` | `informational` |
+|---|---|---|---|
+| **`requires`** | ✅ Core constituent | ✅ Hard operational dependency | ❌ Invalid |
+| **`depends_on`** | ✅ Soft constituent | ✅ **Allocated resource cell** | ✅ Awareness |
+| **`contains`** | ✅ Ownership container | ⚠️ Rare — justify explicitly | ❌ Invalid |
+| **`references`** | ❌ Invalid | ❌ Invalid | ✅ **Business context cell** |
+| **`peer`** | ❌ Invalid | ✅ Operational peers | ✅ Informational peers |
+| **`manages`** | ✅ Component management | ✅ Operational management | ✅ Audit management |
+
+- `operational` + `depends_on` = **allocated resource cell** — cross-tenant allocations live here
+- `informational` + `references` = **business context cell** — Business Unit, Cost Center etc.
+
+### 11.13 Cross-Tenant Relationships (Q59 resolved)
+
+Relationship **nature** governs cross-tenant permissions:
+
+| Nature | Cross-Tenant? | Rule |
+|--------|--------------|------|
+| `constituent` | ❌ Never | REL-010 |
+| `operational` | ✅ With dual authorization | REL-011 |
+| `informational` | ✅ Unless deny_all | REL-012 |
+
+**Hard tenancy declaration** on Tenant entity:
+```yaml
+hard_tenancy:
+  cross_tenant_relationships: operational_only
+  # deny_all | operational_only | informational_only | allow_all
+```
+
+### 11.14 Allocated Resource Model (Q59 extension, Q61 partial)
+
+An **Allocated Resource** is a pre-defined discrete slice of a parent resource made available by the owning Tenant for consuming Tenants to claim. It becomes a **first-class entity** in the consuming Tenant's scope with its own UUID, lifecycle, and governance.
+
+**Relationship:** `depends_on` + `operational` + `cross_tenant: true` + `allocation_uuid`
+
+**Parent pre-defines** `available_allocations` — consuming Tenant claims → DCM creates allocated entity + relationship → parent tracks in `active_allocations` with `notification_endpoint`.
+
+**Lifecycle events** propagate from parent to all active allocations per each allocation's `parent_lifecycle_policy`:
+`on_parent_destroy | on_parent_suspend | on_parent_maintenance | on_parent_degrade | on_parent_capacity_change`
+
+**System policies:** REL-013 (invalid matrix combinations rejected), REL-014 (claim requires available allocation record)
+
+### 11.15 Shared Resource Model — Same-Tenant (Q61 resolved)
+
+A **Shared Resource** is an entity within a single Tenant that has active relationships from multiple parent entities. DCM maintains `active_relationship_count` — the number of active constituent/operational relationships. Informational relationships never count (REL-016).
+
+**`sharing_model` on entity:**
+```yaml
+sharing_model:
+  shareable: true
+  sharing_scope: tenant
+  active_relationship_count: 3   # DCM-maintained
+  minimum_relationship_count: 0
+  on_last_relationship_released: <destroy | retain | notify>
+```
+
+**`shareability` on Resource Type Specification:**
+- `shareability.allowed: true` — instances can have multiple active relationships
+- `shareability.allowed: false` (e.g., `Compute.BootDisk`) — second relationship rejected (REL-017)
+- `max_active_relationships` — optional cap (e.g., license seat limits)
+
+**Destruction deferral (REL-015):** Destructive lifecycle actions on shared resources are deferred until `active_relationship_count` reaches `minimum_relationship_count`. Deferred destruction is recorded in `deferred_destruction_record`.
+
+### 11.16 Lifecycle Action Hierarchy — Save Overrides Destroy (REL-018)
+
+When multiple relationships produce different lifecycle action recommendations on a shared resource, the most conservative action wins:
+
+```
+retain > notify > suspend > detach > cascade > destroy
+```
+
+`retain` always beats `destroy` — the save_overrides_destroy rule. Applies automatically per REL-018.
+
+**Conflict detection (REL-019):** When recommendations differ, a `lifecycle_conflict_record` is created:
+- Severity `info` — hierarchy resolved cleanly (e.g., retain beats destroy non-adjacent)
+- Severity `warning` — adjacent levels or `notify` is the winning action — notifications sent
+- Severity `critical` — immutable lifecycle lock overridden by REL-018 — platform admin notified
+
+**Unified model:** Same-tenant sharing (`active_relationship_count`) and cross-tenant allocation (`active_allocations`) are the same reference-counting concept at different scopes. Both defer destructive actions until the last relationship/allocation is released.
+
 ---
 
 ## SECTION 12 — INFORMATION PROVIDERS
@@ -982,6 +1158,14 @@ Providers must honor a multi-dimensional contract:
 - Report Realized State completely and accurately
 - Handle drift detection requests
 
+**Query Contract**
+- Support `reserve_query` — atomic: verify constraints + return metadata + place hold
+- Support `capacity_query` (informational, no hold)
+- Support `metadata_query` (informational, no hold)
+- Declare which query types and metadata fields are supported in provider registration
+- Complete missing metadata in realized payload or discovery loop
+- `reserve_query` response must include `missing_metadata` for any requested fields not returned
+
 **Trust Contract** *(validation mechanism — to be detailed)*
 - Providers must be validated and certified to participate
 - Trust is established at onboarding
@@ -1002,6 +1186,7 @@ Providers must honor a multi-dimensional contract:
 - **Atomic Providers** — manage a single fundamental resource type (VM, IP, VLAN, container)
 - **Meta Providers** — compose multiple providers as components of their own service
 - **Process Providers** — purely process-based (no infrastructure resource, but a workflow or automation)
+- **Policy Providers** — supply policies from external authoritative sources; follow same base contract; three delivery modes (push/pull/webhook); three formats (dcm_native/opa_rego/external_schema); trust level governs max authority
 - **Real-world providers** are typically combinations of all three
 
 ---
@@ -1063,6 +1248,23 @@ The Policy Engine exclusively sets `override_control` metadata. Three levels (se
 - Level 2 — simple `override: allow|constrained|immutable`
 - Level 3 — full `override_matrix` with per-actor permissions and trusted grants
 
+### 17.9 Policy Placement Phase
+Every policy declares when in the assembly process it executes:
+- `pre` — before placement (default) — no provider context
+- `loop` — inside the placement loop — has reserve query response data
+- `post` — after placement confirmed — has full placement block
+- `both` — pre and post
+
+### 17.10 Policy Required Context
+Policies declare what fields they need and what to do when fields are absent:
+```yaml
+required_context:
+  - field: placement.provider_metadata.sovereignty_certifications
+    if_absent: <gatekeep | warn | skip>
+    if_absent_reason: <human-readable>
+```
+If no policy declares `required_context` for an absent field → `implicit_approval` recorded in `policy_gap_record`. The system has no implicit opinion beyond what policies state.
+
 ---
 
 ## SECTION 18 — KEY USE CASES
@@ -1082,11 +1284,24 @@ Enforce workload placement within specific regions or sovereignty constraints. C
 ### 18.5 Data Enrichment
 System enriches consumer requests with ancillary implementation details the consumer should not need to know. Consumer declares intent — DCM fills in the details.
 
-### 18.6 Greening the Brownfield
-Bring existing unmanaged resources under DCM lifecycle management:
-1. **Discovery** — provider interrogates existing resources, creates Discovered State payload
-2. **Enrichment** — business data associated with discovered resources (owner, cost center, purpose)
-3. **Lifecycle Ownership** — Discovered State promoted to Realized State; DCM assumes lifecycle management
+### 18.6 Greening the Brownfield — Unified Ingestion Model
+Bring existing unmanaged infrastructure under DCM lifecycle management using the unified ingestion model (see Section 20 and data model document 13-ingestion-model.md). The same three-step pattern applies to both brownfield ingestion and V1 migration:
+
+```
+1. INGEST   — bring the entity into DCM with whatever identity/metadata is available
+2. ENRICH   — associate business data, ownership, Tenant assignment, relationships
+3. PROMOTE  — transition from holding state to full DCM lifecycle ownership
+```
+
+**Brownfield flow:** Service Provider performs discovery → DCM identifies unmanaged Discovered State records → Entity stubs created (state: INGESTED, Tenant: `__transitional__`) → Business data and Tenant assigned → Promotion authorized → Discovered State promoted to Realized State → Drift detection active from this point.
+
+**V1 Migration flow:** V1 resources inventoried → Auto-assignment attempted via signals (resource groups, business unit, request history) → Auto-assignable resources assigned in bulk → Manually assignable resources surfaced in admin queue → Orphaned resources assigned to `__transitional__` → Enrichment and promotion → Migration complete when `__transitional__` Tenant is empty.
+
+**Key concepts:**
+- `__transitional__` Tenant — system-managed holding area for unassigned ingested entities. Cannot be deleted or used for new provisioning. Governance policy enforces max residency and escalation.
+- `ingestion_record` — provenance record on every ingested entity: source, confidence, assignment method, enrichment history, promotion timestamp
+- Ingestion confidence: `high` (strong signal) | `medium` (inferred) | `low` (orphaned)
+- Entities in `INGESTED` or `ENRICHING` state cannot be parents for allocated resource claims or hard dependencies for new requests
 
 ---
 
@@ -1105,7 +1320,215 @@ DCM addresses four dimensions of digital sovereignty:
 
 ---
 
-## SECTION 20 — PERSONAS
+## SECTION 20 — INGESTION MODEL
+
+The Ingestion Model is the **unified mechanism for bringing entities that exist outside DCM's lifecycle control into DCM governance**. It covers V1 Migration, Brownfield Discovery, and Manual Import — all follow the same pattern.
+
+### 20.1 Three-Step Pattern
+```
+INGEST  → ENRICH  → PROMOTE  → OPERATIONAL
+```
+
+### 20.2 Ingestion Lifecycle States
+
+| State | Tenant | New Requests? | Parent for Allocations? | New Relationships? |
+|-------|--------|--------------|------------------------|-------------------|
+| `INGESTED` | `__transitional__` or assigned | No | No | Informational only |
+| `ENRICHING` | Assigned | No | No | Operational (read-only) |
+| `PROMOTED` | Assigned | Yes | Yes | All types |
+
+### 20.3 The `__transitional__` Tenant
+System-managed holding Tenant for unassigned ingested entities:
+- Cannot be deleted, renamed, or used for new resource provisioning
+- Governance policy enforces `max_residency_days` and escalation action
+- Hard tenancy: `operational_only` by default
+- `created_via: system` — artifact metadata
+
+### 20.4 Ingestion Record
+Every ingested entity carries an `ingestion_record` in provenance:
+- `ingestion_source` — `v1_migration | brownfield_discovery | manual_import`
+- `assigned_tenant_uuid` — real Tenant or null if still in `__transitional__`
+- `assignment_method` — `auto | manual | transitional`
+- `assignment_signal` — human-readable description of what drove auto-assignment
+- `ingestion_confidence` — `high | medium | low`
+- `enrichment_status` — `pending | partial | complete`
+- `enrichment_history` — append-only log of all enrichment actions
+- `promoted_at` — when entity reached PROMOTED state
+
+### 20.5 Auto-Assignment Signal Priority
+DCM attempts auto-assignment in this order (configurable):
+1. Explicit ownership metadata (high confidence)
+2. Resource group membership (high confidence)
+3. Request history (high confidence)
+4. Network/location context (medium confidence)
+5. Naming convention (medium confidence)
+6. Provider context (medium confidence)
+7. No signal → `__transitional__` (low confidence)
+
+### 20.6 V1 Migration (Q55 resolved)
+V1 resources have no `tenant_uuid`. V2 requires one (TEN-001). Migration uses the ingestion model:
+- Pre-migration analysis pass classifies all V1 resources: `auto_assignable | manually_assignable | orphaned`
+- Auto-assignable → bulk Tenant assignment + ingestion record
+- Manually assignable → admin queue for human review and assignment
+- Orphaned → `__transitional__` Tenant + governance timer
+- Migration complete when `__transitional__` Tenant is empty
+
+### 20.7 Brownfield Ingestion
+Unmanaged discovered entities follow the same ingestion model:
+- Service Provider discovery creates Discovered State records
+- DCM identifies unmanaged Discovered State records (no matching Realized State)
+- Entity stubs created (state: INGESTED, source: brownfield_discovery)
+- Enriched → promoted → Discovered State becomes initial Realized State
+- Drift detection active from promotion forward
+
+### 20.8 DCM System Policies for Ingestion
+
+| Policy | Rule |
+|--------|------|
+| `ING-001` | Every ingested entity must be assigned to one Tenant — real or `__transitional__` — before V2 eligibility |
+| `ING-002` | Entities in `INGESTED` or `ENRICHING` state may not be parents for allocated resource claims |
+| `ING-003` | `__transitional__` Tenant cannot be deleted, renamed, or used for new provisioning |
+| `ING-004` | Every ingested entity must carry an `ingestion_record` in provenance |
+| `ING-005` | Entities in `__transitional__` beyond `max_residency_days` must trigger configured escalation |
+| `ING-006` | Brownfield entities may not be promoted without explicit actor authorization |
+| `ING-007` | At brownfield promotion, Discovered State is promoted to Realized State — DCM assumes lifecycle ownership |
+
+---
+
+## SECTION 21 — POLICY ORGANIZATION: GROUPS, PROFILES, AND POLICY PROVIDERS
+
+### 21.1 Three-Level Policy Organization
+```
+Policy Profile     — complete use-case configuration (composed of groups)
+  │
+Policy Groups      — single-concern policy collections (composed of policies)
+  │
+Policies           — individual Transformation / Validation / GateKeeper rules
+  │  optionally sourced from
+Policy Providers   — external authoritative policy sources (fifth provider type)
+```
+
+### 21.2 Policy Groups
+A **Policy Group** is a cohesive collection of policies addressing a single identifiable concern.
+
+**Concern types:** `technology | compliance | sovereignty | business | operational | security`
+
+**Key fields:** `handle` (domain/group/name), `concern_type`, `concern_tags`, `extends` (inherits parent), `policies` (constituent policies), `activation_scope` (resource types, tenant tags, regions), `conflicts_with` (explicit conflict declarations), `source` (local or policy_provider)
+
+**DCM built-in groups include:** core-minimal, dev-defaults, ephemeral-resources, audit-basic, audit-compliance, data-classification, cost-governance, sla-enforcement, hard-tenancy, explicit-cross-tenant, zero-trust, encryption-baseline, pci-dss, gdpr-eu, nist-800-53, iso-27001, fsi-audit, lifecycle-ttl-enforcement, air-gap, kubevirt, openstack, vmware
+
+### 21.3 Policy Profiles
+A **Policy Profile** is a complete DCM configuration for a specific use case composed of Policy Groups.
+
+**Six DCM built-in profiles (least to most restrictive):**
+
+| Profile | Tenancy | Enforcement | Cross-Tenant | Audit |
+|---------|---------|-------------|-------------|-------|
+| `minimal` | Optional — auto-created | Advisory only | allow_all | None |
+| `dev` | Recommended | Warn only | operational_only | Basic 90-day |
+| `standard` | Required | Blocking | explicit_only | Compliance-grade |
+| `prod` | Required | Blocking + SLA | explicit_only | Compliance-grade |
+| `fsi` | Hard tenancy | Blocking | explicit_only | 7-year retention |
+| `sovereign` | Hard tenancy | Blocking | deny_all | 10-year retention |
+
+**Profile inheritance chain:** sovereign extends fsi extends prod extends standard extends dev extends minimal
+
+**Profile activation levels (more specific wins):**
+```yaml
+installation_config:  default_profile: minimal
+platform_config:      active_profile: prod; minimum_tenant_profile: dev
+tenant_config:        active_profile: fsi  # must be >= minimum_tenant_profile
+```
+
+**Profile shadow validation:** proposed profiles run in shadow mode before activation — same as proposed policies.
+
+### 21.4 Policy Provider (Fifth Provider Type)
+A **Policy Provider** is a fifth DCM provider type — an external authoritative source supplying policies into DCM or evaluating/enriching data via external logic.
+
+**Four delivery modes:**
+
+| Mode | Name | Logic Lives In |
+|------|------|---------------|
+| 1 | DCM Native Push/Pull | DCM Policy Engine |
+| 2 | OPA/Rego Bundle | DCM Policy Engine (OPA) |
+| 3 | External Schema (naturalization) | DCM Policy Engine (post-translation) |
+| 4 | Black Box Query-Enrichment | External provider — opaque to DCM |
+
+**Modes 1-3** deliver policy rules. **Mode 4** is a query-response interface — DCM sends data, external system evaluates and/or enriches, returns structured result.
+
+**Mode 4 can:**
+- **Evaluate** — return pass/fail, score, or recommendation
+- **Enrich** — inject additional fields into the payload (risk scores, compliance citations, cost predictions, org context, case references)
+- **Both** — multi_factor result combining decision + enrichment
+
+**Mode 4 governance requirements:**
+- Data sovereignty check before ANY query is sent (BBQ-001, BBQ-003)
+- Data minimization — only declared fields sent (BBQ-002)
+- Full audit record per query-response cycle (BBQ-004) including `audit_token` for cross-system correlation
+- Default failure behavior is `gatekeep` — unknown is not safe (BBQ-005)
+- Injected enrichment fields carry standard field-level provenance with `source_type: black_box_provider` + `audit_token` (BBQ-007)
+- Override control applies to injected fields — GateKeeper can refuse enrichment (BBQ-008)
+- Mode 4 enrichment providers require minimum `transformation` trust level (BBQ-009)
+
+**Trust levels (all modes):**
+- `trusted` → GateKeeper authority (dual approval elevation required)
+- `verified` → Transformation/Validation only; Mode 4 enrichment minimum
+- `untrusted` → advisory only
+
+**`on_update` (Modes 1-3):** `proposed` (shadow validation) | `active` (immediate — trusted only)
+**On provider failure:** policies deprecated with configurable sunset; Mode 4 → `on_unavailable` behavior fires
+
+### 21.5 Lifecycle Time Constraints
+First-class field on any resource entity. Follow standard data model precedence and override control.
+
+**Two types:**
+- `ttl` — ISO 8601 duration relative to reference_point (created_at | realization_timestamp | last_modified)
+- `expires_at` — absolute ISO 8601 timestamp
+
+When both declared, earliest wins (LTC-004). GateKeeper can lock as `override: immutable`.
+
+**`on_expiry` actions:** `destroy | suspend | notify | review`
+
+Expiry enforcement is a DCM control plane function — not a provider concern. Failed expiry action → `PENDING_EXPIRY_ACTION` state + escalation (LTC-005).
+
+### 21.6 Cross-Tenancy Authorization — Explicit_Only Default
+Default stance is now **`explicit_only`** — informational sharing is NOT open by default. Every cross-tenant relationship of any nature requires an explicit `cross_tenant_authorization` record.
+
+**Authorization specifies who/what/when/where:**
+```yaml
+cross_tenant_authorization:
+  authorized_consumer_tenant_uuid: <uuid>    # WHO
+  permitted_fields: [field1, field2]         # WHAT — empty = all fields
+  valid_from/valid_until: <ISO 8601>         # WHEN
+  permitted_in_regions: [eu-west]            # WHERE
+  authorization_level: <tenant_global | resource_specific | field_specific>
+  # Hierarchy: field_specific > resource_specific > tenant_global (more specific wins)
+```
+
+All cross-tenant authorization decisions are policy-driven and DCM-enforced (XTA-004).
+
+### 21.7 Rehydration Tenancy Controls
+Tenancy controls, sovereignty directives, and cross-tenant authorizations **always use current policies during rehydration — cannot be pinned**.
+
+**`policy_version: pinned`** governs resource configuration policies only. Tenancy/sovereignty always current.
+
+When rehydration conflicts with current tenancy controls → entity enters **PENDING_REVIEW** state:
+- Allocation not automatically released
+- Notifications: entity owner, both Tenant admins, platform admin
+- Resolution: re_authorize | release | escalate
+- A policy may declare automatic resolution behavior (RHY-004)
+
+### 21.8 System Policy Summary
+
+**LTC:** LTC-001 through LTC-005 — lifecycle time constraint enforcement  
+**XTA:** XTA-001 through XTA-005 — cross-tenancy authorization model  
+**RHY:** RHY-001 through RHY-004 — rehydration tenancy controls  
+**DEP:** DEP-001 through DEP-003 — cross-tenant dependency rules  
+**BBQ:** BBQ-001 through BBQ-009 — Mode 4 black box query-enrichment governance
+
+---
+
+## SECTION 22 — PERSONAS
 
 | Persona | Primary Concern |
 |---------|----------------|
@@ -1122,7 +1545,7 @@ DCM addresses four dimensions of digital sovereignty:
 
 ---
 
-## SECTION 21 — TERMINOLOGY GLOSSARY
+## SECTION 23 — TERMINOLOGY GLOSSARY
 
 | Term | Definition |
 |------|-----------|
@@ -1175,6 +1598,39 @@ DCM addresses four dimensions of digital sovereignty:
 | **Tenant Advocate** | DCM's role in protecting Tenant interests in all provider interactions |
 | **DCM System Policy** | Non-overridable policy built into DCM — cannot be disabled or overridden by organizational policy |
 | **Webhook** | Push-based outbound notification from DCM to an external system triggered by a DCM event |
+| **Mode 4 Policy Provider** | Black box query-enrichment policy provider — DCM sends query, external system evaluates and/or enriches, returns structured result; logic is opaque to DCM |
+| **Black Box Query-Enrichment** | Mode 4 operation where an external system simultaneously evaluates request data and injects enrichment fields into the payload |
+| **audit_token** | Provider-issued reference in Mode 4 responses enabling cross-system audit correlation between DCM audit trail and provider's internal logs |
+| **data_request_spec** | Mode 4 registration declaration of which fields the provider is authorized to receive, with classification ceiling per field |
+| **Policy Naturalization** | Translation of external policy schemas (OSCAL, XCCDF, CIS JSON) into DCM policy format — Mode 3 Policy Provider mechanism |
+| **Policy Group** | Cohesive versioned collection of policies addressing a single identifiable concern — the unit of policy reuse |
+| **Policy Profile** | Complete DCM configuration for a specific use case — composed of Policy Groups |
+| **Policy Provider** | Fifth DCM provider type — external authoritative source supplying policies into DCM |
+| **Policy Naturalization** | Translation of external policy schemas (OSCAL, XCCDF, CIS JSON) into DCM policy format |
+| **concern_type** | Policy Group classification: technology, compliance, sovereignty, business, operational, security |
+| **minimal profile** | Least restrictive built-in profile — advisory enforcement, auto-tenant, home lab / evaluation |
+| **sovereign profile** | Most restrictive built-in profile — hard tenancy, deny_all cross-tenant, maximum sovereignty |
+| **Lifecycle Constraint Enforcer** | DCM control plane component monitoring realized entities against time constraints |
+| **cross_tenant_authorization** | Explicit authorization record for cross-tenant relationship — specifies who, what, when, where |
+| **explicit_only** | Default cross-tenant hard tenancy setting — ALL cross-tenant requires explicit authorization |
+| **PENDING_REVIEW** | Entity state during paused rehydration tenancy conflict — awaiting resolution |
+| **Policy Gap Record** | Audit record for fields absent from reserve query with no applicable policy — records implicit_approval |
+| **Shared Resource** | An entity within a single Tenant with active relationships from multiple parent entities; governed by sharing_model and reference counting |
+| **sharing_model** | Entity-level declaration of shareability, active_relationship_count, and on_last_relationship_released behavior |
+| **active_relationship_count** | DCM-maintained count of active constituent/operational relationships on a shared resource |
+| **save_overrides_destroy** | The lifecycle action hierarchy rule: retain > notify > suspend > detach > cascade > destroy; most conservative action always wins |
+| **lifecycle_conflict_record** | Audit record created when multiple lifecycle action recommendations differ; carries severity, resolved action, and resolution rule |
+| **deferred_destruction_record** | Audit record created when a destructive lifecycle action is deferred because active_relationship_count is above minimum |
+| **Ingestion Model** | Unified DCM mechanism for bringing entities outside lifecycle control into DCM governance — covers V1 migration, brownfield discovery, and manual import |
+| **Ingestion Record** | Provenance record on every ingested entity — source, confidence, assignment method, enrichment history, promotion timestamp |
+| **`__transitional__` Tenant** | System-managed holding Tenant for unassigned ingested entities — cannot be deleted, renamed, or used for new provisioning |
+| **Ingestion Confidence** | `high | medium | low` — quality signal for auto-assignment; reflects how reliable the Tenant assignment is |
+| **Brownfield** | Existing infrastructure not yet under DCM lifecycle management — brought in via brownfield ingestion |
+| **Greening the Brownfield** | The progressive process of bringing unmanaged infrastructure under DCM lifecycle control via the ingestion model |
+| **V1 Migration** | Migration of pre-Tenant DCM V1 entities to V2 using the ingestion model |
+| **INGESTED state** | First ingestion lifecycle state — entity in DCM, minimal metadata, Tenant may be __transitional__ |
+| **ENRICHING state** | Second ingestion lifecycle state — Tenant assigned, metadata and relationships being completed |
+| **PROMOTED state** | Final ingestion lifecycle state — all requirements met, DCM assumes full lifecycle ownership |
 | **DCM Event Type** | A versioned, typed event that DCM can emit — follows universal versioning model |
 | **Event Type Registry** | DCM-maintained registry of standard event types — extensible like the Resource Type Registry |
 | **Webhook Registration** | Declaration by a consumer, provider, or external system of which DCM events they want to receive and where |
@@ -1244,7 +1700,7 @@ DCM addresses four dimensions of digital sovereignty:
 
 ---
 
-## SECTION 22 — OPEN QUESTIONS
+## SECTION 24 — OPEN QUESTIONS
 
 These items are explicitly unresolved. Do not make assumptions about them — flag them and ask for guidance.
 
@@ -1281,7 +1737,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 | 29 | How does SUSPENDED state interact with cost analysis — is a suspended Entity still billable? | Entities |
 | 30 | How are dependency graphs versioned relative to catalog item versions? | Dependencies |
 | 31 | Should the dependency graph be stored as a separate entity or embedded in the request payload? | Dependencies |
-| 32 | How are cross-tenant dependencies handled? | Dependencies |
+| 32 | How are cross-tenant dependencies handled? | Dependencies | ✅ Resolved — governed by REL-010/011/012; DEP-001/002/003 for dependency graph specifics; explicit_only default; cross_tenant_authorization required |
 | 33 | Should there be a maximum dependency graph depth? | Dependencies |
 | 34 | How does the dependency graph interact with the Meta Provider model? | Dependencies |
 | 35 | Should DCM maintain a registry of well-known custom group types? | Grouping |
@@ -1303,14 +1759,14 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 | 51 | When immutable is set by a Global policy, can a higher-priority Global policy still override it? | Override Control | ✅ Resolved — execution order makes default immutable effectively absolute; immutable_ceiling: absolute provides explicit forward-looking protection |
 | 52 | Should constraint_schema on a constrained field be visible to consumers in the Service Catalog UI? | Override Control |
 | 53 | Enhancement gaps: storage/networking bundling vs. dependency model — V1 simplification or new concept needed? | Enhancements |
-| 54 | Enhancement gaps: selected_provider as policy output vs. placement component concern | Enhancements |
-| 55 | Enhancement gaps: migration path from V1 (no Tenant) to Tenant-mandatory | Enhancements |
+| 54 | Enhancement gaps: selected_provider as policy output vs. placement component concern | Enhancements | ✅ Resolved — Placement Engine is a distinct named component; nine-step assembly; reserve query; placement loop with policy phases; policy_gap_record for implicit approval; post-placement policy pass |
+| 55 | Enhancement gaps: migration path from V1 (no Tenant) to Tenant-mandatory | Enhancements | ✅ Resolved — unified ingestion model; __transitional__ Tenant; three-step ingest/enrich/promote; ING-001 through ING-007; also covers brownfield ingestion |
 | 56 | Enhancement gaps: should editable field concept from Catalog Item Schema be incorporated into Resource Type Spec? | Enhancements |
-| 57 | How are relationship conflicts resolved — two policies declare different lifecycle policies for the same relationship? | Entity Relationships |
+| 57 | How are relationship conflicts resolved — two policies declare different lifecycle policies for the same relationship? | Entity Relationships | ✅ Resolved — standard Policy Engine authority hierarchy; lifecycle policy fields are just fields; no special case; REL-008 and REL-009 |
 | 58 | Should relationship roles be validated against the role registry at request time, or is validation advisory? | Entity Relationships |
-| 59 | How does the relationship graph interact with multi-tenant scenarios — can a relationship cross Tenant boundaries? | Entity Relationships |
+| 59 | How does the relationship graph interact with multi-tenant scenarios — can a relationship cross Tenant boundaries? | Entity Relationships | ✅ Resolved — nature governs; constituent never; operational with dual auth; informational unless deny_all; REL-010/011/012; allocated resource model |
 | 60 | Should there be a maximum relationship graph depth? | Entity Relationships |
-| 61 | How are shared entities represented — an entity required by multiple parents? | Entity Relationships |
+| 61 | How are shared entities represented — an entity required by multiple parents? | Entity Relationships | ✅ Resolved — sharing_model with active_relationship_count; save_overrides_destroy hierarchy; lifecycle_conflict_record; REL-015 through REL-019 |
 | 62 | How are conflicting Information Provider push events handled — two providers claim authority for the same record? | Information Providers |
 | 63 | Should Information Providers support write-back — DCM updating external records via the provider? | Information Providers |
 | 64 | How is the extended schema versioned when a provider adds or removes extended fields? | Information Providers |
@@ -1341,7 +1797,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ---
 
-## SECTION 23 — DOCUMENTATION STRUCTURE
+## SECTION 25 — DOCUMENTATION STRUCTURE
 
 DCM documentation follows a hierarchical structure:
 
@@ -1389,7 +1845,7 @@ content/
 
 ---
 
-## SECTION 24 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 26 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, follow these instructions:
 
@@ -1433,6 +1889,30 @@ When working on this project, follow these instructions:
 38. **Conflicts are resolved at ingestion, not assembly** — all active layers in DCM are pre-validated conflict-free; the assembly process never encounters an ambiguous merge; if a conflict is found at ingestion, the PR is blocked until resolved
 39. **Priority schema is advisory for categories, mandatory for ordering** — the reference taxonomy (900=Compliance, 800=Security, etc.) is advisory and organizations may adapt it; however, the numeric comparison rule is always enforced and always deterministic
 40. **Proposed status enables shadow validation** — policy artifacts in proposed status execute in shadow mode against real traffic; output is captured in proposed_evaluation_record but never applied; this is the required validation step before activation
+63. **Mode 4 Policy Providers are query-response interfaces** — logic lives externally; DCM sends minimized data, receives decision and/or enrichment; data sovereignty check always runs before any query is dispatched; default failure behavior is gatekeep
+64. **Mode 4 enrichment fields carry full provenance** — source_type: black_box_provider, source_uuid, and audit_token; override control applies; a GateKeeper can refuse enrichment on sensitive fields; enrichment providers require transformation trust level minimum
+57. **Policy Profiles are the primary configuration mechanism** — most deployments activate a built-in profile and add organization-specific groups; do not configure individual policies from scratch when a profile covers the use case
+58. **Policy Groups are the unit of reuse** — when designing policies for a concern, package them as a group; groups can be shared across profiles and inherited by other groups
+59. **Policy Providers are the fifth provider type** — they follow the same base contract; trust level determines max policy authority; untrusted providers are advisory only; trusted requires dual approval elevation
+60. **Cross-tenant default is explicit_only** — informational sharing is NOT open by default; every cross-tenant relationship of any nature requires a cross_tenant_authorization record; this supersedes the earlier operational_only default
+61. **Lifecycle time constraints are first-class fields** — they follow standard precedence and override control; GateKeeper can lock them immutable; expiry enforcement is a DCM control plane function not a provider concern
+62. **Rehydration cannot bypass tenancy or sovereignty** — policy_version: pinned only governs resource configuration policies; tenancy and sovereignty always use current policies; conflicts produce PENDING_REVIEW state
+53. **Shared resources use reference counting** — DCM maintains active_relationship_count; destructive actions are deferred until the count reaches minimum_relationship_count per REL-015; informational relationships never count (REL-016)
+54. **Save overrides destroy — always** — the lifecycle action hierarchy (retain > notify > suspend > detach > cascade > destroy) resolves all multi-parent lifecycle conflicts deterministically; retain always wins per REL-018; this is non-negotiable
+55. **Lifecycle conflicts are recorded, not silently resolved** — lifecycle_conflict_record created whenever multiple different action recommendations exist; warning/critical severity triggers notifications; info severity is logged only
+56. **shareability.allowed: false blocks multiple relationships at type level** — non-shareable resource types (e.g., boot disks) reject second constituent/operational relationships at request time per REL-017; check Resource Type Specification before designing multi-parent relationships
+49. **Assembly is nine steps not seven** — steps 1-4 (layers), step 5 (pre-placement policies), step 6 (Placement Engine loop), step 7 (post-placement policies), step 8 (Requested State storage), step 9 (dispatch); always use the correct step number when discussing assembly
+50. **Reserve query is atomic** — it simultaneously verifies constraints, returns metadata, and places a resource hold; it is the primary placement query inside the loop; non-hold queries (capacity, metadata, constraint_verification) are available outside the loop for informational purposes
+51. **Missing metadata is a policy concern only** — DCM has no built-in opinion about metadata sufficiency; if no policy declares required_context for an absent field, the result is implicit_approval; implicit approvals are recorded explicitly in policy_gap_records
+52. **Placement Engine is a named component** — it is a peer to the Policy Engine, not subordinate to it; it owns the placement loop, candidate scoring, reserve query dispatch, and hold management
+45. **Ingestion model is the unified mechanism** — V1 migration and brownfield ingestion are the same three-step pattern: ingest → enrich → promote; use the same ingestion_record structure, same __transitional__ Tenant, same governance policies regardless of source
+46. **`__transitional__` Tenant is a system artifact** — never design around it for normal operations; it exists only as a migration/ingestion holding area; entities there are governance liabilities to be resolved
+47. **Ingested entities have capability restrictions** — INGESTED and ENRICHING state entities cannot be parents for allocated resource claims or hard dependencies for new requests; always check ingestion state before designing dependencies
+48. **Promotion is the lifecycle gate** — an entity is not a full DCM citizen until it reaches PROMOTED state; before that it is in a holding state with restricted capabilities
+41. **Lifecycle policy fields on relationships are just fields** — they carry the same override metadata and resolve under the same Policy Engine authority hierarchy as any other DCM field; no special conflict resolution mechanism
+42. **Relationship type × nature matrix is explicit and enforced** — invalid combinations are rejected at request time per REL-013; the matrix is the authoritative source for valid relationship combinations
+43. **Cross-tenant relationships are governed by nature** — constituent never crosses tenant boundaries; operational requires dual authorization; informational is permitted unless deny_all; hard_tenancy declaration on the Tenant entity controls the boundary
+44. **Allocated resources are first-class entities** — a consuming Tenant gets its own UUID, lifecycle, and governance; the relationship is depends_on + operational + cross_tenant; the parent pre-defines available allocations; DCM tracks active allocations on the parent with notification endpoints — they carry the same override metadata and resolve under the same Policy Engine authority hierarchy as any other DCM field; there is no special conflict resolution mechanism for lifecycle policies; REL-008 and REL-009 are the only relationship-specific system policies that add constraints beyond the standard model
 
 ---
 

@@ -1059,17 +1059,177 @@ Layers are merged in precedence order (lowest to highest). For each field:
 ### Step 4 — Request Layer Application
 The consumer's Request Layer is applied last in the data layer merge. Consumer-declared values override all data layer values. Each override is recorded in provenance.
 
-### Step 5 — Policy Processing
-Policies are applied to the merged payload in order. Each policy step may read and set `override_control` metadata on fields — see Section 5a for full detail.
-1. **Transformation Policies** — enrich and modify the payload. May set `override_preference: constrained` on fields, declaring that future overrides must satisfy a constraint schema. Each transformation records the policy UUID, operation type, reason, and any override control declarations in the affected fields' provenance.
-2. **Validation Policies** — check the payload against rules and verify that existing `override_preference` declarations have not been violated. Failures reject the request with a detailed reason. No field modification occurs.
-3. **GateKeeper Policies** — apply hard overrides and blocks. May set `override_preference: immutable` on fields, permanently locking them against further modification. GateKeeper overrides record the policy UUID, the overridden value, the new value, the lock type, and the reason in provenance.
+### Step 5 — Pre-Placement Policy Processing
+Policies with `placement_phase: pre` (or `both`) are evaluated against the merged payload before any provider is known. Three policy types execute in order:
 
-### Step 6 — Requested State Storage
-The fully assembled, policy-processed payload is stored as the **Requested State** in the Request Store. This is the complete, provider-ready payload with full provenance chain intact.
+1. **Transformation Policies** — enrich and modify the payload. May set `override: constrained` on fields. Each transformation records the policy UUID, operation type, reason, and any override control declarations in provenance.
+2. **Validation Policies** — check the payload against rules. Pass/fail only — no field modification. Failures reject the request.
+3. **GateKeeper Policies** — apply hard overrides and blocks. May set `override: immutable`. All overrides recorded in provenance.
 
-### Step 7 — Provider Dispatch
-The Requested State payload is dispatched to the appropriate Service Provider via the API Gateway.
+Pre-placement policies produce **placement constraints** — declarative requirements a provider must satisfy (sovereignty zone, hardware class, conformance level, etc.). These constraints are carried forward as inputs to the Placement Engine.
+
+### Step 6 — Placement Engine — Placement Loop
+
+The Placement Engine takes the policy-processed payload and placement constraints, builds a candidate provider list (filtered by constraints, ordered by scoring criteria), and iterates through candidates until placement is confirmed or all candidates are exhausted.
+
+**Placement loop governance** (configurable by policy):
+```yaml
+placement_loop_config:
+  max_iterations: 5              # maximum candidates to attempt
+  max_duration_seconds: 30       # timeout for entire loop
+  on_exhaustion: <reject | escalate | manual_placement>
+  hold_ttl_seconds: 300          # how long provider holds resources
+```
+
+**Per-candidate iteration:**
+
+```
+── RESERVE QUERY (single atomic call to provider) ──
+  Request: constraints + resource spec + hold TTL + metadata_requested
+  Response status:
+    confirmed: resources held, constraints satisfied, metadata returned
+    partial:   hold confirmed, some metadata unavailable
+    insufficient: provider lacks capacity — skip to next candidate
+    refused:   provider cannot satisfy constraints — skip to next candidate
+
+── POLICY PHASE (placement_phase: loop) ──
+  Policies evaluate: payload + constraints + reserve query response
+  For each field declared in policy required_context:
+    Field present:   evaluate normally
+    Field absent, required_context declared:
+      if_absent: gatekeep  → release hold, abort loop, REJECT REQUEST
+      if_absent: warn      → record warning, continue
+      if_absent: skip      → record as skipped, continue
+    Field absent, no policy declares required_context:
+      → record policy_gap_record (implicit_approval), continue
+  Policy outcomes:
+    gatekeep         → release hold, abort loop, REJECT REQUEST
+    reject_candidate → release hold, skip to next candidate
+    pass / warn      → PLACEMENT CONFIRMED — exit loop
+```
+
+**Reserve query structure:**
+```yaml
+reserve_query_request:
+  request_uuid: <uuid>
+  hold_uuid: <uuid — DCM-generated>
+  resource_type: <e.g., Compute.VirtualMachine>
+  placement_constraints: <from pre-placement policy outputs>
+  resource_spec:
+    cpu: 16
+    ram_gb: 64
+    storage_gb: 500
+  hold_ttl_seconds: 300
+  metadata_requested:
+    - capacity_available
+    - topology
+    - sovereignty_certifications
+    - patch_level
+    - maintenance_windows
+
+reserve_query_response:
+  hold_uuid: <echoed>
+  provider_hold_reference: <provider-native hold ID — opaque>
+  hold_status: <confirmed | insufficient | refused | partial>
+  hold_confirmed_spec:
+    cpu: 16
+    ram_gb: 64
+    storage_gb: 500
+    zone: eu-west-1a
+    rack: rack-07
+  metadata:
+    topology:
+      zone: eu-west-1a
+      rack: rack-07
+      network_segment: vlan-142
+      available_ips: ["10.20.4.0/24"]
+    sovereignty_certifications:
+      - cert: ISO-27001
+        valid_until: "2027-06-30"
+    missing_metadata:
+      - field: patch_level
+        reason: "Provider does not track patch metadata at this conformance level"
+```
+
+**Non-hold queries** (available outside the placement loop for capacity checks, provider health, cost estimation, and pre-filtering):
+
+| Query Type | Hold? | Purpose |
+|-----------|-------|---------|
+| `reserve_query` | Yes — atomic | Primary placement loop query |
+| `capacity_query` | No | Pre-loop filtering, dashboard, cost estimation |
+| `metadata_query` | No | Provider health checks, audit, policy pre-evaluation |
+| `constraint_verification` | No | Rapid pre-filter before entering the loop |
+
+**Policy gap records** — when a field is absent and no policy declares `required_context` for it:
+```yaml
+policy_gap_record:
+  request_uuid: <uuid>
+  field: patch_level
+  field_value: null
+  evaluation_result: implicit_approval
+  reason: >
+    No active policy declared required_context for this field.
+    Field was absent in reserve query response.
+    Request proceeded without policy evaluation of this field.
+  provider_uuid: <uuid>
+  recorded_at: <ISO 8601>
+  resolution_expected: realized_payload
+  # Provider expected to supply this field in the realized payload or discovery
+```
+
+**Provider metadata completeness — eventual consistency:**
+Fields missing from the reserve query response are expected to be completed in:
+1. **Realized payload** (primary) — provider returns full metadata when confirming realization
+2. **Discovery loop** (fallback) — periodic discovery fills remaining gaps
+
+The realized entity carries `enrichment_status: pending | partial | complete` reflecting how complete its metadata is. This is the same pattern as the ingestion model.
+
+### Step 7 — Post-Placement Policy Processing
+Policies with `placement_phase: post` (or `both`) execute after the Placement Engine has confirmed a provider selection. These policies have full access to the `placement` block of the payload including the provider selection, hold confirmation, and all returned metadata.
+
+1. **Transformation Policies** — provider-aware enrichment. Inject zone-specific configuration, provider-specific defaults, topology-derived values that are only knowable after provider selection.
+2. **Validation Policies** — post-placement checks. Verify the selected provider meets requirements that couldn't be expressed as pre-placement constraints.
+3. **GateKeeper Policies** — post-placement hard overrides. May inject mandatory fields triggered by the specific provider selected (e.g., additional data handling requirements for a provider in a specific jurisdiction).
+
+**Policy `placement_phase` values:**
+```yaml
+policy:
+  placement_phase: <pre | loop | post | both>
+  # pre:  steps 5 — before provider known (default)
+  # loop: step 6 — inside placement loop, evaluates reserve query response
+  # post: step 7 — after placement confirmed, provider known
+  # both: pre and post (not loop)
+```
+
+**Policy `required_context` for missing metadata:**
+```yaml
+policy:
+  placement_phase: loop
+  required_context:
+    - field: placement.provider_metadata.sovereignty_certifications
+      if_absent: gatekeep
+      if_absent_reason: >
+        Cannot evaluate sovereignty compliance without provider
+        certification data. Blocking request. Provider must register
+        this metadata to participate in sovereignty-scoped requests.
+    - field: placement.provider_metadata.patch_level
+      if_absent: warn
+      if_absent_reason: >
+        Patch level not available. Proceeding with warning.
+        Provider notified to register patch metadata.
+```
+
+### Step 8 — Requested State Storage
+The fully assembled, policy-processed, placement-confirmed payload is stored as the **Requested State** in the Request Store. The Requested State includes:
+- All assembled resource fields with full provenance chain
+- Complete `placement` block: selected provider, hold UUID, all reserve query responses per iteration, all policy evaluations per iteration, placement constraints applied, alternatives considered
+- All `policy_gap_record` entries for implicit approvals
+- `enrichment_status` reflecting metadata completeness at dispatch time
+
+### Step 9 — Provider Dispatch
+The Requested State payload is dispatched to the selected Service Provider via the API Gateway. The resource hold placed during the Placement Loop is confirmed by dispatch. The provider uses the hold reference to fulfill the request against the reserved resources.
+
+---
 
 ---
 
@@ -1080,12 +1240,12 @@ Consumer Request
       │
       ▼
 ┌─────────────────┐
-│  REQUEST LAYER  │  ← Consumer declared intent → stored as INTENT STATE
+│  REQUEST LAYER  │  ← Consumer declared intent → stored as INTENT STATE (Step 1)
 └────────┬────────┘
          │
          ▼
 ┌─────────────────────────────────────────────────────────┐
-│                  LAYER RESOLUTION                        │
+│             LAYER RESOLUTION + MERGE (Steps 2-4)         │
 │                                                          │
 │  Base Layer          (lowest precedence)                 │
 │       ↓                                                  │
@@ -1101,22 +1261,55 @@ Consumer Request
          │  Merged payload with full provenance
          ▼
 ┌─────────────────────────────────────────────────────────┐
-│                  POLICY PROCESSING                       │
+│          PRE-PLACEMENT POLICY PROCESSING (Step 5)        │
 │                                                          │
 │  Transformation Policies  (enrich / modify)              │
 │       ↓                                                  │
 │  Validation Policies      (pass / fail check)            │
 │       ↓                                                  │
 │  GateKeeper Policies      (override / block)             │
+│       ↓ outputs: placement constraints                   │
 └────────┬────────────────────────────────────────────────┘
-         │  Complete, validated, policy-processed payload
+         │  Policy-processed payload + placement constraints
+         ▼
+┌─────────────────────────────────────────────────────────┐
+│              PLACEMENT ENGINE — LOOP (Step 6)            │
+│                                                          │
+│  For each candidate provider (filtered + scored):        │
+│    │                                                     │
+│    ├── Reserve Query (atomic: verify + metadata + hold)  │
+│    │     confirmed / partial → policy phase              │
+│    │     insufficient / refused → next candidate         │
+│    │                                                     │
+│    └── Loop Policy Phase (placement_phase: loop)         │
+│          Field present → evaluate normally               │
+│          Field absent + required_context → if_absent     │
+│          Field absent + no policy → implicit_approval    │
+│          pass/warn → PLACEMENT CONFIRMED                 │
+│          reject_candidate → release hold, next           │
+│          gatekeep → release hold, REJECT REQUEST         │
+│                                                          │
+│  No candidates remain → on_exhaustion behavior           │
+└────────┬────────────────────────────────────────────────┘
+         │  selected_provider_uuid + placement block
+         ▼
+┌─────────────────────────────────────────────────────────┐
+│         POST-PLACEMENT POLICY PROCESSING (Step 7)        │
+│                                                          │
+│  Transformation Policies  (provider-aware enrichment)    │
+│       ↓                                                  │
+│  Validation Policies      (post-placement checks)        │
+│       ↓                                                  │
+│  GateKeeper Policies      (provider-triggered overrides) │
+└────────┬────────────────────────────────────────────────┘
+         │  Complete, validated, placement-confirmed payload
          ▼
 ┌─────────────────┐
-│ REQUESTED STATE │  ← Stored in Request Store
-└────────┬────────┘
-         │
+│ REQUESTED STATE │  ← Stored in Request Store (Step 8)
+└────────┬────────┘    includes: placement block, hold records,
+         │             policy gap records, enrichment_status
          ▼
-   Service Provider
+   Service Provider  (Step 9 — dispatch, hold confirmed)
 ```
 
 ---

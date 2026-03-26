@@ -12,7 +12,7 @@ weight: 5
 
 
 **Document Status:** 🔄 In Progress  
-**Related Documents:** [Context and Purpose](../context-and-purpose/) | [Layering and Versioning](../layering-and-versioning/) | [Resource Type Hierarchy](../resource-type-hierarchy/) | [Service Dependencies](../service-dependencies/) | [Resource Grouping](../resource-grouping/)
+**Related Documents:** [Context and Purpose](00-context-and-purpose.md) | [Layering and Versioning](03-layering-and-versioning.md) | [Resource Type Hierarchy](05-resource-type-hierarchy.md) | [Service Dependencies](07-service-dependencies.md) | [Resource Grouping](08-resource-grouping.md)
 
 ---
 
@@ -410,7 +410,7 @@ dcm_capacity_rating:
 
 Every Resource/Service Entity carries a `relationships` section declaring its relationships to other entities — internal DCM entities, external data entities, and business context entities. The relationship model is universal — the same structure is used for all relationship types.
 
-See [Entity Relationships](../entity-relationships/) for the complete relationship model.
+See [Entity Relationships](09-entity-relationships.md) for the complete relationship model.
 
 ```yaml
 resource_service_entity:
@@ -449,6 +449,73 @@ The following are **non-overridable DCM System Policies** that apply to all Reso
 | `RSE-006` | Provider lifecycle events must be recorded in Entity provenance | Enforced at event receipt |
 | `RSE-007` | Ownership transfers must be authorized by policy | Enforced at transfer initiation |
 | `RSE-008` | Process Resource Entities must reference all affected Entity UUIDs | Enforced at process completion |
+
+---
+
+## 9a. Lifecycle Time Constraints
+
+### 9a.1 Concept
+
+**Lifecycle time constraints** declare when a resource should cease to exist or trigger a lifecycle action. They are a first-class field on any resource entity — governed, provenance-tracked, and subject to the standard override control model.
+
+Any source in the data model precedence chain can declare a time constraint: a consumer request, a Core Layer, a Service Layer, or a policy. The Policy Engine has full authority over constraints — a GateKeeper can lock a TTL immutable or set `immutable_ceiling: absolute` on an expiry date.
+
+### 9a.2 Constraint Structure
+
+```yaml
+lifecycle_constraints:
+  ttl:
+    duration: P14D                            # ISO 8601 duration
+    reference_point: realization_timestamp    # created_at | realization_timestamp | last_modified
+    on_expiry: <destroy | suspend | notify | review>
+    metadata:
+      override: allow                         # standard override control
+      basis_for_value: "Consumer declared ephemeral — 14-day lab resource"
+
+  expires_at:
+    timestamp: "2026-06-30T23:59:59Z"         # absolute calendar date
+    on_expiry: notify
+    metadata:
+      override: immutable
+      locked_by_policy_uuid: <uuid>
+      basis_for_value: "Project deadline — resource must not persist beyond Q2"
+
+  enforcement:
+    warn_before_expiry: P1D                   # warn 1 day before expiry
+    grace_period: PT1H                        # 1 hour grace after expiry before action
+    on_grace_period_expiry: <execute | escalate>
+```
+
+When both `ttl` and `expires_at` are declared, the earliest expiry wins (LTC-004).
+
+### 9a.3 Precedence
+
+Time constraints follow the same precedence as all other resource fields:
+
+```
+Base Layer (lowest — e.g., no TTL by default)
+  ↓  Core Layer (e.g., all dev resources: TTL 90 days)
+  ↓  Service Layer (e.g., ephemeral compute: TTL 7 days)
+  ↓  Request Layer (consumer declared)
+  ↓  Transformation Policy (enrich from business context)
+  ↓  GateKeeper Policy (highest — may lock immutable)
+```
+
+### 9a.4 Expiry Enforcement
+
+The **Lifecycle Constraint Enforcer** is a DCM control plane component — not a provider concern. It monitors realized entities, fires `on_expiry` actions when constraints are reached, and records all enforcement in provenance and the Audit Store.
+
+Entities whose `on_expiry` action fails to execute enter `PENDING_EXPIRY_ACTION` state and trigger an escalation (LTC-005).
+
+### 9a.5 System Policies
+
+| Policy | Rule |
+|--------|------|
+| `LTC-001` | Lifecycle time constraints follow standard data model precedence |
+| `LTC-002` | GateKeeper policies may lock lifecycle constraints as immutable |
+| `LTC-003` | Expiry enforcement is a DCM control plane function |
+| `LTC-004` | When multiple time constraints exist, the earliest expiry wins |
+| `LTC-005` | Failed expiry action execution triggers `PENDING_EXPIRY_ACTION` state and escalation |
 
 ---
 

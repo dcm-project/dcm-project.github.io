@@ -232,20 +232,38 @@ Intent State captured (immutable consumer declaration)
   │  CI: policy pre-validation, cost estimate, sovereignty check
   │  Human review via PR (if policy requires)
   ▼  [PR merged — CD pipeline fires]
-Request Payload Processor
-  │  Layer assembly (Base → Core → Intermediate → Service → Request)
-  │  Policy Engine (Transformation → Validation → GateKeeper)
+Request Payload Processor — Nine-Step Assembly
+  │
+  │  Steps 1-4: Layer assembly
+  │    Base → Core → Intermediate → Service → Request Layer
+  │
+  │  Step 5: Pre-Placement Policies
+  │    Transformation → Validation → GateKeeper
+  │    Outputs: placement constraints
+  │
+  │  Step 6: Placement Engine — Placement Loop
+  │    For each candidate provider:
+  │      Reserve Query (atomic: verify + metadata + hold)
+  │      Loop Policy Phase (evaluates reserve query response)
+  │        pass → Placement confirmed
+  │        reject_candidate → next candidate
+  │        gatekeep → request rejected
+  │
+  │  Step 7: Post-Placement Policies
+  │    Transformation → Validation → GateKeeper
+  │    Provider-aware enrichment and validation
+  │
   ▼
 Requested State committed to Git (full provenance chain)
-  │  Provider selected by placement component
+  │  Includes: placement block, hold records, policy gap records
   ▼
-Provider dispatch via API Gateway
+Provider dispatch via API Gateway (hold confirmed)
   │  Naturalization: DCM format → provider native format
-  │  Provider realizes resource
+  │  Provider realizes resource, returns full metadata
   │  Denaturalization: provider native → DCM format
   ▼
 Realized State (event stream, provider-confirmed)
-  │
+  │  enrichment_status updated as metadata arrives
   ▼  [Continuous]
 Drift Detection: Discovered State vs Realized State
   │  Unsanctioned changes → Policy Engine response
@@ -256,6 +274,6 @@ Drift Detection: Discovered State vs Realized State
 
 ## Related Documents
 
-- [Data Model](data-model/) — Complete data model documentation
+- [Data Model](data-model/) — Complete data model documentation including the Ingestion Model for V1 migration and brownfield ingestion
 - [Specifications](specifications/) — Operator Interface Specification, Kubernetes compatibility, SDK API, CNCF strategy
 - [Enhancements](../enhancements/) — Enhancement proposals for the DCM project

@@ -12,7 +12,7 @@ weight: 2
 
 
 **Document Status:** 🔄 In Progress  
-**Related Documents:** [Context and Purpose](../context-and-purpose/) | [Entity Relationships](../entity-relationships/) | [Storage Providers](../storage-providers/) | [Audit, Provenance, and Observability](../audit-provenance-observability/)
+**Related Documents:** [Context and Purpose](00-context-and-purpose.md) | [Entity Relationships](09-entity-relationships.md) | [Storage Providers](11-storage-providers.md) | [Audit, Provenance, and Observability](12-audit-provenance-observability.md)
 
 ---
 
@@ -120,7 +120,7 @@ Given an entity UUID, DCM can reconstruct the complete history of that entity ac
 
 DCM describes store **contracts**, not implementations. Each store is a Storage Provider — a formal DCM provider type with registration, health check, and trust obligations. Implementors choose the technology that satisfies the contract.
 
-See [Storage Providers](../storage-providers/) for the complete contract specifications.
+See [Storage Providers](11-storage-providers.md) for the complete contract specifications.
 
 ### 4.1 GitOps Stores (Intent and Requested)
 
@@ -300,7 +300,60 @@ Two independent axes — placement and policy version — produce four distinct 
 
 Historical modes require elevated authorization. All modes run governance — the difference is whether governance uses current or pinned policies.
 
-### 5.5 Partial Resolution of Q54 — Provider Selection
+### 5.5 Rehydration Tenancy and Sovereignty Controls
+
+**Tenancy controls, sovereignty directives, and cross-tenant authorizations are always evaluated against current policies during rehydration — they cannot be pinned to historical versions.**
+
+The `policy_version: pinned` setting governs resource configuration policies only. It does not apply to:
+- Tenancy boundary enforcement
+- Sovereignty constraints
+- Cross-tenant authorization requirements
+
+```yaml
+rehydration:
+  policy_version: pinned         # governs resource configuration policies
+  # The following ALWAYS use current policies — cannot be pinned:
+  tenancy_controls: always_current
+  sovereignty_controls: always_current
+  cross_tenant_authorizations: always_current
+```
+
+**When rehydration conflicts with current tenancy controls:**
+
+If the current policy environment produces a tenancy or sovereignty constraint that conflicts with a cross-tenant allocation valid at original request time — for example, the consuming Tenant's authorization was revoked since the original request — the rehydration is **paused**, not failed or silently bypassed:
+
+```
+Rehydration detects cross-tenant authorization conflict
+  │
+  ▼
+Entity enters PENDING_REVIEW state
+  │  Allocation is not automatically released
+  │  Rehydration_tenancy_conflict_record created
+  ▼
+Notifications dispatched:
+  │  entity owner, owning Tenant admin,
+  │  consuming Tenant admin, platform admin
+  ▼
+Resolution options:
+  re_authorize  → issue new cross_tenant_authorization for this allocation
+  release       → release the allocation, entity decommissioned
+  escalate      → refer to platform admin for manual decision
+  │
+  └── A policy may declare automatic resolution:
+      "on rehydration conflict → re_authorize if consuming Tenant
+       still meets sovereignty requirements"
+```
+
+**System policies for rehydration tenancy:**
+
+| Policy | Rule |
+|--------|------|
+| `RHY-001` | Tenancy, sovereignty, and cross-tenant authorizations always use current policies during rehydration — cannot be pinned |
+| `RHY-002` | Rehydration that conflicts with current tenancy/sovereignty pauses and enters PENDING_REVIEW |
+| `RHY-003` | A paused rehydration allocation is not automatically released — requires explicit resolution |
+| `RHY-004` | A policy may declare automatic resolution behavior for rehydration tenancy conflicts |
+
+### 5.6 Partial Resolution of Q54 — Provider Selection
 
 The placement flag model clarifies the Q54 question (selected_provider as policy output vs placement component). The emerging answer:
 
