@@ -2443,7 +2443,12 @@ The Ship/Shore/Enclave terminology from defense IT contexts has been replaced th
 
 | Former Term | Replacement | Meaning |
 |-------------|-------------|---------|
-| Shore | **SCIM 2.0** | System for Cross-domain Identity Management; optional Auth Provider capability for automated actor provisioning from enterprise IdPs; provisions actors and group memberships; roles not SCIM-provisioned |
+| Shore | **certified profile** | DCM profile carrying formal third-party certification metadata (HIPAA assessor, FedRAMP JAB, PCI QSA); promoted to Tier 1; applies to artifact not deployment |
+| **POLICY_PROVIDER_ELEVATED** | Audit action recorded when a Policy Provider's mode level is elevated; always produced regardless of profile |
+| **tier_certifications** | Certification metadata on Resource Type Specs or profiles from recognized certifying bodies; filter criterion, not structural tier boundary |
+| **tier_3_to_tier_2_promotion** | PR-based pathway for organizations to promote internal Tier 3 Resource Types to Verified Community (Tier 2); requires production deployment, OSS license, named maintainer, migration path |
+| **independent operation mode** | Registry Provider state when upstream registry is permanently unavailable; existing types continue; new community type adoption requires governance decision |
+| **SCIM 2.0** | System for Cross-domain Identity Management; optional Auth Provider capability for automated actor provisioning from enterprise IdPs; provisions actors and group memberships; roles not SCIM-provisioned |
 | **step-up MFA** | Additional MFA challenge at sensitive operations within an already-authenticated session; declared per operation by policy; step-up token TTL PT10M |
 | **actor.type** | Audit record field: human / service_account / system; enables filtering between human-initiated and automated lifecycle operations in queries and dashboards |
 | **system_actor** | Audit record block on system-initiated records: identifies DCM component, trigger event, and authorizing policy UUID |
@@ -2567,7 +2572,53 @@ Per-instance hash chains — each DCM instance (Hub, Regional, Sovereign) has it
 
 ---
 
-## SECTION 42 — PERSONAS
+## SECTION 42 — POLICY AND REGISTRY REFINEMENTS
+
+### 42.1 Community Profile and Group Submissions (Policy Q1)
+
+Organizations submit custom profiles and policy groups to the DCM community registry via same PR-based workflow as Resource Types — Tier 2. Requirements: documented use case, at least one production deployment reference, test results, named maintainer. Same lifecycle as Resource Types (shadow validation before active, deprecation, sunset). PROF-005.
+
+### 42.2 Certified Profile Program (Policy Q2)
+
+Certified profiles carry third-party certification metadata (HIPAA assessor, FedRAMP JAB, PCI QSA). Certified profiles promoted to Tier 1 (DCM Core). Certification applies to the profile artifact only — not to any specific deployment. Community-contributed Tier 2 profiles that obtain certification can be promoted to Tier 1. PROF-006.
+
+### 42.3 Policy Provider Trust Elevation Approval (Policy Q3)
+
+Trust elevation (increasing mode level) requires formal approval workflow. Profile-governed approver requirements:
+- standard: 1 platform_admin
+- prod: platform_admin + security_owner (min 2)
+- fsi: platform_admin + security_owner + compliance_officer (dual approval)
+- sovereign: 3 approvers + change control ticket
+
+P7D shadow period after elevation before outputs become binding. POLICY_PROVIDER_ELEVATED audit record. PROF-007.
+
+### 42.4 Dev Profile Resource TTL Configurability (Policy Q4)
+
+Default TTL declared in system domain layer; overridable at platform domain level. Per-resource-type overrides supported (VMs: P7D, Storage: P14D, DNS: P3D). on_expiry action configurable: notify (consumers can extend) vs destroy. PROF-008.
+
+### 42.5 Air-Gapped Policy Provider Delivery (Policy Q5)
+
+Signed bundle model — same as registry bundles. Mode 3 bundles include OPA Rego files. Mode 4 in sovereign profiles: endpoint must be within sovereignty boundary — external AI service calls blocked by BBQ-001 sovereignty check. PROF-009.
+
+### 42.6 No Fourth Registry Tier (Registry Q1)
+
+Certification metadata within existing tier structure — no structural fourth tier. filter: tier_certifications provides equivalent discovery. REG-008.
+
+### 42.7 Tier 3 to Tier 2 Promotion (Registry Q2)
+
+PR-based promotion pathway with additional requirements: production deployment + OSS-compatible license + named community maintainer + documented migration path from Tier 3 handle. Current Tier 3 users notified. REG-009.
+
+### 42.8 Upstream Registry Permanently Unavailable (Registry Q3)
+
+Organization Registry mirror is self-sufficient — upstream loss is a governance decision, not an operational crisis. Three options: designate community mirror as new upstream / fork the registry / continue as independent installation. Existing operations never interrupted. REG-010.
+
+### 42.9 Provider Cost Metadata Source (Registry Q4)
+
+Static declaration or dynamic Cost Analysis sourcing; hybrid recommended (Cost Analysis preferred, static fallback, fallback_max_age: PT24H). Placement engine cost analysis step uses freshest available source — no changes to tie-breaking model. REG-011.
+
+---
+
+## SECTION 43 — PERSONAS
 
 | Persona | Primary Concern |
 |---------|----------------|
@@ -2584,7 +2635,7 @@ Per-instance hash chains — each DCM instance (Hub, Regional, Sovereign) has it
 
 ---
 
-## SECTION 43 — TERMINOLOGY GLOSSARY
+## SECTION 44 — TERMINOLOGY GLOSSARY
 
 | Term | Definition |
 |------|-----------|
@@ -2647,6 +2698,11 @@ Per-instance hash chains — each DCM instance (Hub, Regional, Sovereign) has it
 | **Raft** | Consensus protocol used by Commit Log (etcd) for quorum writes; guarantees durability even if minority of replicas fail |
 | **DCMGroup** | Universal group entity — all grouping constructs in DCM expressed as DCMGroup with group_class |
 | **group_class** | Determines system behavior of a DCMGroup — closed built-in set: tenant_boundary, resource_grouping, policy_collection, policy_profile, layer_grouping, composite, federation |
+| **certified profile** | DCM profile carrying formal third-party certification metadata (HIPAA assessor, FedRAMP JAB, PCI QSA); promoted to Tier 1; applies to artifact not deployment |
+| **POLICY_PROVIDER_ELEVATED** | Audit action recorded when a Policy Provider's mode level is elevated; always produced regardless of profile |
+| **tier_certifications** | Certification metadata on Resource Type Specs or profiles from recognized certifying bodies; filter criterion, not structural tier boundary |
+| **tier_3_to_tier_2_promotion** | PR-based pathway for organizations to promote internal Tier 3 Resource Types to Verified Community (Tier 2); requires production deployment, OSS license, named maintainer, migration path |
+| **independent operation mode** | Registry Provider state when upstream registry is permanently unavailable; existing types continue; new community type adoption requires governance decision |
 | **SCIM 2.0** | System for Cross-domain Identity Management; optional Auth Provider capability for automated actor provisioning from enterprise IdPs; provisions actors and group memberships; roles not SCIM-provisioned |
 | **step-up MFA** | Additional MFA challenge at sensitive operations within an already-authenticated session; declared per operation by policy; step-up token TTL PT10M |
 | **actor.type** | Audit record field: human / service_account / system; enables filtering between human-initiated and automated lifecycle operations in queries and dashboards |
@@ -2800,7 +2856,7 @@ Per-instance hash chains — each DCM instance (Hub, Regional, Sovereign) has it
 
 ---
 
-## SECTION 44 — OPEN QUESTIONS
+## SECTION 45 — OPEN QUESTIONS
 
 These items are explicitly unresolved. Do not make assumptions about them — flag them and ask for guidance.
 
@@ -2897,7 +2953,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ---
 
-## SECTION 45 — DOCUMENTATION STRUCTURE
+## SECTION 46 — DOCUMENTATION STRUCTURE
 
 DCM documentation follows a hierarchical structure:
 
@@ -2945,7 +3001,7 @@ content/
 
 ---
 
-## SECTION 46 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 47 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, follow these instructions:
 
