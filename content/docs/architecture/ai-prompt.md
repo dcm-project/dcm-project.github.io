@@ -2170,7 +2170,54 @@ Clinical Tenants (HIPAA) + Billing Tenants (HIPAA + PCI-DSS) + Admin Tenants (st
 
 ---
 
-## SECTION 36 — PERSONAS
+## SECTION 36 — GROUPING AND RELATIONSHIP GAPS
+
+### 36.1 Group Subclass Registry (Q35)
+No separate registry needed. `group_class` is the closed system-behavior set. `group_subclass` is open and advisory — freely declared, never validated. DCM ships a community subclass catalog as a non-authoritative reference (same infrastructure as well-known provider registry). GRP-011.
+
+### 36.2 Group Sovereignty Interaction (Q36)
+Class-specific sovereignty rules:
+- `tenant_boundary` — NEVER cross-sovereignty (structural, not configurable)
+- `resource_grouping` — permitted by default; policy may restrict for classified resources
+- `policy_collection` / `layer_grouping` — always permitted (governance artifacts, no data)
+- `composite` — governed by most restrictive member type
+- `federation` — permitted with DCM federation rules (DCM-003)
+
+GRP-012.
+
+### 36.3 Tenant Decommission Lifecycle (Q37)
+Mandatory four-phase staged decommission:
+1. **Pre-decommission validation** (blocking): resource state, cross-tenant relationships, compliance holds, rehydration leases, child groups resolved first
+2. **Resource decommission**: cascade (default) / retain (ORPHANED state) / notify (PENDING_DECOMMISSION)
+3. **Group membership cleanup**: remove from all memberships; empty federation groups → EMPTY state
+4. **Audit record archival**: all records enter post-lifecycle retention — NEVER destroyed
+
+Child tenant_boundary groups must be resolved BEFORE parent decommission (GRP-INV-003). GRP-013.
+
+### 36.4 Time-Bounded Group Membership (Q38)
+Already in Universal Group Model via `valid_from` / `valid_until` on every membership. Lifecycle Constraint Enforcer handles expiry. `on_expiry` actions: `remove` / `notify` (default) / `suspend_member`. `warn_before_expiry: P7D` standard. Expiry produces `MEMBER_REMOVE` audit record with `reason: membership_ttl_expired`. GRP-014.
+
+### 36.5 Group Policy Inheritance (Q39)
+Class-specific defaults, all profile-governed:
+- `tenant_boundary`: `opt_out` (standard/prod) — parent cascades unless child excludes; `opt_in` (minimal/dev/fsi/sovereign)
+- `federation`: always `opt_in` — peer consent required, not configurable
+- `composite`: `opt_out` by default, configurable
+- `resource_grouping` / `policy_collection`: not applicable
+
+GRP-015.
+
+### 36.6 Relationship Role Validation (Q58)
+Advisory by default. Resource Type Spec may declare `permitted_relationship_roles` with `role_validation: advisory | enforced`. Advisory → assembly warning for unknown roles. Enforced → unknown roles rejected at request time. DCM ships community role catalog as non-authoritative reference. REL-020.
+
+### 36.7 Relationship Graph Depth (Q60)
+Profile-governed max: minimal=25, dev=20, standard/prod=15, fsi/sovereign=10. Circular detection always enforced. Depth = graph traversal distance between any two entities (NOT count of relationships on one entity). REL-021.
+
+### 36.8 System Policies
+GRP-011 through GRP-015 — see doc 15. REL-020, REL-021 — see doc 09.
+
+---
+
+## SECTION 37 — PERSONAS
 
 | Persona | Primary Concern |
 |---------|----------------|
@@ -2187,7 +2234,7 @@ Clinical Tenants (HIPAA) + Billing Tenants (HIPAA + PCI-DSS) + Admin Tenants (st
 
 ---
 
-## SECTION 37 — TERMINOLOGY GLOSSARY
+## SECTION 38 — TERMINOLOGY GLOSSARY
 
 | Term | Definition |
 |------|-----------|
@@ -2366,7 +2413,7 @@ Clinical Tenants (HIPAA) + Billing Tenants (HIPAA + PCI-DSS) + Admin Tenants (st
 
 ---
 
-## SECTION 38 — OPEN QUESTIONS
+## SECTION 39 — OPEN QUESTIONS
 
 These items are explicitly unresolved. Do not make assumptions about them — flag them and ask for guidance.
 
@@ -2463,7 +2510,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ---
 
-## SECTION 39 — DOCUMENTATION STRUCTURE
+## SECTION 40 — DOCUMENTATION STRUCTURE
 
 DCM documentation follows a hierarchical structure:
 
@@ -2511,7 +2558,7 @@ content/
 
 ---
 
-## SECTION 40 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 41 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, follow these instructions:
 
@@ -2560,6 +2607,9 @@ When working on this project, follow these instructions:
 67. **Composite groups default to targeting all member types** — always declare member_type_filter when writing policies that target a composite group unless genuinely intending to govern all member types simultaneously
 68. **Nested tenant governance: most restrictive wins** — a child policy that is more restrictive than a parent policy wins; parent policies cascade where the child has no policy; this is the same principle as save_overrides_destroy and field override control
 69. **former_group_membership records are permanent** — group destruction does not erase membership history; queries against membership history are valid at any time via provenance store; use this for compliance and audit queries about past associations
+108. **Tenant decommission is four-phase and never silent** — pre-decommission validation blocks the operation until all resources, cross-tenant relationships, compliance holds, and child groups are resolved; audit records enter post-lifecycle retention and are never destroyed
+109. **Group policy inheritance is class-specific** — tenant_boundary uses opt_out for standard/prod (parent cascades) and opt_in for fsi/sovereign; federation always opt_in; resource_grouping and policy_collection are not applicable
+110. **Relationship graph depth differs from dependency depth** — depth is graph traversal distance between any two entities, not relationship count; circular detection always enforced; profile-governed max 15 (standard/prod) or 10 (fsi/sovereign)
 105. **Profiles have two independent dimensions** — posture (how DCM infrastructure behaves) and compliance domain (which regulatory frameworks apply); compose them freely; a hospital uses hipaa-prod = posture-prod + compliance-hipaa; a defense contractor uses dod-il4 = posture-sovereign + compliance-dod-il4 + compliance-fedramp-high + compliance-nist-800-53
 106. **Compliance domain groups apply at Tenant level** — one DCM deployment can host clinical Tenants (HIPAA), billing Tenants (HIPAA + PCI-DSS), and admin Tenants (standard) simultaneously; compliance_groups in tenant_config are additive to the platform profile
 107. **HIPAA group enforces PHI minimum necessary** — Mode 4 data_request_spec is limited to minimum PHI fields; providers handling PHI must declare baa_in_place in sovereignty_declaration; audit retention is P6Y regardless of profile default; breach notification triggers via sovereignty_violation_record

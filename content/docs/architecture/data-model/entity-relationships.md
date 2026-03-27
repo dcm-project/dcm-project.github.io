@@ -932,6 +932,72 @@ Relationships follow the universal versioning and deprecation model. A relations
 - **Resource Type Specification** — declares possible relationships for a resource type
 - **External Entity Reference** — stable pointer to data owned by an external system
 
+
+## 12. Relationship Gap Resolutions — Q58 and Q60
+
+### 12.1 Relationship Role Validation (Q58)
+
+Relationship roles are semantic labels — human-readable identifiers for the function a member plays in a relationship. By default, role validation is advisory. Resource Type Specifications may declare a closed set of permitted roles with enforced validation.
+
+```yaml
+resource_type_spec:
+  fully_qualified_name: Compute.VirtualMachine
+  permitted_relationship_roles:
+    - role: storage
+      relationship_types: [requires]
+      permitted_related_types: [Storage.Block, Storage.File]
+    - role: networking
+      relationship_types: [requires]
+      permitted_related_types: [Network.IPAddress, Network.Port]
+    - role: dns
+      relationship_types: [depends_on]
+      permitted_related_types: [DNS.Record]
+    - role: load_balancer
+      relationship_types: [depends_on]
+      permitted_related_types: [Network.LoadBalancer]
+  role_validation: advisory   # advisory | enforced
+  # advisory: unknown roles produce a warning in assembly provenance
+  # enforced: unknown roles are rejected at request time
+```
+
+**Community role catalog:** DCM ships a non-authoritative reference list of commonly-used roles. Organizations freely declare roles not in the catalog when role_validation is advisory.
+
+### 12.2 Maximum Relationship Graph Depth (Q60)
+
+Relationship graph depth is limited to a profile-governed maximum. Circular relationship detection is always enforced regardless of depth configuration.
+
+```yaml
+relationship_depth_policy:
+  max_depth: 15                  # configurable via Policy Group
+  on_max_exceeded: reject        # reject with clear error
+  cycle_detection: always        # non-configurable — always enforced
+  # Depth = maximum traversal distance between any two entities
+  # NOT the count of relationships on one entity
+```
+
+**Profile-governed defaults:**
+
+| Profile | Max Depth | Rationale |
+|---------|----------|-----------|
+| `minimal` | 25 | Home lab — free composition |
+| `dev` | 20 | Development — generous |
+| `standard` | 15 | Production baseline |
+| `prod` | 15 | Production |
+| `fsi` | 10 | Tighter — complex graphs harder to audit |
+| `sovereign` | 10 | Maximum control |
+
+**Note:** Relationship depth differs from dependency depth (ENT-008). Dependency depth counts the provisioning chain. Relationship depth counts the graph traversal distance between any two entities. A VM with 50 IP address relationships has depth 1, not 50.
+
+---
+
+## 13. System Policies — Relationship Gaps
+
+| Policy | Rule |
+|--------|------|
+| `REL-020` | Relationship roles are semantic labels. Resource Type Specifications may declare permitted_relationship_roles with advisory or enforced validation. Advisory produces assembly warnings for unknown roles. Enforced rejects unknown roles at request time. DCM maintains a community role catalog as a non-authoritative reference. |
+| `REL-021` | Relationship graph depth is limited to a profile-governed maximum (default: 15 for standard/prod; 10 for fsi/sovereign). Circular relationship detection is always enforced regardless of depth configuration. Depth is measured as the maximum traversal distance between any two entities in the relationship graph. |
+
+
 ---
 
 *Document maintained by the DCM Project. For questions or contributions see [GitHub](https://github.com/dcm-project).*
