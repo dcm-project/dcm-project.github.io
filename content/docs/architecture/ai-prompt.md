@@ -2443,7 +2443,15 @@ The Ship/Shore/Enclave terminology from defense IT contexts has been replaced th
 
 | Former Term | Replacement | Meaning |
 |-------------|-------------|---------|
-| Shore | **Hub DCM** | Central/global instance; governance origin; authoritative registry |
+| Shore | **SCIM 2.0** | System for Cross-domain Identity Management; optional Auth Provider capability for automated actor provisioning from enterprise IdPs; provisions actors and group memberships; roles not SCIM-provisioned |
+| **step-up MFA** | Additional MFA challenge at sensitive operations within an already-authenticated session; declared per operation by policy; step-up token TTL PT10M |
+| **actor.type** | Audit record field: human / service_account / system; enables filtering between human-initiated and automated lifecycle operations in queries and dashboards |
+| **system_actor** | Audit record block on system-initiated records: identifies DCM component, trigger event, and authorizing policy UUID |
+| **Merkle root proof** | Federation-level audit integrity mechanism: Hub DCM computes Merkle root of all Regional DCM chain tips daily; any chain break detectable against stored root |
+| **per-instance hash chain** | Each DCM instance (Hub/Regional/Sovereign) maintains its own independent hash chain; not merged cross-instance; cross-referenced via correlation_id |
+| **AUTH-012 through AUTH-015** | Auth Provider gap policies: SCIM provisioning, failover handling, two-tier MFA, pluggable user store |
+| **AUD-014 through AUD-017** | Universal Audit gap policies: hash chain verification modes, Commit Log capacity, system-initiated records, distributed hash chains |
+| **Hub DCM** | Central/global instance; governance origin; authoritative registry |
 | Ship | **Regional DCM** | Distributed regional instance; manages resources in its region |
 | Enclave | **Sovereign DCM** | Air-gapped/compliance-isolated; signed bundle updates only |
 
@@ -2494,7 +2502,72 @@ Intent/Requested → YAML in Git. Realized → Event Stream → Realized Store. 
 
 ---
 
-## SECTION 41 — PERSONAS
+## SECTION 41 — SECURITY, AUTH, AND AUDIT REFINEMENTS
+
+### 41.1 SCIM 2.0 User Provisioning (Auth Q1)
+
+SCIM 2.0 is an optional Auth Provider capability for enterprise deployments. Automates actor lifecycle from enterprise IdPs (Okta, Azure AD, Ping, JumpCloud).
+
+**What SCIM manages:** DCM actor records (create/update/deactivate), DCM group memberships from IdP groups.
+
+**What SCIM does NOT manage:** Roles — they require explicit DCM policy authorization. This prevents privilege escalation through the SCIM channel.
+
+**Deprovisioning:** `suspend` by default (reversible; sessions terminated; leases released; in-flight requests complete first). AUTH-012.
+
+### 41.2 Auth Provider Failover — In-Flight Requests (Auth Q2)
+
+**In-flight requests (already authenticated):** Continue to completion — session token carries resolved roles/groups/tenant scope; Auth Provider not needed for assembly.
+
+**New requests, provider down:** Follow declared failover chain. Sessions valid for declared TTL (PT8H default) regardless of provider availability.
+
+**Session expiry during outage:** Requires re-auth via available failover provider. All providers unavailable → reject new authentication with clear error.
+
+Failover chain: primary LDAP → OIDC backup → local users (last resort). AUTH-013.
+
+### 41.3 Two-Tier MFA — Per-Session and Step-Up (Auth Q3)
+
+**Per-session MFA:** Validated at login; captured in `ingress.actor.mfa_verified`.
+
+**Step-up MFA:** Additional challenge at sensitive operations even within a valid MFA session. Policy declares which operations require step-up:
+- platform_policy_activate, provider_decommission, tenant_decommission
+- sovereignty_zone_change, auth_provider_update, manual_rehydration (if entity requires hardware_token_mfa)
+
+Step-up token TTL: PT10M. Profile defaults: minimal/dev = no MFA; standard = recommended; prod = per-session required + destructive ops step-up; fsi = per-session + all policy changes; sovereign = hardware token + all admin ops. AUTH-014.
+
+### 41.4 Built-In Auth Provider Storage Backend (Auth Q4)
+
+Pluggable storage backend following the Storage Provider model. SQLite (minimal/dev) → PostgreSQL (standard+). FSI/sovereign require encryption at rest. Local store should contain bootstrap users, service accounts, API keys only — not enterprise users. AUTH-015.
+
+### 41.5 Hash Chain Verification Modes (Audit Q1)
+
+Three independent levels:
+- **Continuous write:** Hash computed on every write — this IS chain construction; always active
+- **Scheduled sweep:** Background verification: standard=weekly, prod=daily, fsi/sovereign=every 6 hours
+- **On-demand:** Operator-triggered for any time range (max P365D per run)
+
+Failure: security alert + integrity incident; new writes continue (halting writes is itself a security risk). AUD-014.
+
+### 41.6 Commit Log Capacity and Overflow (Audit Q2)
+
+Configurable max capacity (default 10Gi) with declared overflow policy:
+- `alert_and_continue` (minimal/dev/standard/prod) — availability priority
+- `reject_new_ops` (fsi/sovereign) — audit completeness priority; operating unaudited is a compliance violation
+
+Backpressure: alert at 75%, urgent at 90%. P7D max age triggers escalation regardless of capacity. AUD-015.
+
+### 41.7 System-Initiated Audit Records (Audit Q3)
+
+`actor.type` field on all audit records: `human | service_account | system`
+
+System records include `system_actor` block: component + trigger + authorizing_policy_uuid. Full audit records — appear in all queries and compliance reports. Enables dashboard filtering: "show only human-initiated changes" vs "show only automated lifecycle operations". AUD-016.
+
+### 41.8 Distributed Hash Chain Integrity (Audit Q4)
+
+Per-instance hash chains — each DCM instance (Hub, Regional, Sovereign) has its own independent chain. Federation-level integrity via daily Merkle root proof at Hub DCM. Cross-instance queries: parallel chains with cross-references via `correlation_id` — not merged. Per-instance verification always local; federation verification requires Hub DCM connectivity. AUD-017.
+
+---
+
+## SECTION 42 — PERSONAS
 
 | Persona | Primary Concern |
 |---------|----------------|
@@ -2511,7 +2584,7 @@ Intent/Requested → YAML in Git. Realized → Event Stream → Realized Store. 
 
 ---
 
-## SECTION 42 — TERMINOLOGY GLOSSARY
+## SECTION 43 — TERMINOLOGY GLOSSARY
 
 | Term | Definition |
 |------|-----------|
@@ -2574,6 +2647,14 @@ Intent/Requested → YAML in Git. Realized → Event Stream → Realized Store. 
 | **Raft** | Consensus protocol used by Commit Log (etcd) for quorum writes; guarantees durability even if minority of replicas fail |
 | **DCMGroup** | Universal group entity — all grouping constructs in DCM expressed as DCMGroup with group_class |
 | **group_class** | Determines system behavior of a DCMGroup — closed built-in set: tenant_boundary, resource_grouping, policy_collection, policy_profile, layer_grouping, composite, federation |
+| **SCIM 2.0** | System for Cross-domain Identity Management; optional Auth Provider capability for automated actor provisioning from enterprise IdPs; provisions actors and group memberships; roles not SCIM-provisioned |
+| **step-up MFA** | Additional MFA challenge at sensitive operations within an already-authenticated session; declared per operation by policy; step-up token TTL PT10M |
+| **actor.type** | Audit record field: human / service_account / system; enables filtering between human-initiated and automated lifecycle operations in queries and dashboards |
+| **system_actor** | Audit record block on system-initiated records: identifies DCM component, trigger event, and authorizing policy UUID |
+| **Merkle root proof** | Federation-level audit integrity mechanism: Hub DCM computes Merkle root of all Regional DCM chain tips daily; any chain break detectable against stored root |
+| **per-instance hash chain** | Each DCM instance (Hub/Regional/Sovereign) maintains its own independent hash chain; not merged cross-instance; cross-referenced via correlation_id |
+| **AUTH-012 through AUTH-015** | Auth Provider gap policies: SCIM provisioning, failover handling, two-tier MFA, pluggable user store |
+| **AUD-014 through AUD-017** | Universal Audit gap policies: hash chain verification modes, Commit Log capacity, system-initiated records, distributed hash chains |
 | **Hub DCM** | Central/global DCM instance; authoritative registry origin; governance authority; replaces "Shore" terminology |
 | **Regional DCM** | Distributed regional DCM instance; manages resources in its region; caches from Hub DCM; replaces "Ship" terminology |
 | **Sovereign DCM** | Air-gapped or compliance-isolated DCM instance; local static caches from signed bundles; replaces "Enclave" terminology |
@@ -2719,7 +2800,7 @@ Intent/Requested → YAML in Git. Realized → Event Stream → Realized Store. 
 
 ---
 
-## SECTION 43 — OPEN QUESTIONS
+## SECTION 44 — OPEN QUESTIONS
 
 These items are explicitly unresolved. Do not make assumptions about them — flag them and ask for guidance.
 
@@ -2816,7 +2897,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ---
 
-## SECTION 44 — DOCUMENTATION STRUCTURE
+## SECTION 45 — DOCUMENTATION STRUCTURE
 
 DCM documentation follows a hierarchical structure:
 
@@ -2864,7 +2945,7 @@ content/
 
 ---
 
-## SECTION 45 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 46 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, follow these instructions:
 
