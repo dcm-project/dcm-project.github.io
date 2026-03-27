@@ -2363,7 +2363,79 @@ ENT-010.
 
 ---
 
-## SECTION 39 — PERSONAS
+## SECTION 39 — FOUR STATES OPERATIONAL GAPS
+
+### 39.1 Entity UUID Preservation on Rehydration (Q75)
+
+Entity UUIDs are **preserved on rehydration** — UUID is the stable logical identity across all provider migrations, sovereignty changes, and lifecycle events. All external references (CMDB, cost attribution, audit trails, relationships, dependencies) use UUID. Generating a new UUID would silently break all references.
+
+What changes: the **provider-side identifier** (actual VM ID, container name, resource handle). Recorded in `rehydration_history`:
+```yaml
+entity:
+  uuid: <original-uuid>    # PRESERVED
+  rehydration_history:
+    - rehydration_uuid: <uuid>
+      from_realized_entity_id: "vm-12345"   # no longer valid
+      to_realized_entity_id: "vm-67890"     # new provider ID
+      trigger / from_provider / to_provider / rehydrated_by
+      intent_state_ref / previous_requested_state_ref / new_requested_state_ref
+```
+
+**Rehydration is transactional** — failure preserves pre-rehydration state completely; no UUID change, no partial state. RHY-005.
+
+### 39.2 Pinned Authentication Level for Rehydration (Q76)
+
+Entities may declare `rehydration_constraints.min_auth_level` — a minimum floor the rehydrating actor must meet. Prevents privilege escalation through the rehydration mechanism.
+
+Auth levels (ascending): `api_key → ldap_password → oidc → oidc_mfa → hardware_token → hardware_token_mfa`
+
+**Profile enforcement:** minimal/dev = not enforced; standard = advisory warn; prod = enforced reject; fsi = enforced + dual approval on mismatch; sovereign = dual approval always.
+
+**Automated rehydration** (DCM service account for provider migration): requires `allow_delegated_rehydration: true` OR platform admin manual authorization → full audit trail preserving accountability. RHY-006.
+
+### 39.3 Concurrent Rehydration Handling (Q77)
+
+**Exclusive rehydration lease per entity** — only one rehydration active at a time.
+
+```yaml
+rehydration_lease:
+  entity_uuid / lease_uuid / acquired_by / acquired_at
+  lease_ttl: PT2H    # expires if rehydration hangs
+  trigger / status: active|completed|failed|expired
+```
+
+**Concurrent request:**
+- Active lease + higher priority incoming → escalate to platform admin; queue
+- Active lease + same/lower priority → reject with retry guidance; REHYDRATION_BLOCKED audit
+
+**Priority (1=highest):** security/compliance emergency → manual platform admin → automated sovereignty migration → provider decommission → manual consumer request
+
+**TTL expiry:** marks rehydration `failed`; releases lease; triggers drift detection for partial completion assessment. RHY-007.
+
+### 39.4 Discovered State Retention (Q78)
+
+Ephemeral operational data — NOT the source of truth (Realized State is). Three modes:
+
+| Mode | Behavior |
+|------|---------|
+| `rolling_window` | Keep last N days; useful for trending |
+| `event_driven` | Retain until drift_resolved; ensures investigation has snapshot |
+| `hybrid` (recommended) | min_retention + retain_until_drift_resolved + max_retention ceiling |
+
+**Profile defaults:**
+- minimal: rolling P3D
+- dev: rolling P7D
+- standard/prod: hybrid P24-48H min / P30D max
+- fsi/sovereign: hybrid P7D min / P90D max
+
+**Audit relationship:** Discovered State records are NOT in the Audit Store (too high-volume, too ephemeral). Drift events triggered by Discovered State ARE in the Audit Store with discovery snapshot UUID reference. After snapshot expires: audit record preserved; snapshot no longer available. RHY-008.
+
+### 39.5 Complete Rehydration Policy Set
+RHY-001 through RHY-008 — see doc 02.
+
+---
+
+## SECTION 40 — PERSONAS
 
 | Persona | Primary Concern |
 |---------|----------------|
@@ -2380,7 +2452,7 @@ ENT-010.
 
 ---
 
-## SECTION 40 — TERMINOLOGY GLOSSARY
+## SECTION 41 — TERMINOLOGY GLOSSARY
 
 | Term | Definition |
 |------|-----------|
@@ -2443,6 +2515,13 @@ ENT-010.
 | **Raft** | Consensus protocol used by Commit Log (etcd) for quorum writes; guarantees durability even if minority of replicas fail |
 | **DCMGroup** | Universal group entity — all grouping constructs in DCM expressed as DCMGroup with group_class |
 | **group_class** | Determines system behavior of a DCMGroup — closed built-in set: tenant_boundary, resource_grouping, policy_collection, policy_profile, layer_grouping, composite, federation |
+| **rehydration_history** | Immutable record on entity of all rehydration events: trigger, from/to provider, from/to provider-side IDs, actor, state refs |
+| **rehydration_lease** | Exclusive time-bounded lock per entity during rehydration; prevents concurrent rehydrations; TTL prevents orphans |
+| **min_auth_level** | Entity rehydration constraint declaring minimum actor authentication level required; profile governs enforcement |
+| **allow_delegated_rehydration** | Entity flag permitting DCM service accounts to rehydrate automatically; requires platform admin authorization audit trail |
+| **REHYDRATION_BLOCKED** | Audit event recorded when a concurrent rehydration attempt is rejected due to active lease |
+| **hybrid retention mode** | Discovered State retention: minimum window + retain until drift resolved + hard maximum ceiling |
+| **rolling_window retention** | Discovered State retention: keep last N days regardless of drift status |
 | **override: allow/constrained/immutable** | Layer field metadata declaring override intent; enforced by Request Payload Processor at Step 3; immutable prevents lower-authority overrides only; GateKeeper may additionally lock |
 | **constraint_visibility** | Policy-governed disclosure level for constrained fields: full (constraint+bounds+reason+suggestions), summary (bounds only), hidden (silently enforced) |
 | **editable** | Resource Type Spec field declaration: can this field be modified post-realization via a targeted delta update (true) or only via reprovisioning (false) |
@@ -2572,7 +2651,7 @@ ENT-010.
 
 ---
 
-## SECTION 41 — OPEN QUESTIONS
+## SECTION 42 — OPEN QUESTIONS
 
 These items are explicitly unresolved. Do not make assumptions about them — flag them and ask for guidance.
 
@@ -2669,7 +2748,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ---
 
-## SECTION 42 — DOCUMENTATION STRUCTURE
+## SECTION 43 — DOCUMENTATION STRUCTURE
 
 DCM documentation follows a hierarchical structure:
 
@@ -2717,7 +2796,7 @@ content/
 
 ---
 
-## SECTION 43 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 44 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, follow these instructions:
 

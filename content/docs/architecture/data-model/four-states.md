@@ -1,5 +1,5 @@
 ---
-title: "Four States"
+title: "The Four States and Storage Model"
 type: docs
 weight: 2
 ---
@@ -473,16 +473,162 @@ The three ingress paths — PR workflow, direct API, and programmatic (Terraform
 
 ---
 
+## 7a. Four States Operational Gaps — Q75 through Q78
+
+### 7a.1 Entity UUID Preservation on Rehydration (Q75)
+
+Entity UUIDs are **preserved on rehydration**. The UUID represents the stable logical identity of the resource across provider migrations, sovereignty changes, and lifecycle events. All external references — CMDB records, cost attribution, audit trails, cross-tenant relationships, dependency declarations — reference the entity by UUID. Generating a new UUID on rehydration would silently break all of those references.
+
+What changes on rehydration is the **provider-side identifier** — the actual VM ID, container name, or resource handle at the provider. These are recorded in the rehydration history:
+
+```yaml
+entity:
+  uuid: <original-uuid>              # PRESERVED across all rehydrations
+  rehydration_history:
+    - rehydration_uuid: <uuid>
+      rehydrated_at: <ISO 8601>
+      trigger: <provider_migration|sovereignty_violation|manual|provider_decommission>
+      from_provider_uuid: <uuid>
+      to_provider_uuid: <uuid>
+      from_realized_entity_id: "vm-12345"   # provider's ID — no longer valid
+      to_realized_entity_id: "vm-67890"     # new provider's ID after rehydration
+      rehydrated_by: <actor-uuid>
+      intent_state_ref: <uuid>
+      previous_requested_state_ref: <uuid>
+      new_requested_state_ref: <uuid>
+```
+
+**Rehydration is transactional:** If the target provider cannot accept the entity (capacity unavailable, sovereignty mismatch discovered mid-rehydration), the original entity remains in its current state with no UUID change and no partial state. Failure preserves the pre-rehydration state completely.
+
+### 7a.2 Pinned Authentication Level for Rehydration (Q76)
+
+Entities may declare a minimum authentication level required to rehydrate them. This prevents escalation of privilege through the rehydration mechanism — a resource provisioned with hardware-token MFA authorization should not be re-instantiatable by a simple API key.
+
+```yaml
+entity:
+  rehydration_constraints:
+    min_auth_level: hardware_token_mfa
+    # Ascending levels: api_key | ldap_password | oidc | oidc_mfa |
+    #                   hardware_token | hardware_token_mfa
+    auth_level_source: <original_provisioning|policy_declared>
+    allow_delegated_rehydration: false
+    # true = DCM service accounts may rehydrate if explicitly authorized
+```
+
+**Profile-governed enforcement:**
+
+| Profile | Enforcement |
+|---------|------------|
+| `minimal` | Not enforced — any auth level may rehydrate |
+| `dev` | Not enforced |
+| `standard` | Advisory — warn if rehydrating actor has lower auth |
+| `prod` | Enforced — reject if rehydrating actor has lower auth |
+| `fsi` | Enforced — dual approval required if auth level mismatch |
+| `sovereign` | Enforced — dual approval always; logged in classified audit |
+
+**Automated rehydration:** When DCM triggers rehydration automatically (sovereignty violation, provider decommission), the rehydration uses DCM's internal service account. This requires `allow_delegated_rehydration: true` OR a platform admin must manually authorize the operation. Authorization produces an audit record preserving accountability even when the action is automated.
+
+### 7a.3 Concurrent Rehydration Handling (Q77)
+
+Rehydration requests acquire an **exclusive rehydration lease** per entity. Only one rehydration may be active per entity at any time.
+
+```yaml
+rehydration_lease:
+  entity_uuid: <uuid>
+  lease_uuid: <uuid>
+  acquired_by: <actor-uuid>
+  acquired_at: <ISO 8601>
+  lease_ttl: PT2H                     # expires after 2 hours if not released
+  trigger: <manual|sovereignty_migration|provider_decommission|admin_request>
+  status: <active|completed|failed|expired>
+```
+
+**Concurrent request handling:**
+
+```
+Second rehydration attempt arrives for entity <uuid>
+  │
+  ├── No active lease → acquire lease; proceed
+  │
+  └── Active lease exists:
+        Priority higher than active → escalate to platform admin; queue
+        Same or lower priority → reject:
+          "Rehydration in progress — lease held since <timestamp>; retry after PT2H"
+        REHYDRATION_BLOCKED audit event recorded
+```
+
+**Priority ordering:**
+1. Security/compliance emergency (sovereignty violation at fsi/sovereign)
+2. Manual platform admin rehydration
+3. Automated sovereignty migration
+4. Provider decommission migration
+5. Manual consumer rehydration request
+
+**Lease TTL expiry:** If rehydration hangs or crashes, the lease expires after TTL. DCM marks the rehydration `failed` in rehydration_history, releases the lease, and triggers drift detection to assess partial completion at the provider.
+
+### 7a.4 Discovered State Retention (Q78)
+
+Discovered State is ephemeral operational data — not the authoritative source of truth (Realized State is). It is a snapshot used for drift detection. Three retention modes, all profile-governed:
+
+```yaml
+discovered_state_retention:
+  mode: <rolling_window|event_driven|hybrid>   # hybrid recommended
+
+  rolling_window:
+    retention: P7D              # keep last 7 days; useful for trending
+
+  event_driven:
+    retain_until: drift_resolved  # keep until associated drift record resolved
+    # Ensures drift investigation has the discovery snapshot that triggered it
+
+  hybrid:                         # recommended — combines both
+    minimum_retention: P24H
+    retain_until: drift_resolved  # extend beyond minimum until drift resolved
+    maximum_retention: P30D       # hard ceiling regardless of drift status
+```
+
+**Profile-governed defaults:**
+
+| Profile | Mode | Min Retention | Max Retention |
+|---------|------|--------------|--------------|
+| `minimal` | `rolling_window` | — | P3D |
+| `dev` | `rolling_window` | — | P7D |
+| `standard` | `hybrid` | P24H | P30D |
+| `prod` | `hybrid` | P48H | P30D |
+| `fsi` | `hybrid` | P7D | P90D |
+| `sovereign` | `hybrid` | P7D | P90D |
+
+**Discovered State and the Audit Store:**
+
+Discovered State records are **NOT** stored in the Audit Store — they are too high-volume and too ephemeral for compliance-grade storage. However, drift events triggered by Discovered State ARE recorded in the Audit Store with a reference to the discovery snapshot UUID. After the Discovered State expires, the audit record still exists — it cannot link to the full snapshot, but the drift event itself is preserved.
+
+---
+
+## 7b. Rehydration System Policies — Complete Set
+
+| Policy | Rule |
+|--------|------|
+| `RHY-001` | Tenancy and sovereignty are always current on rehydration — they cannot be pinned to historical state. |
+| `RHY-002` | Sovereignty conflicts discovered during rehydration place the entity in PENDING_REVIEW state. |
+| `RHY-003` | Resource allocations are not automatically released on rehydration. |
+| `RHY-004` | Rehydration leases have TTL to prevent orphaned lease states. |
+| `RHY-005` | Entity UUIDs are preserved on rehydration. The UUID represents stable logical identity across provider migrations. Provider-side identifiers change on rehydration and are recorded in rehydration_history. Rehydration is transactional — failure preserves pre-rehydration state without UUID change. |
+| `RHY-006` | Entities may declare min_auth_level for rehydration. Profile governs enforcement. Automated rehydration by DCM service accounts requires allow_delegated_rehydration: true OR platform admin manual authorization with full audit trail. |
+| `RHY-007` | Rehydration requests acquire an exclusive lease per entity before proceeding. Only one rehydration may be active per entity. Concurrent requests are queued (higher priority) or rejected (same/lower). Lease TTL prevents indefinite blocking. Expiry triggers drift detection for partial completion assessment. |
+| `RHY-008` | Discovered State retention is profile-governed: rolling_window, event_driven, or hybrid. Discovered State is never stored in the Audit Store. Drift events triggered by Discovered State are recorded in the Audit Store with discovery snapshot UUID reference. Maximum retention: P30D for standard/prod; P90D for fsi/sovereign. |
+
+---
+
 ## 8. Open Questions
 
 | # | Question | Impact | Status |
 |---|----------|--------|--------|
-| 1 | Git repository structure for Intent and Requested stores — deferred pending Q54 resolution | Store design | ❓ Unresolved |
-| 2 | Should the entity UUID be preserved or regenerated on rehydration? | Entity identity | ❓ Unresolved |
-| 3 | For pinned policy version rehydration — what is the minimum authorization level required? | Security | ❓ Unresolved |
-| 4 | How are concurrent rehydration requests for the same entity handled — serialized or rejected? | Concurrency | ❓ Unresolved |
-| 5 | Should the Discovered Store retain full history or only a configurable window? | Retention | ❓ Unresolved |
-| 6 | How does the Search Index handle Git store unavailability — serve stale results or fail? | Reliability | ❓ Unresolved |
+| 1 | Git repository structure for Intent and Requested stores | Store design | ✅ Resolved — handle-based directory structure; 4 repos; tenant isolation (STO-005) |
+| 2 | Should the entity UUID be preserved or regenerated on rehydration? | Entity identity | ✅ Resolved — UUID preserved; rehydration_history records provider-side ID changes; transactional (RHY-005) |
+| 3 | For pinned policy version rehydration — what is the minimum authorization level required? | Security | ✅ Resolved — min_auth_level on entity; profile-governed enforcement; delegated rehydration requires explicit authorization (RHY-006) |
+| 4 | How are concurrent rehydration requests for the same entity handled? | Concurrency | ✅ Resolved — exclusive rehydration lease; priority ordering; TTL expiry triggers drift detection (RHY-007) |
+| 5 | Should the Discovered Store retain full history or only a configurable window? | Retention | ✅ Resolved — hybrid mode recommended; profile-governed min/max; event-driven until drift resolved; max P30-90D (RHY-008) |
+| 6 | How does the Search Index handle Git store unavailability? | Reliability | ✅ Resolved — serve degraded (warn + direct to authoritative); rebuild on recovery (STO-002) |
 
 ---
 
