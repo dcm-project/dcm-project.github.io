@@ -12,7 +12,7 @@ weight: 1
 
 
 **Document Status:** 🔄 In Progress  
-**Related Documents:** [Entity Types](01-entity-types.md) | [Four States](../four-states/) | [Layering and Versioning](../layering-and-versioning/) | [Examples](04-examples.md)
+**Related Documents:** [Entity Types](01-entity-types.md) | [Four States](02-four-states.md) | [Layering and Versioning](03-layering-and-versioning.md) | [Examples](04-examples.md)
 
 ---
 
@@ -241,7 +241,7 @@ All DCM artifacts follow a five-status lifecycle:
 
 **Proposed shadow execution:** Policy artifacts in `proposed` status execute in shadow mode against real traffic — output is captured and reported but never applied. Enables safe validation before activation.
 
-See [Data Layers and Assembly — Section 4b](../layering-and-versioning/) for the complete artifact metadata structure and all field definitions.
+See [Data Layers and Assembly — Section 4b](03-layering-and-versioning.md) for the complete artifact metadata structure and all field definitions.
 
 ---
 
@@ -349,12 +349,12 @@ The following questions remain unresolved and require decisions before the data 
 
 | # | Question | Impact | Status |
 |---|----------|--------|--------|
-| 1 | Where should data caches live? (Shore, Ship, Enclave, all?) | Cache architecture, latency, sovereignty | ❓ Unresolved |
-| 2 | Should cache synchronization be push, pull, or both? | Consistency model, network requirements | ❓ Unresolved |
-| 3 | Which cache is authoritative when caches diverge? | Conflict resolution, drift detection | ❓ Unresolved |
-| 4 | What mechanism maintains consistency across distributed caches? | Data integrity, operational complexity | ❓ Unresolved |
-| 5 | Should the data model allow embedded target-technology-specific data bundles? | Portability vs. practicality | ❓ Unresolved |
-| 6 | How are the four states represented physically? (fields, documents, separate stores?) | Implementation architecture | ❓ Unresolved |
+| 1 | Where should data caches live? | Cache architecture, latency, sovereignty | ✅ Resolved — caches at Regional DCM level; Info Provider caches co-located with source; Sovereign DCM uses local static from signed bundles (CACHE-001) |
+| 2 | Should cache synchronization be push, pull, or both? | Consistency model | ✅ Resolved — hybrid push-pull; pull on schedule; push for time-sensitive events via Message Bus (CACHE-002) |
+| 3 | Which cache is authoritative when caches diverge? | Conflict resolution | ✅ Resolved — GitOps stores always authoritative; caches are projections; divergence triggers rebuild from authoritative store (CACHE-003) |
+| 4 | What mechanism maintains consistency across distributed caches? | Data integrity | ✅ Resolved — hash-based heartbeat divergence detection + push invalidation; PT2H staleness alert; signed bundles for Sovereign DCM (CACHE-004) |
+| 5 | Should the data model allow embedded target-technology-specific data bundles? | Portability | ✅ Resolved — native_passthrough field sanctioned; always audit-logged; opaque mode blocked in fsi/sovereign (DATA-001) |
+| 6 | How are the four states represented physically? | Physical model | ✅ Resolved — Intent/Requested in Git; Realized in Event Stream; Discovered in Discovered Store (STO-005) |res?) | Implementation architecture | ❓ Unresolved |
 | 7 | What is the performance impact of field-level provenance at scale? What optimization strategies are acceptable? | Scalability, storage cost | ❓ Unresolved |
 | 8 | Should provenance metadata be stored inline with field data or in a linked provenance document? | Data model structure, query performance | ❓ Unresolved |
 

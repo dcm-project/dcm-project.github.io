@@ -2435,7 +2435,66 @@ RHY-001 through RHY-008 — see doc 02.
 
 ---
 
-## SECTION 40 — PERSONAS
+## SECTION 40 — ARCHITECTURE GAPS: CACHE MODEL, INGESTION, DEPLOYMENT
+
+### 40.1 DCM Deployment Topology — Hub/Regional/Sovereign
+
+The Ship/Shore/Enclave terminology from defense IT contexts has been replaced throughout with universally understood terms aligned to DCM's federation model:
+
+| Former Term | Replacement | Meaning |
+|-------------|-------------|---------|
+| Shore | **Hub DCM** | Central/global instance; governance origin; authoritative registry |
+| Ship | **Regional DCM** | Distributed regional instance; manages resources in its region |
+| Enclave | **Sovereign DCM** | Air-gapped/compliance-isolated; signed bundle updates only |
+
+These map directly onto the DCM federation model (DCM-001 through DCM-008, doc 22).
+
+### 40.2 Cache Placement (Q1)
+Caches placed closest to consumption point, subject to sovereignty constraints:
+- **Layer + Catalog caches**: Regional DCM (closest to assembly); Hub DCM is authoritative origin
+- **Information Provider caches**: co-located with source; never cross sovereignty boundary
+- **Search Index**: Hub DCM primary; Regional DCM optional mirror; Sovereign DCM local index
+- **Sovereign DCM caches**: always local static; populated from signed bundles; no live sync
+
+CACHE-001.
+
+### 40.3 Cache Synchronization (Q2)
+**Hybrid push-pull model:** Pull on profile-governed schedule (minimal=P4H through fsi/sovereign=P5M); push invalidation via Message Bus for time-sensitive events (layer_updated, policy_activated, sovereignty_change). Pull failure → serve cached. Push failure → queue+retry within PT1H. Sovereign DCM: signed bundle import only. CACHE-002.
+
+### 40.4 Cache Authoritativeness (Q3)
+GitOps stores and Event Streams always authoritative. Caches are derived projections — never authoritative. Cache divergence → rebuild from nearest authoritative store → CACHE_DIVERGENCE_DETECTED Audit event. Regional DCMs send cache state hash in heartbeats to Hub DCM; mismatch → forced refresh. CACHE-003, CACHE-004.
+
+### 40.5 Native Passthrough (Q5)
+Core data model does not embed technology-specific data. `native_passthrough` field sanctioned for genuinely untranslatable provider-specific data. Always audit-logged (content if transparent; hash if opaque). Opaque passthrough blocked in fsi/sovereign profiles by default. DATA-001.
+
+### 40.6 Physical State Representation (Q6)
+Intent/Requested → YAML in Git. Realized → Event Stream → Realized Store. Discovered → Discovered Store (ephemeral). Resolved by STO-001 through STO-005.
+
+### 40.7 Ingestion Model Gaps
+
+**Signal priority configurable (Q1):** Platform domain layer declares priority order. explicit_tenant_tag always first; default_tenant always last; middle signals reorderable. ING-012.
+
+**Bulk promotion (Q2):** Supported with profile-governed limits (minimal=unlimited → sovereign=25 per batch). Preview required. PT24H rollback. BULK_PROMOTE audit record. ING-013.
+
+**Max ingestion sources per entity (Q3):** Profile-governed (5 standard/prod; 3 fsi/sovereign). Warn or reject on exceed. ING-014.
+
+**Ingestion → Service Catalog (Q4):** Ingested entities promotable to catalog items. Bidirectional drift detection between entity and catalog item. ING-015.
+
+### 40.8 Deployment Redundancy Gaps
+
+**Bootstrap manifest verification (Q1):** GitOps stored + hash-verified at every startup. Tampering prevents startup. Operator-signed. RED-011.
+
+**Sovereign Kubernetes upgrades (Q2):** Pre-staged images via signed bundles. DCM maintenance mode during upgrade. Startup verification before resuming queued requests. RED-012.
+
+**Non-Kubernetes runtimes (Q3):** Kubernetes required for production. Podman/Docker Compose for dev/community only. DCM Operator is Kubernetes-native. RED-013.
+
+**Minimum hardware specs (Q4):** Declared as DCM Resource definitions per profile; enforced by placement engine. minimal=2cpu/4Gi/20Gi/1 replica → fsi/sovereign=32cpu/64Gi/500Gi/5 replicas. RED-014.
+
+**DCM self-hosted drift detection (Q5):** DCM is a DCM-managed resource — same drift detection. Bootstrap hash provides independent Operator verification. Audit hash chain breaks externally detectable. RED-015.
+
+---
+
+## SECTION 41 — PERSONAS
 
 | Persona | Primary Concern |
 |---------|----------------|
@@ -2452,7 +2511,7 @@ RHY-001 through RHY-008 — see doc 02.
 
 ---
 
-## SECTION 41 — TERMINOLOGY GLOSSARY
+## SECTION 42 — TERMINOLOGY GLOSSARY
 
 | Term | Definition |
 |------|-----------|
@@ -2515,6 +2574,15 @@ RHY-001 through RHY-008 — see doc 02.
 | **Raft** | Consensus protocol used by Commit Log (etcd) for quorum writes; guarantees durability even if minority of replicas fail |
 | **DCMGroup** | Universal group entity — all grouping constructs in DCM expressed as DCMGroup with group_class |
 | **group_class** | Determines system behavior of a DCMGroup — closed built-in set: tenant_boundary, resource_grouping, policy_collection, policy_profile, layer_grouping, composite, federation |
+| **Hub DCM** | Central/global DCM instance; authoritative registry origin; governance authority; replaces "Shore" terminology |
+| **Regional DCM** | Distributed regional DCM instance; manages resources in its region; caches from Hub DCM; replaces "Ship" terminology |
+| **Sovereign DCM** | Air-gapped or compliance-isolated DCM instance; local static caches from signed bundles; replaces "Enclave" terminology |
+| **native_passthrough** | Sanctioned field for provider-specific data that cannot be expressed in the unified model; always audit-logged; opaque mode blocked in fsi/sovereign |
+| **BULK_PROMOTE** | Audit action for bulk entity promotion; single audit record with full member list; requires preview + approval in prod+ profiles |
+| **CACHE policies** | CACHE-001 through CACHE-004 — cache placement, sync, authoritativeness, consistency |
+| **DATA-001** | Policy: core data model does not embed technology-specific data; native_passthrough sanctioned with governance |
+| **RED-011 through RED-015** | Deployment redundancy gap policies: bootstrap verification, K8s upgrades, runtime support, hardware specs, self-hosted drift |
+| **ING-012 through ING-015** | Ingestion gap policies: signal priority configurable, bulk promotion, max sources, catalog promotion |
 | **rehydration_history** | Immutable record on entity of all rehydration events: trigger, from/to provider, from/to provider-side IDs, actor, state refs |
 | **rehydration_lease** | Exclusive time-bounded lock per entity during rehydration; prevents concurrent rehydrations; TTL prevents orphans |
 | **min_auth_level** | Entity rehydration constraint declaring minimum actor authentication level required; profile governs enforcement |
@@ -2651,13 +2719,13 @@ RHY-001 through RHY-008 — see doc 02.
 
 ---
 
-## SECTION 42 — OPEN QUESTIONS
+## SECTION 43 — OPEN QUESTIONS
 
 These items are explicitly unresolved. Do not make assumptions about them — flag them and ask for guidance.
 
 | # | Question | Area |
 |---|----------|------|
-| 1 | Where should data caches live? (Shore, Ship, Enclave, all?) | Data Model |
+| 1 | Where should data caches live? (Hub DCM, Regional DCM, Sovereign DCM, all?) | Data Model |
 | 2 | Should cache synchronization be push, pull, or both? | Data Model |
 | 3 | Which cache is authoritative when caches diverge? | Data Model |
 | 4 | What mechanism maintains consistency across distributed caches? | Data Model |
@@ -2748,7 +2816,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ---
 
-## SECTION 43 — DOCUMENTATION STRUCTURE
+## SECTION 44 — DOCUMENTATION STRUCTURE
 
 DCM documentation follows a hierarchical structure:
 
@@ -2796,7 +2864,7 @@ content/
 
 ---
 
-## SECTION 44 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 45 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, follow these instructions:
 
