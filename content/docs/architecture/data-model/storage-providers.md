@@ -47,7 +47,7 @@ storage_provider_registration:
   uuid: <uuid>
   name: <provider name>
   display_name: <human-readable name>
-  store_type: <gitops|event_stream|search_index|audit|observability>
+  store_type: <gitops|write_once_snapshot|event_stream|search_index|audit|observability>
   version: <Major.Minor.Revision>
   endpoint: <base URL>
   capabilities: <list — store-type specific>
@@ -209,6 +209,103 @@ event_envelope:
 | Audit | Regulatory period (configurable — minimum 7 years for FSI) | Compliance requirement |
 
 ---
+
+
+---
+
+## 5a. Write-once Snapshot Store Contract (Realized Store)
+
+The Realized Store is a **write-once snapshot store** — distinct from the Event Stream Store used for Discovered State. It holds complete entity state snapshots where every record is traceable to an authorized DCM request.
+
+### 5a.1 Store Characteristics
+
+The Realized Store occupies a middle ground between the GitOps store (structured, human-navigable, PR-mediated) and the Event Stream store (high-frequency, field-level events, ephemeral). The Realized Store is:
+
+- **Write-once** — records are immutable after creation; a new record is created for each authorized state change
+- **Snapshot-based** — each record is a complete entity state, not a field-level delta
+- **Request-traceable** — every record has a non-nullable `corresponding_requested_state_uuid`
+- **Moderate frequency** — written only on authorized changes (initial realization, consumer updates, approved provider updates), not on every event
+- **Long-lived** — records persist for the full entity lifetime plus audit retention period
+
+### 5a.2 Write Authorization Model
+
+The Realized Store has a strictly controlled set of write sources. No component may write to the Realized Store without a corresponding Requested State record:
+
+```yaml
+realized_store_write_authorization:
+  allowed_sources:
+    - source_type: initial_realization
+      trigger: provider_confirms_realization
+      required: corresponding_requested_state_uuid (type: initial_realization)
+
+    - source_type: consumer_update
+      trigger: provider_confirms_targeted_delta
+      required: corresponding_requested_state_uuid (type: consumer_update)
+
+    - source_type: provider_update
+      trigger: dcm_approves_provider_update_notification
+      required: corresponding_requested_state_uuid (type: provider_update)
+
+  explicitly_forbidden:
+    - drift_detection          # drift only reads, never writes
+    - discovery_cycles         # discovery writes to Discovered Store only
+    - unsanctioned_changes     # unsanctioned changes remain drift events
+    - direct_admin_writes      # no bypassing the request pipeline
+```
+
+**Enforcement:** The write authorization model is enforced at the Realized Store API level — not by convention. A write without a valid `corresponding_requested_state_uuid` is rejected with `401 Unauthorized`.
+
+### 5a.3 Required Capabilities
+
+```yaml
+write_once_snapshot_store:
+  write_once_enforcement: true       # writes without corresponding_requested_state_uuid rejected
+  entity_uuid_keyed: true            # O(1) lookup by entity UUID
+  snapshot_retention: per_entity     # all snapshots for an entity retained per retention policy
+  point_in_time_query: true          # query state as of any timestamp
+  supersession_chain: true           # each record knows predecessor and successor
+  hash_chain_integrity: true         # each record hashes previous — tamper evident
+  concurrent_write_handling: optimistic_lock  # retry on conflict, no silent overwrite
+```
+
+### 5a.4 Required API Operations
+
+| Operation | Description |
+|-----------|-------------|
+| `write_snapshot(entity_uuid, payload, requested_state_uuid)` | Write new snapshot; validate non-null requested_state_uuid; return snapshot UUID |
+| `get_current(entity_uuid)` | Return the most recent snapshot for entity |
+| `get_at_timestamp(entity_uuid, timestamp)` | Return snapshot valid at given timestamp |
+| `get_by_uuid(realized_state_uuid)` | Return specific snapshot |
+| `list_history(entity_uuid)` | Return supersession chain for entity |
+| `verify_chain(entity_uuid)` | Verify hash chain integrity for entity's snapshots |
+
+### 5a.5 Retention Policy
+
+Realized State snapshots are retained for the full entity lifecycle. After an entity is DECOMMISSIONED, snapshots are retained per the audit retention policy — the same policy that governs Audit Store records. The entity's final Realized State snapshot is preserved even after all preceding snapshots are archived.
+
+### 5a.6 Relationship to the Audit Store
+
+The Realized Store and Audit Store are complementary — not redundant:
+
+| Aspect | Realized Store | Audit Store |
+|--------|---------------|-------------|
+| Content | Complete entity state snapshots | Atomic action records (who did what when) |
+| Query pattern | "What was the state of X at time T?" | "Who changed X and why?" |
+| Write frequency | Per authorized change | Per every DCM action |
+| Hash chain | Per entity | Per instance |
+| Rehydration source | Yes | No |
+
+The Audit Store records the action. The Realized Store records the result. Both are required for complete auditability.
+
+### 5a.7 Typical Implementations
+
+| Scale | Implementation | Notes |
+|-------|---------------|-------|
+| Minimal / dev | SQLite or PostgreSQL single-instance | Simple; acceptable for evaluation |
+| Standard | PostgreSQL with write-once constraints | Reliable; familiar operational model |
+| Production | CockroachDB or PostgreSQL HA | Geo-distributed; strong consistency |
+| FSI / Sovereign | PostgreSQL with HSM-backed encryption | Encryption at rest required |
+
 
 ## 6. Search Index Contract
 
@@ -420,7 +517,8 @@ storage_failure_policy:
 **By store type:**
 - **Commit Log:** Quorum unavailable → operation aborted. Minority failure → continues via Raft reelection.
 - **GitOps Stores:** Unavailable → writes queue locally; reads serve from cache. Queue exhausted → explicit rejection.
-- **Event Stream:** Producer queues locally. Consumer resumes from last committed offset on recovery. No data loss.
+- **Event Stream (Discovered Store):** Producer queues locally. Consumer resumes from last committed offset on recovery. No data loss.
+- **Write-once Snapshot Store (Realized Store):** Writes queue locally with the same WAL pattern as the Audit Store. Write retry on recovery. Rejected writes (missing requested_state_uuid) are never retried — they are logged as security events.
 - **Audit Store:** Two-stage model — Commit Log accumulates `pending_forward` entries. Operations not blocked.
 - **Search Index:** Non-authoritative. Unavailable → degraded response + reference to authoritative store. Recovery → full index rebuild.
 
@@ -673,6 +771,8 @@ Full audit trail: sovereignty_violation_record links to migration request
 | `STO-001` | Storage Providers must declare replication capabilities. Active Profile determines minimum replication requirements. Providers not meeting Profile minimum cannot be activated for that Profile's stores. |
 | `STO-002` | Storage Provider failure behavior is declared per store type and governed by the active Profile. GitOps unavailability queues writes locally — does not silently drop. Commit Log quorum loss aborts the triggering operation. Audit Store unavailability accumulates entries in the Commit Log. Search Index unavailability degrades query responses without impacting write operations. |
 | `STO-003` | The Search Index is a separate Storage Provider sub-type — non-authoritative and rebuildable. API queries may specify `freshness: authoritative` to bypass the index. |
+| `STO-007` | The Realized Store is a write-once snapshot store. Every write requires a non-nullable corresponding_requested_state_uuid. Drift detection, discovery cycles, and unsanctioned provider changes do not write to the Realized Store. Enforcement is at the store API level, not by convention. |
+| `STO-008` | The Intent Store requires a GitOps implementation. The Requested Store requires write-once semantics; GitOps is the reference implementation; write-once document stores are supported for production scale. |
 | `STO-004` | The Audit Store is a specialized Storage Provider sub-type — append-only, hash chain integrity, reference-based retention, compliance-grade queries. The Event Stream is the delivery channel only. |
 | `STO-005` | GitOps stores use a handle-based directory structure. The main branch is authoritative. Minimal and dev profiles may use a monorepo; standard and above should use separate repositories per store type. |
 

@@ -1,7 +1,7 @@
 ---
 title: "Entity Relationships"
 type: docs
-weight: 8
+weight: 9
 ---
 
 > **⚠️ Active Development Notice**
@@ -845,7 +845,7 @@ The relationship graph exists across all four states:
 | `REL-012` | A Tenant with `hard_tenancy.cross_tenant_relationships: deny_all` may not participate in any cross-tenant relationship in any direction |
 | `REL-013` | `❌ Invalid` relationship type × nature combinations (per the matrix in Section 6a) must be rejected by the Policy Engine at request time |
 | `REL-014` | An allocated resource claim requires a matching `available` allocation record on the parent entity |
-| `REL-015` | A destructive lifecycle action on a shared resource entity (`shareable: true`) is deferred until `active_relationship_count` reaches `minimum_relationship_count` |
+| `REL-015` | A destructive lifecycle action on a shared resource entity (`ownership_model: shareable` (see [Ownership, Sharing, and Allocation](04b-ownership-sharing-allocation.md))) is deferred until `active_relationship_count` reaches `minimum_relationship_count` |
 | `REL-016` | Informational relationships do not contribute to `active_relationship_count` on shared resource entities |
 | `REL-017` | A Resource Type Specification with `shareability.allowed: false` must reject any attempt to create more than one active constituent or operational relationship to an instance of that type |
 | `REL-018` | When a lifecycle event produces multiple action recommendations on a shared resource, the most conservative action wins per the hierarchy: `retain > notify > suspend > detach > cascade > destroy` (save_overrides_destroy) |
@@ -919,6 +919,69 @@ Relationships follow the universal versioning and deprecation model. A relations
 | 3 | How does the relationship graph interact with multi-tenant scenarios — can a relationship cross Tenant boundaries? | Multi-tenancy | ✅ Resolved — nature governs; constituent never; operational with dual auth; informational unless deny_all; REL-010/011/012 |
 | 4 | Should there be a maximum relationship graph depth to prevent runaway complexity? | Operational governance | ✅ Resolved — profile-governed max depth: 15 standard/prod, 10 fsi/sovereign; circular detection always enforced; depth = traversal distance; see doc 09 Section 12 (REL-021) |
 | 5 | How are shared entities represented in the relationship graph — an entity required by multiple parents? | Graph model | ✅ Resolved — sharing_model declaration; active_relationship_count; save_overrides_destroy hierarchy (REL-018); lifecycle_conflict_record; REL-015 through REL-019 |
+
+
+---
+
+## 14. Notification Traversal Rules
+
+The entity relationship graph is the source of truth for notification audiences. This section defines how relationships govern notification traversal for the Notification Model (doc 23).
+
+### 14.1 Relationship Properties Relevant to Notifications
+
+Every relationship carries two properties that the Notification Router uses for audience resolution:
+
+```yaml
+relationship:
+  type: attached_to
+  stake_strength: <required|preferred|optional>
+  notification_relevance:
+    # Declared in the Resource Type Spec for this relationship type
+    # Can be overridden per relationship instance
+    notifiable_events: [entity.decommissioning, entity.state_changed, entity.ttl_expired]
+    traversal_depth: 1               # how many hops from this relationship
+    audience_role: stakeholder       # role assigned to notified party
+```
+
+### 14.2 Stake Strength and Notification Threshold
+
+Different event types use different minimum stake strengths for notification:
+
+| Event Category | Minimum Stake Strength | Rationale |
+|---------------|----------------------|-----------|
+| `entity.decommissioning` | optional | All stakeholders should know |
+| `entity.decommissioned` | optional | All stakeholders should know |
+| `entity.state_changed` (to FAILED/DEGRADED) | required | Only required stakeholders are affected |
+| `entity.state_changed` (to OPERATIONAL) | preferred | Recovery notification broader |
+| `entity.ttl_expired` | required | Only required stakeholders need to act |
+| `drift.detected` | — (owner only) | Drift is the owner's concern |
+| `dependency.state_changed` | required | Only affects required dependents |
+
+The minimum stake strength threshold per event type is declared in the resource type specification and can be overridden by a platform-domain policy.
+
+### 14.3 Notification Traversal and Graph Depth
+
+Notification traversal respects the same depth limits as other graph operations (REL-021: max depth 15 standard/prod, 10 fsi/sovereign). However, notification traversal depth is typically much shallower — most event types only traverse depth 1 (direct relationships).
+
+```
+VLAN-100 decommissioning (depth 1 traversal):
+  Direct relationships:
+    ├── VM-A (attached_to, required) → AppTeam notified as stakeholder
+    ├── VM-B (attached_to, required) → DevTeam notified as stakeholder
+    └── VM-C (attached_to, optional) → OpsTeam notified as observer
+  No depth-2 traversal — VM-A's dependencies are not notified about VLAN changes
+```
+
+Security events (sovereignty violation, audit chain break) use depth 0 (system audiences only — no relationship traversal needed).
+
+### 14.4 Notification Traversal Policies
+
+| Policy | Rule |
+|--------|------|
+| `REL-022` | Notification traversal follows relationship edges from the changed entity. Traversal depth per event type is declared in the Resource Type Specification. Default traversal depth is 1. |
+| `REL-023` | Notification traversal respects sovereignty boundaries. Cross-tenant notifications carry only content authorized for the receiving Tenant. |
+| `REL-024` | The same actor reached via multiple relationship paths receives a single notification with all applicable audience_roles listed. |
+
 
 ---
 

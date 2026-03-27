@@ -17,3 +17,5 @@ superset strategy, and community engagement.
   {{< card link="operator-sdk-api" title="Operator SDK API" icon="code" subtitle="Go library API design for the DCM Operator SDK — Level 1 conformance in one day." >}}
   {{< card link="cncf-strategy" title="CNCF Strategy" icon="globe-alt" subtitle="CNCF submission strategy, community engagement plan, and operator ecosystem approach." >}}
 {{< /cards >}}
+
+{{< card link="consumer-api-spec" title="Consumer API Specification" icon="code" subtitle="REST API specification for DCM consumers — service catalog, request submission, resource management, and audit access." >}}

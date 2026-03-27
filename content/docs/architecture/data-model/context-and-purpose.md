@@ -1,7 +1,7 @@
 ---
 title: "Context and Purpose"
 type: docs
-weight: 1
+weight: 0
 ---
 
 > **⚠️ Active Development Notice**
@@ -12,7 +12,7 @@ weight: 1
 
 
 **Document Status:** 🔄 In Progress  
-**Related Documents:** [Entity Types](01-entity-types.md) | [Four States](02-four-states.md) | [Layering and Versioning](03-layering-and-versioning.md) | [Examples](04-examples.md)
+**Related Documents:** [Entity Types](01-entity-types.md) | [Ownership, Sharing, and Allocation](04b-ownership-sharing-allocation.md) | [Four States](02-four-states.md) | [Layering and Versioning](03-layering-and-versioning.md) | [Examples](04-examples.md)
 
 ---
 
@@ -179,7 +179,7 @@ The Audit capability in DCM reads provenance data that is intrinsic to every dat
 
 The DCM Data Model is governed by three foundational constraints that apply universally and without exception:
 
-### 3.1 Declarative
+### 5.1 Declarative
 
 Data in DCM describes **what something is or should be**, not how to achieve it. Every entity in the data model is a complete, self-describing statement of state. The procedures required to achieve that state are the concern of the Service Provider, not the data model.
 
@@ -188,7 +188,7 @@ This means:
 - A policy declares its conditions and outcomes, not its execution logic
 - A layer declares its overrides, not the merge algorithm used to apply them
 
-### 3.2 Idempotent in Operation
+### 5.2 Idempotent in Operation
 
 Applying the same data to the same system multiple times must always produce the same result. No operation on DCM data should have different outcomes based on how many times it has been applied.
 
@@ -198,7 +198,7 @@ This is critical for:
 - **Retry scenarios** — failed operations can be safely retried without risk of inconsistent state
 - **Audit and compliance** — the same data, applied by anyone at any time, produces the same verifiable outcome
 
-### 3.3 Immutable if Versioned
+### 5.3 Immutable if Versioned
 
 Once a version of any entity is published, it cannot be modified. If a change is required, a new version must be created. The previous version remains intact and accessible.
 
@@ -354,7 +354,7 @@ The following questions remain unresolved and require decisions before the data 
 | 3 | Which cache is authoritative when caches diverge? | Conflict resolution | ✅ Resolved — GitOps stores always authoritative; caches are projections; divergence triggers rebuild from authoritative store (CACHE-003) |
 | 4 | What mechanism maintains consistency across distributed caches? | Data integrity | ✅ Resolved — hash-based heartbeat divergence detection + push invalidation; PT2H staleness alert; signed bundles for Sovereign DCM (CACHE-004) |
 | 5 | Should the data model allow embedded target-technology-specific data bundles? | Portability | ✅ Resolved — native_passthrough field sanctioned; always audit-logged; opaque mode blocked in fsi/sovereign (DATA-001) |
-| 6 | How are the four states represented physically? | Physical model | ✅ Resolved — Intent/Requested in Git; Realized in Event Stream; Discovered in Discovered Store (STO-005) |res?) | Implementation architecture | ❓ Unresolved |
+| 6 | How are the four states represented physically? | Physical model | ✅ Resolved — Intent/Requested in Git; Realized in Event Stream; Discovered in Discovered Store (STO-005) |
 | 7 | What is the performance impact of field-level provenance at scale? What optimization strategies are acceptable? | Scalability, storage cost | ✅ Resolved — three configurable provenance models: full_inline, deduplicated (Model B recommended), tiered; profile-appropriate Policy Groups; see docs 03 and 06 (OPS-001) |
 | 8 | Should provenance metadata be stored inline with field data or in a linked provenance document? | Data model structure, query performance | ✅ Resolved — three-level structure: implicit chain ref, inline delta, linked history document; all reconstructable from stored facts; see doc 03 (OPS-002) |
 

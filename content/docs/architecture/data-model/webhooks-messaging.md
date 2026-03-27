@@ -1,7 +1,7 @@
 ---
 title: "Webhooks, Messaging, and External Integration"
 type: docs
-weight: 17
+weight: 18
 ---
 
 > **⚠️ Active Development Notice**
@@ -10,7 +10,8 @@ weight: 17
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress  
+**Document Status:** 🔄 In Progress
+**Related Documents (updated):** [Notification Model](23-notification-model.md) | [Entity Relationships](09-entity-relationships.md)  
 **Related Documents:** [Universal Audit Model](16-universal-audit.md) | [Deployment and Redundancy](17-deployment-redundancy.md) | [Authentication and Authorization](19-auth-providers.md) | [Policy Organization](14-policy-profiles.md)
 
 ---
@@ -162,6 +163,16 @@ policy: "If ingress.surface == message_bus_inbound AND message_bus_provider.juri
 
 ## 3. Outbound Webhooks
 
+> **⚠️ Architecture Update — Notification Model Supersedes Outbound Webhooks**
+>
+> The outbound webhook model described in Section 3 has been superseded by the **Unified Notification Model** (see [doc 23: Notification Model](23-notification-model.md)). Outbound webhooks are now one delivery channel type within the Notification Provider model rather than a parallel mechanism.
+>
+> **For new implementations:** Use the Notification Provider subscription model (doc 23, Section 6) with a webhook-type Notification Provider.
+>
+> **For existing webhook registrations:** The registration model below remains supported via a compatibility layer. Existing registrations are automatically treated as actor-level subscriptions with a webhook-type Notification Provider. No migration required for current deployments.
+>
+> The key improvement in the new model: audience is derived from the **entity relationship graph**, not from a manually maintained subscriber list. A webhook subscription for VLAN drift events will now automatically include all VMs attached to that VLAN as audience context.
+
 ### 3.1 Concept
 
 DCM pushes event notifications to registered external HTTP endpoints. Outbound webhooks are **optional and policy-governed** — the active Profile and Policy Groups determine which events require external notification.
@@ -245,6 +256,8 @@ webhook_registration:
 ```
 
 ### 3.3 Event Taxonomy
+
+> **See [doc 23: Notification Model](23-notification-model.md) Section 4 for the authoritative event taxonomy.** The table below is the legacy taxonomy for existing webhook registrations.
 
 The event taxonomy maps onto the Universal Audit action vocabulary. All are versioned registry entries:
 

@@ -417,6 +417,19 @@ Providers are **custodians** of the underlying infrastructure — they are not t
 | Model | Description | Example |
 |-------|-------------|---------|
 | **Allocation** | Provider retains internal ownership. Consumer owns the Entity (the allocation). Provider has reclaim rights on decommission. | VM, Container, IP Address |
+| **Notification Provider** | Ninth DCM provider type; translates unified notification envelope to delivery channel; handles delivery, retry, dead letter, and delivery confirmation callbacks |
+| **Notification Router** | DCM control plane component that resolves notification audiences and routes envelopes to Notification Providers |
+| **audience resolution** | Deriving notification recipients by traversing the entity relationship graph from the changed entity at event time |
+| **notification_uuid** | Idempotency key on notification envelopes; Notification Providers use this to deduplicate on retry |
+| **audience_role** | owner / stakeholder / approver / observer — why this actor is in the notification audience |
+| **stakeholder_reason** | Notification envelope field explaining which relationship caused the actor to be in the stakeholder audience |
+| **Tier 1 / Tier 2 / Tier 3 notifications** | Mandatory system (non-suppressable) / Tenant defaults / Actor subscriptions — three subscription tiers that compose |
+| **NOT-001 through NOT-008** | Notification model system policies |
+| **write-once snapshot store** | Realized Store implementation model: each record is a complete immutable entity state snapshot; no event replay; direct point-in-time lookup; supersession chain links snapshots |
+| **corresponding_requested_state_uuid** | Mandatory non-nullable field on every Realized State snapshot; traces every Realized State change to an authorized request |
+| **Provider Update Notification** | Formal API for providers to report authorized state changes; DCM evaluates via Policy Engine; approved → new Requested State + Realized State; rejected → drift event |
+| **notification_uuid** | Idempotency key on Provider Update Notifications; safe to resend on provider crash |
+| **pre-authorized update** | Category of provider update pre-approved by GateKeeper policy; processed automatically without per-change human review |
 | **Whole Allocation** | Entire resource allocated as indivisible unit. Provider retains ownership. Consumer has exclusive use. Not subdivided or shared. | Dedicated Bare Metal (provider-owned) |
 | **Full Transfer** | Provider transfers complete ownership to consumer's DCM Tenant. Consumer controls full lifecycle including decommission. | Transferred Bare Metal, Licensed asset |
 | **Hybrid Transfer** | Ownership can transfer multiple times. Current owner is always exactly one DCM Tenant. Every transfer is tracked and auditable. | Bare Metal reallocated between tenants |
@@ -2443,7 +2456,31 @@ The Ship/Shore/Enclave terminology from defense IT contexts has been replaced th
 
 | Former Term | Replacement | Meaning |
 |-------------|-------------|---------|
-| Shore | **federation routing** | Hub DCM applies placement engine logic at the DCM instance level; Regional DCMs are DCM Provider instances; sovereignty is a hard pre-filter; same tie-breaking hierarchy as provider selection |
+| Shore | **Notification Provider** | Ninth DCM provider type; translates unified notification envelope to delivery channel; handles delivery, retry, dead letter, and delivery confirmation callbacks |
+| **Notification Router** | DCM control plane component that resolves notification audiences and routes envelopes to Notification Providers |
+| **audience resolution** | Deriving notification recipients by traversing the entity relationship graph from the changed entity at event time |
+| **notification_uuid** | Idempotency key on notification envelopes; Notification Providers use this to deduplicate on retry |
+| **audience_role** | owner / stakeholder / approver / observer — why this actor is in the notification audience |
+| **stakeholder_reason** | Notification envelope field explaining which relationship caused the actor to be in the stakeholder audience |
+| **Tier 1 / Tier 2 / Tier 3 notifications** | Mandatory system (non-suppressable) / Tenant defaults / Actor subscriptions — three subscription tiers that compose |
+| **NOT-001 through NOT-008** | Notification model system policies |
+| **write-once snapshot store** | Realized Store implementation model: each record is a complete immutable entity state snapshot; no event replay; direct point-in-time lookup; supersession chain links snapshots |
+| **corresponding_requested_state_uuid** | Mandatory non-nullable field on every Realized State snapshot; traces every Realized State change to an authorized request |
+| **Provider Update Notification** | Formal API for providers to report authorized state changes; DCM evaluates via Policy Engine; approved → new Requested State + Realized State; rejected → drift event |
+| **notification_uuid** | Idempotency key on Provider Update Notifications; safe to resend on provider crash |
+| **pre-authorized update** | Category of provider update pre-approved by GateKeeper policy; processed automatically without per-change human review |
+| **Whole Allocation** | Ownership pattern: consumer owns the entire resource entity outright in their Tenant; no pool involved |
+| **Allocation** | Ownership pattern: pool yields independently-owned sub-resources; consumer owns their allocation; AllocationRecord relationship links to pool |
+| **Shareable** | Ownership pattern: one resource, multiple stakeholders; consumers hold stakes (relationships) only; no consumer owns any portion |
+| **AllocationRecord** | Cross-tenant relationship from an allocation entity back to its source pool entity |
+| **stake_strength** | Relationship property on shareable resource attachments: required (blocks decommission) / preferred / optional |
+| **PENDING_REVIEW** | Formal Infrastructure Resource Entity lifecycle state for conflicts requiring human resolution (sovereignty, cross-tenant auth revocation, ownership transfer conflicts) |
+| **Consumer API** | DCM REST API for consumers: catalog browsing, request submission, resource management, audit trail access |
+| **Consumer Request Status** | Lifecycle: ACKNOWLEDGED → ASSEMBLING → AWAITING_APPROVAL → APPROVED → DISPATCHED → PROVISIONING → COMPLETED/FAILED/CANCELLED |
+| **01-entity-types.md** | Entity type taxonomy: Infrastructure Resource, Composite Resource, Process Resource; sub-types and invariants |
+| **04-examples.md** | Worked examples: VM end-to-end, IP allocation, VLAN sharing, brownfield ingestion, drift remediation; Git repo structure |
+| **04b-ownership-sharing-allocation.md** | Authoritative ownership model: whole allocation, allocation, shareable; policies OWN-001 through OWN-008 |
+| **federation routing** | Hub DCM applies placement engine logic at the DCM instance level; Regional DCMs are DCM Provider instances; sovereignty is a hard pre-filter; same tie-breaking hierarchy as provider selection |
 | **independent_with_overlap** | Certificate rotation model: old cert valid P30D after new cert issued; allows peers to update trust stores without coordinated downtime |
 | **alert_and_hold** | Federated drift detection response when peer DCM is unavailable: do not assume drift; hold state; escalate to platform admin after PT24H |
 | **AUDIT_STORE_UNAVAILABLE** | Gap record inserted in Audit Store hash chain after recovery from Audit Store failure; timestamps the exact outage window; makes gap explicit and auditable |
@@ -2775,7 +2812,234 @@ IAM, CAT, REQ, PRV, LCM, DRF, POL, LAY, INF, ING, AUD, OBS, STO, FED, GOV — se
 
 ---
 
-## SECTION 46 — PERSONAS
+## SECTION 46 — GROUP 1: MISSING DOCUMENTS
+
+### 46.1 01-entity-types.md — Entity Types Taxonomy
+
+Three primary entity types in DCM:
+
+**Infrastructure Resource Entity** — persistent, full lifecycle (REQUESTED → PENDING → PROVISIONING → REALIZED → OPERATIONAL → SUSPENDED → DECOMMISSIONED). Owned by exactly one Tenant. Drift detection active. TTL management. `PENDING_REVIEW` is a valid state for sovereignty/tenancy conflicts during rehydration — not an error state; requires human resolution.
+
+**Composite Resource Entity** — Meta Provider composition of multiple Infrastructure Resource Entities. Owns its UUID; constituents own theirs. `lifecycle_state` reflects aggregate health — OPERATIONAL only when all required constituents OPERATIONAL. Two-level drift detection (composite + constituent). Staged decommission (composite first, then constituents in reverse dependency order). `composition_visibility: opaque|transparent|selective`.
+
+**Process Resource Entity** — ephemeral execution (automation jobs, playbooks, pipelines). Short lifecycle (REQUESTED → INITIATED → EXECUTING → terminal). No SUSPENDED state. No PENDING_REVIEW. `max_execution_time` mandatory — no default. Must record `affected_entity_uuids` if any infrastructure modifications made.
+
+Entity sub-types: Shared Resource Entity (`ownership_model: shareable`), Allocatable Pool Resource (pool entity), Allocation entity (`ownership_model: allocation`).
+
+Entity identity invariants: UUID never changes (including rehydration); single Tenant ownership always; provider entity ID is separate from DCM UUID; audit records preserved per retention policy.
+
+### 46.2 04b-ownership-sharing-allocation.md — Ownership, Sharing, and Allocation
+
+**The three ownership patterns — use these terms precisely:**
+
+**Whole Allocation** — consumer receives entire resource entity; owns it outright in their Tenant; no pool involved; full lifecycle control; decommission is straightforward.
+
+**Allocation** — pool resource (owned by platform Tenant) yields new independently-owned sub-resources. Consumer owns their allocation outright. AllocationRecord relationship links allocation → pool. Decommissioning the allocation releases it back to the pool. Pool entity unaffected. Example: IPAddressPool → IPAddress entities.
+
+**Shareable** — single resource owned by one Tenant; multiple consumers hold stakes (relationships) but own nothing. No new entity created per consumer. Decommission deferred while required stakes active. Consumer holds an `attached_to` or `depends_on` relationship with declared `stake_strength: required|preferred|optional`. Example: VLAN shared by multiple VMs.
+
+**Critical distinction:** Shareable = one resource, multiple stake-holders. Allocation = one pool, multiple independently-owned sub-resources. Never confuse these.
+
+Hybrid case: an allocation from a shareable pool. Consumer owns their /28 subnet (allocation). The parent /16 is shareable (NetworkOps owns it, multiple /28s have stakes in it).
+
+OWN-001 through OWN-008 policies govern these patterns.
+
+### 46.3 04-examples.md — Worked Examples and Git Repository Structure
+
+**Git repository structure (resolves Q54 deferred item):**
+- Intent Store: `intent-store/{tenant-uuid}/{resource-type-category}/{resource-type}/{entity-uuid}/intent.yaml`
+- Requested Store: `requested-store/{tenant-uuid}/{resource-type-category}/{resource-type}/{entity-uuid}/` with: `requested.yaml`, `assembly-provenance.yaml`, `placement.yaml`, `dependencies.yaml`
+- Provider selection is in `placement.yaml` — not encoded in directory structure (Q54 resolved)
+
+**Five worked examples:**
+1. VM provision end-to-end (layer assembly, policy evaluation, placement, all four states)
+2. IP Address allocation (pool → consumer-owned allocation entity, AllocationRecord relationship)
+3. VLAN attachment (shareable ownership — stake relationship, decommission deferral)
+4. Brownfield ingestion (INGEST → ENRICH → PROMOTE with CMDB Information Provider)
+5. Drift detection and remediation (unsanctioned memory change, severity, ESCALATE, UPDATE_DEFINITION resolution)
+
+### 46.4 consumer-api-spec.md — Consumer API Specification
+
+Consumer API base URL: `/api/v1/`. Three ingress surfaces: REST API (this spec), Web UI, Git PR.
+
+**Authentication:** Bearer token from `/api/v1/auth/token`. Tenant context via `X-DCM-Tenant` header — always required when actor has multiple Tenants. Step-up MFA via `X-DCM-StepUp-Token` for sensitive operations.
+
+**Service Catalog:** `GET /api/v1/catalog` (list, filtered by RBAC), `GET /api/v1/catalog/{uuid}` (describe with full schema, constraints, cost estimate), `GET /api/v1/catalog/search`.
+
+**Request submission:** `POST /api/v1/requests` → 202 with entity_uuid and status_url. Consumer request status lifecycle: ACKNOWLEDGED → ASSEMBLING → AWAITING_APPROVAL → APPROVED → DISPATCHED → PROVISIONING → COMPLETED|FAILED|CANCELLED. `DELETE /api/v1/requests/{uuid}` for cancellation (only before PROVISIONING).
+
+**Resource management:** `GET /api/v1/resources` (list), `GET /api/v1/resources/{uuid}` (describe with confidence scores, drift status, editable flags), `PATCH /api/v1/resources/{uuid}` (targeted delta for editable fields), `POST /suspend`, `DELETE` (decommission with deferred response if stakes active), `POST /rehydrate`.
+
+**Audit:** `GET /api/v1/resources/{uuid}/audit` with chain_integrity field, `GET /api/v1/audit/correlation/{id}` for cross-state timeline.
+
+Three conformance levels: Level 1 (read-only), Level 2 (standard), Level 3 (full including rehydration and audit).
+
+### 46.5 Context-and-Purpose Fix
+
+Section 5 subsections were incorrectly numbered 3.1/3.2/3.3 — corrected to 5.1/5.2/5.3. Q6 garbled row in open questions table — corrected.
+
+### 46.6 Q54 Resolution
+
+Git repository structure is independent of provider selection. Provider selection is stored in `placement.yaml` within the entity's directory. The deferred note in the four states doc has been updated to reference the worked examples document for the complete layout.
+
+---
+
+## SECTION 47 — STORE ARCHITECTURE: INTENT, REQUESTED, REALIZED, DISCOVERED
+
+### 47.1 The Four Stores — Corrected Model
+
+| Store | Type | Implementation | Why |
+|-------|------|---------------|-----|
+| Intent | GitOps (required) | GitHub/GitLab/Gitea | PR workflow is first-class feature, not implementation detail |
+| Requested | Write-once Storage Provider | GitOps (reference); PostgreSQL (production scale) | Machine-generated; no PR benefit; Git degrades at scale |
+| Realized | Write-once Snapshot Store | PostgreSQL; CockroachDB | Snapshot-based (not event stream); request-traceable only |
+| Discovered | Ephemeral Snapshot Stream | Kafka; EventStoreDB | High-frequency; never a rehydration source; ephemeral |
+
+**Intent Store must be GitOps** — the PR workflow, branch-per-request, and human review are architectural features.
+
+**Requested Store should NOT be GitOps at production scale** — Git throughput degrades under high-frequency machine writes; PR mechanics add latency with no benefit for machine-generated content. Write-once document store with hash-chain integrity satisfies the contract.
+
+**Realized Store is NOT an event stream** — it is a write-once snapshot store. Each record is a complete entity state, not a field-level event. This makes rehydration a direct lookup (not a replay) and makes point-in-time queries trivial.
+
+**Discovered Store remains an event stream** — high-frequency, machine-generated, ephemeral; never a rehydration source.
+
+### 47.2 The Fundamental Realized Store Constraint
+
+> **Realized State only changes when an authorized request produces a corresponding Requested State record. No exceptions.**
+
+Three write sources — all require `corresponding_requested_state_uuid` (non-nullable):
+1. `initial_realization` — provider confirms first provisioning
+2. `consumer_update` — consumer targeted delta approved and confirmed
+3. `provider_update` — DCM approves a Provider Update Notification
+
+**What does NOT write to Realized Store:**
+- Drift detection (reads only)
+- Discovery cycles (writes to Discovered Store only)
+- Unsanctioned provider changes (become drift events)
+- Direct admin writes (bypassing the request pipeline is forbidden)
+
+**Drift is always unsanctioned** — there are no "legitimate drift events." Every authorized change goes through a request and produces a Requested State record. If Discovered State differs from Realized State without a corresponding Requested State record, it is drift.
+
+### 47.3 Provider Update Notification
+
+Formal mechanism for providers to report authorized state changes (auto-scaling, auto-healing, maintenance). Not drift — the provider is asserting the change was authorized.
+
+**DCM processing pipeline:**
+```
+Provider submits POST /api/v1/provider/entities/{uuid}/update-notification
+  → Authentication (provider mTLS)
+  → Policy Engine evaluates (pre-authorized? requires consumer approval?)
+  → APPROVED: create provider_update Requested State → write Realized State snapshot
+  → REQUIRES_APPROVAL: entity enters PENDING_REVIEW; consumer notified
+  → REJECTED: Realized State unchanged; discrepancy becomes drift
+```
+
+**Pre-authorization:** Providers declare update capabilities at registration. Organizations pre-authorize categories of updates via GateKeeper policy (e.g., auto-scale within 2× bounds). Pre-authorized updates are processed automatically.
+
+**Consumer approval API:** `GET /api/v1/resources/{uuid}/provider-notifications` and `POST /approve` or `/reject`. On approval → new Requested State + Realized State. On rejection → drift event.
+
+**Idempotency:** `notification_uuid` is the idempotency key. Safe to resend on provider crash.
+
+**Level 2 conformance requirement** in the Operator Interface Specification for providers implementing auto-scaling, auto-healing, or provider-side maintenance.
+
+### 47.4 Realized State Snapshot Structure
+
+```yaml
+realized_state_snapshot:
+  realized_state_uuid: <uuid>
+  entity_uuid: <uuid>
+  realized_at: <ISO 8601>
+  source_type: initial_realization | consumer_update | provider_update
+  corresponding_requested_state_uuid: <uuid>   # mandatory, not nullable
+  supersedes_realized_state_uuid: <uuid|null>
+  superseded_by_realized_state_uuid: <uuid|null>
+  fields: { # complete entity state }
+```
+
+### 47.5 Rehydration from Realized State
+
+Rehydration picks a specific snapshot — direct lookup by `realized_state_uuid` or by timestamp. Not a replay. Not a projection. A complete entity state that was explicitly authorized through DCM's governance pipeline. The supersession chain enables historical rehydration ("rehydrate as of March 15").
+
+### 47.6 New Policies
+
+- `STO-007`: Realized Store is write-once snapshot; every write requires non-nullable `corresponding_requested_state_uuid`; enforcement at store API level
+- `STO-008`: Intent Store requires GitOps; Requested Store requires write-once semantics (GitOps reference impl; write-once document stores supported at scale)
+- `RSE-010`: Realized State only changes via authorized request; drift detection never writes to Realized Store
+- `RSE-011`: Provider Update Notifications evaluated by Policy Engine before any Realized State change
+- `RSE-012`: Categories of provider updates may be pre-authorized via GateKeeper policy
+- `RSE-013`: Provider updates requiring consumer approval place entity in PENDING_REVIEW
+
+---
+
+## SECTION 48 — NOTIFICATION MODEL
+
+### 48.1 Core Principle: Relationship Graph Determines Audience
+
+The audience for every notification is derived from the **entity relationship graph at event time** — not from a manually maintained subscriber list. When VLAN-100 is decommissioned, every VM attached to it gets notified automatically through their relationship edges. No subscription management required.
+
+### 48.2 Notification Provider — Ninth Provider Type
+
+| # | Type |
+|---|------|
+| 1-8 | (existing providers) |
+| **9** | **Notification Provider** — translates DCM unified envelope to delivery channel (Slack, PagerDuty, email, ServiceNow, webhook, SMS); handles delivery, retry, dead letter; reports delivery status back to DCM |
+
+Notification Providers register with DCM declaring supported channels, sovereignty, and delivery guarantees. Organizations configure which channel to use per subscription.
+
+### 48.3 Three Subscription Tiers
+
+**Tier 1 — Mandatory system notifications (non-suppressable):** Security events, sovereignty violations, audit chain breaks. Always delivered to Security Team + Platform Admin. Cannot be filtered.
+
+**Tier 2 — Tenant defaults:** Tenant admin configures baseline for all resources in Tenant — which event categories fire, which channels, urgency routing.
+
+**Tier 3 — Actor subscriptions:** Individual actors subscribe to specific events on specific resources or resource types.
+
+Tiers compose: Tier 1 always fires; Tier 2 applies to all Tenant resources; Tier 3 adds specifics. Actor subscriptions can add channels but cannot suppress Tier 1.
+
+### 48.4 Audience Resolution Algorithm (6 steps)
+
+1. Direct owner of changed entity (role: owner)
+2. Traverse relationship graph — for each relationship: check event relevance, check min stake_strength, resolve related entity's owner (role: stakeholder)
+3. Approval requirements — add approvers (role: approver)
+4. Mandatory system audiences (Security Team, Platform Admin for security events)
+5. Actor subscription overrides (can add; cannot remove mandatory)
+6. Deduplicate; same actor via multiple paths → one notification with all roles listed
+
+### 48.5 Event Taxonomy (closed vocabulary — 7 categories)
+
+1. **Request lifecycle:** acknowledged, requires_approval, approved, dispatched, completed, failed, cancelled, gatekeeper_rejected
+2. **Resource lifecycle:** realized, state_changed, ttl_warning, ttl_expired, suspended, resumed, decommissioning, decommissioned, decommission_deferred, ownership_transferred, pending_review
+3. **Drift and discovery:** drift.detected, drift.severity_escalated, drift.resolved, drift.escalated, unsanctioned_change.detected
+4. **Provider update:** submitted, requires_approval, approved, rejected, auto_approved
+5. **Dependency and relationship:** dependency.state_changed, stakeholder.resource_decommissioning, allocation.pool_capacity_low, cross_tenant_auth.revoked
+6. **Governance:** policy.activated, policy_provider.trust_elevated, profile.changed, catalog_item.deprecated
+7. **Security/system (mandatory):** audit.chain_integrity_alert, sovereignty.violation, federation.tunnel_degraded, security.unsanctioned_provider_write
+
+### 48.6 Notification Envelope (unified — all channels)
+
+Key fields: notification_uuid (idempotency), correlation_id (links to audit record), event_type, urgency (critical/high/medium/low), entity info, audience role + stakeholder_reason (WHY this actor is in audience), context (previous/new state, changed_fields), action (type/url/deadline for approvals), deep links.
+
+### 48.7 Provider Update + Notifications Integration
+
+`provider_update.requires_approval` fires → consumer receives notification with `action.type: approve`, `action.deadline` (default PT24H). Approved → `provider_update.approved` + `entity.state_changed` to stakeholders. Rejected → `provider_update.rejected` + drift event.
+
+### 48.8 Webhooks Are Now a Notification Channel
+
+Outbound webhooks (doc 18) are superseded by the Notification Model. Webhooks are one channel type within a Notification Provider. Existing webhook registrations are auto-converted to actor-level subscriptions with a webhook-type Notification Provider — no migration needed.
+
+### 48.9 Delivery Pipeline
+
+Event → Audit record → Notification Router resolves audience → Subscription resolution → Envelope generation per actor → Route to Notification Provider(s) → Provider delivers → Delivery confirmation → NOTIFICATION_DISPATCHED audit record.
+
+### 48.10 Policies
+
+NOT-001 through NOT-008. Key: audience derived from relationship graph (NOT-001); mandatory notifications never suppressable (NOT-002); cross-tenant notifications sovereignty-checked (NOT-003); every dispatch is audited (NOT-004); Notification Provider must be registered for external delivery (NOT-007); event taxonomy is closed vocabulary (NOT-008).
+
+REL-022 through REL-024: traversal depth declared in Resource Type Spec; default depth 1; sovereignty respected; same actor via multiple paths → one notification with all roles.
+
+---
+
+## SECTION 49 — PERSONAS
 
 | Persona | Primary Concern |
 |---------|----------------|
@@ -2792,7 +3056,7 @@ IAM, CAT, REQ, PRV, LCM, DRF, POL, LAY, INF, ING, AUD, OBS, STO, FED, GOV — se
 
 ---
 
-## SECTION 47 — TERMINOLOGY GLOSSARY
+## SECTION 50 — TERMINOLOGY GLOSSARY
 
 | Term | Definition |
 |------|-----------|
@@ -2855,6 +3119,30 @@ IAM, CAT, REQ, PRV, LCM, DRF, POL, LAY, INF, ING, AUD, OBS, STO, FED, GOV — se
 | **Raft** | Consensus protocol used by Commit Log (etcd) for quorum writes; guarantees durability even if minority of replicas fail |
 | **DCMGroup** | Universal group entity — all grouping constructs in DCM expressed as DCMGroup with group_class |
 | **group_class** | Determines system behavior of a DCMGroup — closed built-in set: tenant_boundary, resource_grouping, policy_collection, policy_profile, layer_grouping, composite, federation |
+| **Notification Provider** | Ninth DCM provider type; translates unified notification envelope to delivery channel; handles delivery, retry, dead letter, and delivery confirmation callbacks |
+| **Notification Router** | DCM control plane component that resolves notification audiences and routes envelopes to Notification Providers |
+| **audience resolution** | Deriving notification recipients by traversing the entity relationship graph from the changed entity at event time |
+| **notification_uuid** | Idempotency key on notification envelopes; Notification Providers use this to deduplicate on retry |
+| **audience_role** | owner / stakeholder / approver / observer — why this actor is in the notification audience |
+| **stakeholder_reason** | Notification envelope field explaining which relationship caused the actor to be in the stakeholder audience |
+| **Tier 1 / Tier 2 / Tier 3 notifications** | Mandatory system (non-suppressable) / Tenant defaults / Actor subscriptions — three subscription tiers that compose |
+| **NOT-001 through NOT-008** | Notification model system policies |
+| **write-once snapshot store** | Realized Store implementation model: each record is a complete immutable entity state snapshot; no event replay; direct point-in-time lookup; supersession chain links snapshots |
+| **corresponding_requested_state_uuid** | Mandatory non-nullable field on every Realized State snapshot; traces every Realized State change to an authorized request |
+| **Provider Update Notification** | Formal API for providers to report authorized state changes; DCM evaluates via Policy Engine; approved → new Requested State + Realized State; rejected → drift event |
+| **notification_uuid** | Idempotency key on Provider Update Notifications; safe to resend on provider crash |
+| **pre-authorized update** | Category of provider update pre-approved by GateKeeper policy; processed automatically without per-change human review |
+| **Whole Allocation** | Ownership pattern: consumer owns the entire resource entity outright in their Tenant; no pool involved |
+| **Allocation** | Ownership pattern: pool yields independently-owned sub-resources; consumer owns their allocation; AllocationRecord relationship links to pool |
+| **Shareable** | Ownership pattern: one resource, multiple stakeholders; consumers hold stakes (relationships) only; no consumer owns any portion |
+| **AllocationRecord** | Cross-tenant relationship from an allocation entity back to its source pool entity |
+| **stake_strength** | Relationship property on shareable resource attachments: required (blocks decommission) / preferred / optional |
+| **PENDING_REVIEW** | Formal Infrastructure Resource Entity lifecycle state for conflicts requiring human resolution (sovereignty, cross-tenant auth revocation, ownership transfer conflicts) |
+| **Consumer API** | DCM REST API for consumers: catalog browsing, request submission, resource management, audit trail access |
+| **Consumer Request Status** | Lifecycle: ACKNOWLEDGED → ASSEMBLING → AWAITING_APPROVAL → APPROVED → DISPATCHED → PROVISIONING → COMPLETED/FAILED/CANCELLED |
+| **01-entity-types.md** | Entity type taxonomy: Infrastructure Resource, Composite Resource, Process Resource; sub-types and invariants |
+| **04-examples.md** | Worked examples: VM end-to-end, IP allocation, VLAN sharing, brownfield ingestion, drift remediation; Git repo structure |
+| **04b-ownership-sharing-allocation.md** | Authoritative ownership model: whole allocation, allocation, shareable; policies OWN-001 through OWN-008 |
 | **federation routing** | Hub DCM applies placement engine logic at the DCM instance level; Regional DCMs are DCM Provider instances; sovereignty is a hard pre-filter; same tie-breaking hierarchy as provider selection |
 | **independent_with_overlap** | Certificate rotation model: old cert valid P30D after new cert issued; allows peers to update trust stores without coordinated downtime |
 | **alert_and_hold** | Federated drift detection response when peer DCM is unavailable: do not assume drift; hold state; escalate to platform admin after PT24H |
@@ -3019,7 +3307,7 @@ IAM, CAT, REQ, PRV, LCM, DRF, POL, LAY, INF, ING, AUD, OBS, STO, FED, GOV — se
 
 ---
 
-## SECTION 48 — OPEN QUESTIONS
+## SECTION 51 — OPEN QUESTIONS
 
 These items are explicitly unresolved. Do not make assumptions about them — flag them and ask for guidance.
 
@@ -3116,7 +3404,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ---
 
-## SECTION 49 — DOCUMENTATION STRUCTURE
+## SECTION 52 — DOCUMENTATION STRUCTURE
 
 DCM documentation follows a hierarchical structure:
 
@@ -3164,7 +3452,7 @@ content/
 
 ---
 
-## SECTION 50 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 53 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, follow these instructions:
 

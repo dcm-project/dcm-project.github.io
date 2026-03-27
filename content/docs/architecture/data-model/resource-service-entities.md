@@ -1,7 +1,7 @@
 ---
 title: "Resource and Service Entities"
 type: docs
-weight: 5
+weight: 6
 ---
 
 > **⚠️ Active Development Notice**
@@ -12,7 +12,7 @@ weight: 5
 
 
 **Document Status:** 🔄 In Progress  
-**Related Documents:** [Context and Purpose](00-context-and-purpose.md) | [Layering and Versioning](03-layering-and-versioning.md) | [Resource Type Hierarchy](05-resource-type-hierarchy.md) | [Service Dependencies](07-service-dependencies.md) | [Resource Grouping](08-resource-grouping.md)
+**Related Documents:** [Context and Purpose](00-context-and-purpose.md) | [Entity Types](01-entity-types.md) | [Ownership, Sharing, and Allocation](04b-ownership-sharing-allocation.md) | [Layering and Versioning](03-layering-and-versioning.md) | [Resource Type Hierarchy](05-resource-type-hierarchy.md) | [Service Dependencies](07-service-dependencies.md) | [Resource Grouping](08-resource-grouping.md)
 
 ---
 
@@ -405,6 +405,157 @@ dcm_capacity_rating:
 ```
 
 ---
+
+
+---
+
+## 7a. Provider Update Notification Model
+
+### 7a.1 The Fundamental Constraint — Realized State Only Changes via a Request
+
+DCM enforces a single foundational rule for the Realized Store:
+
+> **Realized State only changes when an authorized request produces a corresponding Requested State record. No exceptions.**
+
+This constraint unifies all state change pathways and eliminates ambiguity:
+
+- **Drift is always unsanctioned** — if Discovered State differs from Realized State and there is no corresponding Requested State record explaining the difference, it is drift. There is no such thing as "legitimate drift."
+- **Discovery does not update Realized State** — discovery writes only to the Discovered Store. It never updates the Realized Store, even if discovery shows an authorized change (the authorization produces its own Requested State and Realized State records).
+- **Providers cannot write directly to Realized State** — providers report changes via the Provider Update Notification API. DCM evaluates the notification and creates a Requested State record if approved. Only then does a new Realized State record get written.
+
+### 7a.2 Provider Update Notification
+
+A **Provider Update Notification** is a formal mechanism by which a Service Provider reports an authorized state change to DCM. This is distinct from a lifecycle event (which reports provider health) and distinct from an unsanctioned change (which triggers drift). A Provider Update Notification is the provider saying: "I made an authorized change to this entity — please record it as the new Realized State."
+
+**When is a Provider Update Notification appropriate:**
+
+| Scenario | Correct mechanism | Why |
+|----------|------------------|-----|
+| Provider auto-heals a failed disk | Provider Update Notification | Authorized maintenance action; new disk is the correct state |
+| Provider scales resources per pre-authorized auto-scale policy | Provider Update Notification | DCM pre-authorized the scaling policy; each scaling event is an authorized change |
+| Provider performs planned maintenance that changes an IP assignment | Provider Update Notification | Planned, coordinated change |
+| Unauthorized human modifies VM configuration at provider console | Drift event | No DCM authorization; treated as unsanctioned change |
+| Provider silently changes configuration without notifying DCM | Drift event (detected by discovery) | Unreported change is unsanctioned until evaluated |
+
+### 7a.3 Provider Update Notification API
+
+Service Providers submit update notifications via a dedicated endpoint on the DCM API Gateway:
+
+```
+POST /api/v1/provider/entities/{entity_uuid}/update-notification
+Authorization: <provider mTLS certificate>
+
+Request body:
+{
+  "provider_uuid": "<uuid>",
+  "notification_uuid": "<uuid>",      # idempotency key
+  "notification_type": "<authorized_change|maintenance_change|auto_scale>",
+  "changed_fields": {
+    "memory_gb": {
+      "previous_value": 8,
+      "new_value": 16,
+      "change_reason": "Auto-scale policy: payments-api-scale-up triggered at 85% memory utilization",
+      "authorizing_policy_ref": "<uuid of pre-authorized policy>"
+    }
+  },
+  "effective_at": "<ISO 8601>",
+  "provider_evidence_ref": "<provider-side reference for this change>"
+}
+```
+
+### 7a.4 DCM Processing of Provider Update Notifications
+
+```
+Provider submits update notification
+  │
+  ▼ Authentication and authorization check
+  │   Verify: provider UUID is registered and active
+  │   Verify: provider has authority over this entity
+  │
+  ▼ Policy Engine evaluates notification
+  │   Evaluate: is this type of change pre-authorized for this entity/provider?
+  │   Evaluate: does the change violate any GateKeeper constraints?
+  │   Evaluate: does this change require consumer notification or approval?
+  │
+  ├── REJECTED
+  │   The change is not authorized.
+  │   DCM does NOT update Realized State.
+  │   The discrepancy between provider state and DCM Realized State becomes drift.
+  │   Provider receives rejection response with reason.
+  │   UNSANCTIONED_CHANGE event logged.
+  │
+  ├── REQUIRES_CONSUMER_APPROVAL
+  │   The change is plausible but requires consumer sign-off.
+  │   Notification queued. Consumer notified.
+  │   Entity enters PENDING_REVIEW state.
+  │   Provider receives "pending_approval" response.
+  │   On consumer approval → proceeds to APPROVED path.
+  │   On consumer rejection → treated as REJECTED.
+  │
+  └── APPROVED
+      DCM creates a Requested State record:
+        source_type: provider_update
+        actor: provider (service account)
+        authorizing_policy_uuid: <policy that approved>
+        changed_fields: [as reported by provider]
+      
+      DCM writes new Realized State snapshot:
+        source_type: provider_update
+        corresponding_requested_state_uuid: <newly created record>
+        supersedes_realized_state_uuid: <previous snapshot>
+      
+      Audit record written: PROVIDER_UPDATE_APPLIED
+      Provider receives "accepted" response.
+```
+
+### 7a.5 Pre-Authorization of Provider Updates
+
+Organizations can pre-authorize categories of provider updates through policy, eliminating the need for per-change human approval:
+
+```yaml
+policy:
+  type: gatekeeper
+  handle: "tenant/payments/allow-auto-scale"
+  rules:
+    - condition:
+        notification_type: auto_scale
+        provider_uuid: <approved-provider-uuid>
+        entity.resource_type: Compute.VirtualMachine
+        changed_fields: [memory_gb, cpu_count]
+        change_within_bounds:
+          memory_gb: { max_increase_factor: 2 }
+          cpu_count: { max_increase_factor: 2 }
+      action: approve
+      audit_note: "Auto-scale approved per payments team scaling policy"
+```
+
+This pre-authorization pattern allows providers to implement auto-scaling, auto-healing, and maintenance operations without requiring per-change manual approval, while keeping DCM's Realized Store accurate and traceable.
+
+### 7a.6 Updated Provider Lifecycle Events Table
+
+The following table supersedes the table in Section 7.2 with clearer DCM response categorization:
+
+| Event Type | Mechanism | DCM Response | Realized Store Updated? |
+|------------|-----------|-------------|------------------------|
+| `CAPACITY_CHANGE` | Lifecycle event | Update internal capacity rating | No |
+| `DEGRADATION` | Lifecycle event | Policy Engine → ALERT/ESCALATE | No |
+| `MAINTENANCE_SCHEDULED` | Lifecycle event | Notify, plan migration if needed | No |
+| `MAINTENANCE_CHANGE` | **Provider Update Notification** | Evaluate → Requested State if approved | Yes (if approved) |
+| `AUTO_SCALE` | **Provider Update Notification** | Evaluate per pre-auth policy → Requested State if approved | Yes (if approved) |
+| `AUTO_HEAL` | **Provider Update Notification** | Evaluate per pre-auth policy → Requested State if approved | Yes (if approved) |
+| `UNSANCTIONED_CHANGE` | Lifecycle event (no notification) | Drift event → Policy Engine → REVERT/ALERT/ESCALATE | No (drift, not update) |
+| `ENTITY_HEALTH_CHANGE` | Lifecycle event | Policy Engine evaluation | No |
+| `DECOMMISSION_NOTICE` | Lifecycle event | Policy Engine → migrate or decommission | No |
+
+### 7a.7 System Policies
+
+| Policy | Rule |
+|--------|------|
+| `RSE-010` | Realized State only changes via an authorized request that produces a corresponding Requested State record. Drift detection, discovery cycles, and lifecycle events do not write to the Realized Store. |
+| `RSE-011` | Provider Update Notifications are evaluated by the Policy Engine before any Realized State change. Rejected notifications do not update Realized State — the discrepancy becomes drift. |
+| `RSE-012` | Categories of provider updates may be pre-authorized via GateKeeper policy. Pre-authorized updates are processed automatically without per-change human approval. |
+| `RSE-013` | Provider Update Notifications that require consumer approval place the entity in PENDING_REVIEW state. The provider receives a "pending_approval" response and the change is queued until resolution. |
+
 
 ## 8. Entity Relationships
 

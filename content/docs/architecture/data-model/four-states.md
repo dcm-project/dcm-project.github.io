@@ -24,10 +24,10 @@ The four states answer four distinct questions:
 
 | State | Question Answered | Store Type |
 |-------|------------------|------------|
-| **Intent State** | What did the consumer ask for? | GitOps Store |
-| **Requested State** | What was approved and dispatched to the provider? | GitOps Store |
-| **Realized State** | What did the provider actually build? | Event Stream Store |
-| **Discovered State** | What does DCM observe actually existing right now? | Event Stream Store (ephemeral) |
+| **Intent State** | What did the consumer ask for? | GitOps Store (required) |
+| **Requested State** | What was approved and dispatched to the provider? | Write-once Storage Provider (GitOps reference impl) |
+| **Realized State** | What did the provider actually build? | Write-once Snapshot Store (authorized changes only) |
+| **Discovered State** | What does DCM observe actually existing right now? | Ephemeral Snapshot Store |
 
 ---
 
@@ -71,16 +71,30 @@ The **Requested State** is the fully assembled, policy-processed, provider-ready
 The **Realized State** is the provider-confirmed record of what was actually built. It is produced by the provider after successful realization — the denaturalized result of the provider's execution, translated back to DCM Unified Data Model format.
 
 **Characteristics:**
-- Append-only event stream — each state change is a new event, never an overwrite
-- Stored in an Event Stream Store — high-frequency writes, entity-keyed streams
-- The entity UUID is the stream key — all realized state events for an entity share the same stream
+- Write-once complete snapshots — each Realized State record is a full entity state, never modified after writing
+- Every Realized State record is traceable to exactly one Requested State record — no exceptions
+- Stored in a Write-once Snapshot Store keyed by entity UUID
 - Contains provider-specific details not in the Requested State — assigned IPs, generated passwords, actual storage sizes, provider-internal IDs
 - Is the authoritative record of what actually exists from DCM's perspective
-- Drift is detected by comparing Realized State against Discovered State
+- Drift is detected by comparing the most recent Realized State snapshot against Discovered State
+- Carries a supersession chain — each snapshot knows which snapshot it superseded and which superseded it
 
-**When created:** After provider confirms realization, updated on every provider lifecycle event
+**Three write sources (all require a corresponding Requested State record):**
 
-**Content:** The realized entity in DCM Unified Data Model format, with provider-added fields, full field-level provenance including provider attribution
+| Source | Requested State record type | Example |
+|--------|---------------------------|---------|
+| Initial realization | `initial_realization` | Consumer provisions a new VM |
+| Consumer update request | `consumer_update` | Consumer patches an editable field |
+| Provider update notification | `provider_update` | Provider reports an authorized state change (auto-healing, maintenance) |
+
+**What does NOT write to the Realized Store:**
+- Drift detection — drift only compares, never writes
+- Discovery cycles — discovery writes to Discovered Store only
+- Unsanctioned provider changes — these are drift events until DCM evaluates and explicitly approves them
+
+**When created:** When a provider confirms realization of any authorized request (initial, consumer update, or approved provider update notification)
+
+**Content:** Complete entity state snapshot in DCM Unified Data Model format, with provider-added fields, full field-level provenance including provider attribution, and supersession chain references
 
 ### 2.4 Discovered State
 
@@ -132,19 +146,76 @@ See [Storage Providers](11-storage-providers.md) for the complete contract speci
 - Indexed for query — a Search Index projection enables field-based queries at scale
 - Entity UUID → file path mapping maintained in the Search Index
 
-**Typical implementations:** GitHub, GitLab, Gitea, Forgejo (with Elasticsearch/OpenSearch as the Search Index)
+**Intent Store — GitOps implementation required:**
+The PR workflow, branch-per-request semantics, and human review flow are first-class features of the Intent Store — not implementation details. GitOps is the only supported implementation for the Intent Store.
 
-**Repository structure:** Deferred pending Q54 resolution (provider selection in Requested State affects directory structure). Will be documented in `04-examples.md`.
+**Requested Store — write-once Storage Provider (GitOps is the reference implementation):**
+The Requested Store requires write-once semantics and hash-chain integrity but does not require GitOps PR mechanics — the Requested State is machine-generated output, not consumer input. The GitOps implementation is the reference implementation and suitable for small-to-medium deployments. For production scale (thousands of requests per day), a purpose-built write-once document store is explicitly supported.
 
-### 4.2 Event Stream Stores (Realized and Discovered)
+The distinction matters for the following reasons:
+- Git performance degrades at scale (large repo size, high-frequency machine writes)
+- PR semantics (branch creation, merge, CI hooks) add latency and overhead with no workflow benefit for machine-generated content
+- Sensitive assembled payload data may warrant stricter field-level access control than Git provides
+- A write-once document store with hash-chain integrity satisfies all Requested Store contracts without Git's operational constraints
+
+**Typical implementations (Intent Store):** GitHub, GitLab, Gitea, Forgejo
+
+**Typical implementations (Requested Store):** GitHub/GitLab/Gitea (reference implementation); PostgreSQL with write-once enforcement + Merkle hash chain (production scale); CockroachDB (geo-distributed)
+
+**Repository structure:** Resolved. See [Worked Examples](04-examples.md) Section 2 for the complete Git directory layout. Provider selection is recorded in the assembled payload (placement.yaml), not in the directory structure — directories are independent of provider selection (Q54 resolved).
+
+### 4.2 Write-once Snapshot Store (Realized State)
+
+The Realized Store uses a **write-once snapshot model** — each Realized State record is a complete entity state snapshot, not a field-level event. This model aligns with the constraint that Realized State only changes via authorized requests.
 
 **Contract characteristics:**
-- Append-only — events are never overwritten or deleted
-- Entity-keyed streams — each entity has its own event stream identified by entity UUID
-- Queryable by entity UUID — O(1) lookup of an entity's event stream
-- Replayable — the stream can be replayed from any point to reconstruct state at any timestamp
-- Distributed and redundant — data is replicated across nodes with configurable consistency guarantees
+- Write-once — each snapshot record is immutable after creation; updates create new snapshot records
+- Complete snapshots — each record captures the full entity state, not a delta from previous state
+- Entity-UUID-keyed — O(1) lookup of all snapshots for a given entity
+- Supersession chain — each record references the snapshot it superseded and the Requested State record that authorized the change
+- Queryable by timestamp — point-in-time state reconstruction is a direct lookup, not a replay
+- Traceable — every record has a non-nullable `corresponding_requested_state_uuid` field
+
+**Realized State snapshot record structure:**
+
+```yaml
+realized_state_snapshot:
+  realized_state_uuid: <uuid>            # this snapshot's identity
+  entity_uuid: <uuid>                    # entity this belongs to
+  realized_at: <ISO 8601>
+
+  # Always traceable to a request — mandatory, not nullable
+  source_type: <initial_realization|consumer_update|provider_update>
+  corresponding_requested_state_uuid: <uuid>
+
+  # Supersession chain
+  supersedes_realized_state_uuid: <uuid|null>    # null for first realization
+  superseded_by_realized_state_uuid: <uuid|null> # null for current record
+
+  # Complete entity state at this point — all fields, all provenance
+  fields:
+    # [full entity state in DCM Unified Data Model format]
+
+  # Provider-added fields
+  provider_entity_id: <string>
+  provider_reported_at: <ISO 8601>
+```
+
+**Why snapshots instead of events:**
+Rehydration from Realized State requires a complete entity state — not a replay of field-level events. A snapshot model makes rehydration a direct lookup rather than an event replay. Point-in-time queries ("what was the Realized State on March 15?") are also direct lookups. The Realized Store does not need the high-frequency write throughput of an event stream — it is written only when an authorized change completes.
+
+**Typical implementations:** PostgreSQL with write-once constraints; CockroachDB; etcd (small deployments)
+
+### 4.3 Ephemeral Snapshot Store (Discovered State)
+
+The Discovered Store retains its event stream model — discovery is high-frequency, machine-generated, and ephemeral. It is never a rehydration source by definition (discovered state was never authorized through DCM).
+
+**Contract characteristics:**
+- Append-only snapshot stream — each discovery cycle produces a new snapshot
+- Entity-UUID-keyed streams — each entity has its own snapshot stream
+- Replayable — for trending and historical discovery analysis
 - High throughput — designed for machine-generated, high-frequency writes
+- Ephemeral — retention policy governs how long snapshots are kept (see RHY-008)
 
 **Typical implementations:** Kafka with log compaction, EventStoreDB, Apache Pulsar
 

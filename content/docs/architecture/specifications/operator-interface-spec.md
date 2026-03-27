@@ -110,6 +110,9 @@ This specification defines three conformance levels. Higher levels unlock additi
 
 ### 2.2 Level 2 — Standard
 
+Level 2 conformance is required for providers that support auto-scaling, auto-healing, or provider-side maintenance operations. Level 2 includes all Level 1 requirements plus the Provider Update Notification API (Section 7a).
+
+
 **What it requires:** All Level 1 requirements, plus:
 - Capacity reporting to DCM (scheduled registration)
 - Full lifecycle event reporting (DEGRADED, MAINTENANCE, UNSANCTIONED_CHANGE, etc.)
@@ -417,6 +420,132 @@ decommission_confirmation:
 ```
 
 ---
+
+
+---
+
+## 7a. Provider Update Notification API
+
+This section defines the Provider Update Notification endpoint — the formal mechanism by which Service Providers report authorized state changes to DCM. This is a **Level 2** conformance requirement for providers that support auto-scaling, auto-healing, or provider-side maintenance operations.
+
+### 7a.1 Overview
+
+The Provider Update Notification API enables providers to report authorized state changes so DCM can update its Realized State with a traceable Requested State record. This is distinct from drift — a provider submitting an update notification is asserting that the change was authorized (by a pre-existing policy or operational agreement). DCM evaluates the assertion and decides whether to accept or reject it.
+
+**Key principle:** Providers never write directly to DCM's Realized State. They submit a notification; DCM processes it through its governance pipeline; DCM writes the Realized State if approved.
+
+### 7a.2 Conformance Requirements
+
+| Conformance Level | Requirement |
+|------------------|-------------|
+| Level 1 — Basic | Not required. Providers at Level 1 report all state changes as lifecycle events; DCM handles them as drift. |
+| Level 2 — Standard | Required for providers that implement auto-scaling, auto-healing, or provider-side maintenance. |
+| Level 3 — Full | Required. All authorized provider-side state changes must use this API. |
+
+### 7a.3 Endpoint
+
+```
+POST /api/v1/provider/entities/{entity_uuid}/update-notification
+Host: {dcm-instance}
+Authorization: mTLS (provider certificate)
+Content-Type: application/json
+```
+
+**Note:** This endpoint is on the DCM API Gateway, not on the provider. Providers call DCM; DCM does not poll providers for updates.
+
+### 7a.4 Request Payload
+
+```json
+{
+  "provider_uuid": "<uuid>",
+  "notification_uuid": "<uuid>",
+  "notification_type": "authorized_change | maintenance_change | auto_scale | auto_heal",
+  "changed_fields": {
+    "<field_name>": {
+      "previous_value": "<value>",
+      "new_value": "<value>",
+      "change_reason": "<human-readable explanation>",
+      "authorizing_policy_ref": "<uuid | null>"
+    }
+  },
+  "effective_at": "<ISO 8601>",
+  "provider_evidence_ref": "<provider-side reference>"
+}
+```
+
+**`notification_uuid`** is an idempotency key. If DCM receives the same `notification_uuid` twice, it acknowledges the second request without reprocessing.
+
+**`authorizing_policy_ref`** is the UUID of the DCM policy that pre-authorized this type of change. If null, DCM will evaluate whether a policy covers this change. If no policy covers it, the notification is rejected.
+
+### 7a.5 Response Codes
+
+| Response | Meaning |
+|----------|---------|
+| `202 Accepted` | Notification accepted. DCM is processing. Use `notification_status_url` to poll. |
+| `200 OK` (with `status: approved`) | Notification accepted and Realized State updated. |
+| `200 OK` (with `status: pending_approval`) | Notification queued pending consumer approval. Entity in PENDING_REVIEW. |
+| `200 OK` (with `status: rejected`) | Notification rejected. Realized State not updated. Discrepancy is now drift. |
+| `409 Conflict` | A notification for this entity is already being processed. Retry after the `retry_after` interval. |
+| `422 Unprocessable` | Notification payload malformed or entity UUID not found in this provider's scope. |
+
+```json
+{
+  "notification_uuid": "<uuid>",
+  "status": "approved | pending_approval | rejected",
+  "realized_state_uuid": "<uuid | null>",
+  "rejection_reason": "<string | null>",
+  "retry_after": "<ISO 8601 duration | null>",
+  "notification_status_url": "/api/v1/provider/notifications/{notification_uuid}"
+}
+```
+
+### 7a.6 Notification Status Polling
+
+```
+GET /api/v1/provider/notifications/{notification_uuid}
+
+Response:
+{
+  "notification_uuid": "<uuid>",
+  "status": "processing | approved | pending_approval | rejected",
+  "entity_uuid": "<uuid>",
+  "realized_state_uuid": "<uuid | null>",
+  "consumer_approval_required": true | false,
+  "consumer_notified_at": "<ISO 8601 | null>",
+  "resolved_at": "<ISO 8601 | null>"
+}
+```
+
+### 7a.7 Idempotency
+
+Provider Update Notifications are idempotent by `notification_uuid`. If DCM crashes between receiving a notification and writing the Realized State, the provider can safely resend the same notification. DCM will not create duplicate Realized State records.
+
+### 7a.8 Pre-Authorization Declarations
+
+Providers may declare categories of updates they routinely make — enabling organizations to pre-authorize them in policy rather than reviewing each one:
+
+```json
+{
+  "provider_uuid": "<uuid>",
+  "update_capabilities": [
+    {
+      "notification_type": "auto_scale",
+      "affected_fields": ["cpu_count", "memory_gb"],
+      "max_change_magnitude": "2x",
+      "typical_trigger": "Resource utilization threshold"
+    },
+    {
+      "notification_type": "auto_heal",
+      "affected_fields": ["storage_device_id", "network_interface_id"],
+      "max_change_magnitude": "replacement",
+      "typical_trigger": "Hardware failure"
+    }
+  ]
+}
+```
+
+This declaration is part of provider registration (Section 3.3) and is surfaced in the Service Catalog to help consumers understand what provider-side changes they can expect.
+
 
 ## 7. Field Mapping Specification
 
