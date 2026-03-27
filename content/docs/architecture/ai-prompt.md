@@ -2009,7 +2009,168 @@ DCM-001 through DCM-008 — see doc 22.
 
 ---
 
-## SECTION 34 — PERSONAS
+## SECTION 34 — OPERATIONAL AND PERFORMANCE GAPS
+
+### 34.1 Field-Level Provenance Models (Q7, Q8)
+
+**Three configurable models — organization chooses; profile provides default:**
+
+**Model A — Full Inline**
+All provenance stored on entity record. Simplest queries, highest storage cost, no tooling required.
+- ✅ Auditors read one record — regulatory clarity
+- ✅ No dependency on layer chain store
+- ❌ Very high storage volume at scale
+- ❌ Write amplification
+
+**Model B — Deduplicated (Content-Addressed) ← RECOMMENDED**
+Layer chain is the deduplication key. Classical content-addressed dedup (like Git objects, Docker layers). Only delta fields store unique provenance. 95-99% storage reduction for standardized deployments. Lossless because layer chains are immutable.
+- ✅ Dramatic storage reduction
+- ✅ Full audit reconstruction always possible
+- ✅ Write performance highest (layer-matching fields free)
+- ❌ Chain traversal tooling required for queries
+- ❌ Layer chain must be retained while any entity references it
+
+**Model C — Tiered Archive**
+Hot (full detail) → warm (change events) → cold (hash anchors). Degrades gracefully.
+- ✅ Balances cost and access speed
+- ✅ Compliant for long retention
+- ❌ Cross-tier queries for long time ranges
+- ❌ Cold tier requires full records from warm/hot for reconstruction
+
+**Model B+C — Combined**
+Maximum efficiency: content-addressed dedup + tiered archival of chains and deltas.
+
+**Profile defaults:**
+
+| Profile | Provenance Group | Rationale |
+|---------|----------------|-----------|
+| minimal, dev | `system/group/provenance-full-inline` | Simplicity; scale not a concern |
+| standard, prod | `system/group/provenance-deduplicated` | Scale matters; tooling justified |
+| fsi, sovereign | `system/group/provenance-full-inline` | Regulatory clarity; self-contained |
+
+Organizations override by swapping the active provenance Policy Group.
+
+**Audit completeness guarantee (OPS-002):** Regardless of model, full provenance is always reconstructable from entity record + layer chain store + Audit Store combined.
+
+### 34.2 Background Conflict Validation (Q85)
+Event-triggered (primary) on layer ingestion/update — async, non-blocking. Scheduled weekly sweep as safety net. Both triggers produce same conflict record format and audit trail. (OPS-003)
+
+### 34.3 Policy Minimum Review Periods (Q86)
+Change-type minimum periods: GateKeeper=14d, Validation=7d, Transformation=3d. Profile multipliers: minimal=0×, dev=0.5×, standard=1×, prod=1.5×, fsi/sovereign=2×. DCM enforces — not bypassable except emergency activation with dual-approval audit. (OPS-004)
+
+### 34.4 Shadow Evaluation Store (Q87)
+Dedicated **Validation Store** (not Audit Store). Queryable and modifiable. Links to Audit Store EVALUATE events via audit_record_uuid. Default retention P90D after policy promotion/retirement. (OPS-005)
+
+### 34.5 Artifact Status Extensions (Q88)
+Five standard statuses (developing/proposed/active/deprecated/retired) are invariant — no custom additions. Organizations use status_metadata for workflow state (purely informational, no system behavior). Policy gates status transitions based on status_metadata field values. (OPS-006)
+
+### 34.6 System Policies
+OPS-001 through OPS-006 — see docs 03 and 06.
+
+---
+
+## SECTION 35 — PROFILE COMPOSITION — POSTURE AND COMPLIANCE DOMAINS
+
+### 35.1 The Two-Dimensional Profile Model
+
+**Profiles compose two orthogonal dimensions:**
+
+```
+Complete Profile = Deployment Posture Group + Compliance Domain Group(s)
+```
+
+**Dimension 1 — Deployment Posture** (vertical axis): How DCM infrastructure behaves — redundancy, enforcement strictness, audit retention, tenancy model.
+
+| Posture Group | Key Behaviors |
+|--------------|--------------|
+| `system/group/posture-minimal` | Advisory; single instance; no redundancy |
+| `system/group/posture-dev` | Warn-not-block; basic logging |
+| `system/group/posture-standard` | Full enforcement; 3-replica; explicit cross-tenant |
+| `system/group/posture-prod` | Full enforcement + SLA; geo-replicated |
+| `system/group/posture-hardened` | 5-replica; 7-year audit; dual approval |
+| `system/group/posture-sovereign` | Air-gap; deny_all; 10-year audit; signed bundles |
+
+**Dimension 2 — Compliance Domain** (horizontal): Which regulatory frameworks govern data and resources.
+
+| Compliance Group | Domain |
+|----------------|--------|
+| `system/group/compliance-fsi` | Financial Services — Basel III, SOX, Dodd-Frank |
+| `system/group/compliance-pci-dss` | Payment Card Industry — PCI-DSS v4 |
+| `system/group/compliance-hipaa` | Healthcare — HIPAA/HITECH PHI |
+| `system/group/compliance-fedramp-moderate` | US Federal Moderate — NIST 800-53 Moderate |
+| `system/group/compliance-fedramp-high` | US Federal High — NIST 800-53 High |
+| `system/group/compliance-dod-il2` through `il6` | DoD Impact Levels |
+| `system/group/compliance-government` | Government/public sector |
+| `system/group/compliance-gdpr` | EU GDPR data protection |
+| `system/group/compliance-iso27001` | ISO 27001 information security |
+| `system/group/compliance-nist-800-53` | NIST 800-53 security framework |
+| `system/group/compliance-soc2` | SOC 2 service organization controls |
+| `system/group/compliance-nerc-cip` | Critical infrastructure energy/utilities |
+| `system/group/compliance-sovereign` | Sovereign/classified — air-gap, HSM, signed bundles |
+
+### 35.2 Built-In Profile Compositions
+
+The six core profiles are posture+compliance compositions:
+
+```
+minimal = posture-minimal
+dev = posture-dev
+standard = posture-standard
+prod = posture-prod
+fsi = posture-hardened + compliance-fsi + compliance-pci-dss + compliance-iso27001
+sovereign = posture-sovereign + compliance-sovereign
+```
+
+**Extended built-in profiles:**
+
+| Profile | Extends | Compliance Groups Added |
+|---------|---------|------------------------|
+| `system/profile/hipaa-prod` | prod | compliance-hipaa, compliance-iso27001 |
+| `system/profile/hipaa-sovereign` | sovereign | compliance-hipaa |
+| `system/profile/fedramp-moderate` | prod | compliance-fedramp-moderate, compliance-nist-800-53 |
+| `system/profile/fedramp-high` | sovereign | compliance-fedramp-high, compliance-nist-800-53 |
+| `system/profile/government` | prod | compliance-government, compliance-nist-800-53 |
+| `system/profile/dod-il4` | sovereign | compliance-dod-il4, compliance-fedramp-high, compliance-nist-800-53 |
+| `system/profile/dod-il5` | dod-il4 | compliance-dod-il5 |
+| `system/profile/dod-il6` | dod-il5 | compliance-dod-il6, compliance-sovereign |
+
+### 35.3 HIPAA Compliance Group Key Controls
+- PHI field classification enforcement (phi: true tag required)
+- PHI access control (phi_authorized role required)
+- Audit retention: P6Y minimum
+- AES-256 at rest, TLS 1.3 in transit for PHI
+- Breach notification workflow via sovereignty_violation_record
+- BAA tracking: providers declare baa_in_place in sovereignty_declaration
+- Minimum Necessary standard on Mode 4 data_request_spec
+
+### 35.4 Government/DoD Key Controls
+- Data classification mandatory on all resources
+- Cross-boundary controls for classification levels
+- Audit retention: P10Y minimum
+- DoD IL4+: CUI handling markers; foreign sub-processor exclusion
+- DoD IL5+: sovereign posture within US boundary
+- DoD IL6: classified + HSM required for key management
+
+### 35.5 Tenant-Level Compliance Overlay
+**One DCM deployment, multiple compliance postures per Tenant:**
+```yaml
+tenant_config:
+  active_profile: system/profile/prod     # posture from platform
+  compliance_groups:
+    - system/group/compliance-hipaa        # this Tenant handles PHI
+    - system/group/compliance-pci-dss      # this Tenant processes payments
+```
+Clinical Tenants (HIPAA) + Billing Tenants (HIPAA + PCI-DSS) + Admin Tenants (standard) — all on same DCM platform.
+
+### 35.6 System Policies
+- `PROF-001` — Profiles compose posture + compliance domain groups
+- `PROF-002` — Compliance groups apply at platform or Tenant level; additive not replacing
+- `PROF-003` — DCM ships built-in compliance groups for all major domains
+- `PROF-004` — implementation_posture groups (provenance model etc.) are independent of compliance domain
+
+---
+
+## SECTION 36 — PERSONAS
 
 | Persona | Primary Concern |
 |---------|----------------|
@@ -2026,7 +2187,7 @@ DCM-001 through DCM-008 — see doc 22.
 
 ---
 
-## SECTION 35 — TERMINOLOGY GLOSSARY
+## SECTION 37 — TERMINOLOGY GLOSSARY
 
 | Term | Definition |
 |------|-----------|
@@ -2205,7 +2366,7 @@ DCM-001 through DCM-008 — see doc 22.
 
 ---
 
-## SECTION 36 — OPEN QUESTIONS
+## SECTION 38 — OPEN QUESTIONS
 
 These items are explicitly unresolved. Do not make assumptions about them — flag them and ask for guidance.
 
@@ -2302,7 +2463,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ---
 
-## SECTION 37 — DOCUMENTATION STRUCTURE
+## SECTION 39 — DOCUMENTATION STRUCTURE
 
 DCM documentation follows a hierarchical structure:
 
@@ -2350,7 +2511,7 @@ content/
 
 ---
 
-## SECTION 38 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 40 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, follow these instructions:
 
@@ -2399,6 +2560,13 @@ When working on this project, follow these instructions:
 67. **Composite groups default to targeting all member types** — always declare member_type_filter when writing policies that target a composite group unless genuinely intending to govern all member types simultaneously
 68. **Nested tenant governance: most restrictive wins** — a child policy that is more restrictive than a parent policy wins; parent policies cascade where the child has no policy; this is the same principle as save_overrides_destroy and field override control
 69. **former_group_membership records are permanent** — group destruction does not erase membership history; queries against membership history are valid at any time via provenance store; use this for compliance and audit queries about past associations
+105. **Profiles have two independent dimensions** — posture (how DCM infrastructure behaves) and compliance domain (which regulatory frameworks apply); compose them freely; a hospital uses hipaa-prod = posture-prod + compliance-hipaa; a defense contractor uses dod-il4 = posture-sovereign + compliance-dod-il4 + compliance-fedramp-high + compliance-nist-800-53
+106. **Compliance domain groups apply at Tenant level** — one DCM deployment can host clinical Tenants (HIPAA), billing Tenants (HIPAA + PCI-DSS), and admin Tenants (standard) simultaneously; compliance_groups in tenant_config are additive to the platform profile
+107. **HIPAA group enforces PHI minimum necessary** — Mode 4 data_request_spec is limited to minimum PHI fields; providers handling PHI must declare baa_in_place in sovereignty_declaration; audit retention is P6Y regardless of profile default; breach notification triggers via sovereignty_violation_record
+101. **Provenance model is configurable — Model B is recommended for standard+** — organizations choose full_inline (simple, high storage), deduplicated/Model B (content-addressed dedup, lossless, 95-99% storage reduction), tiered (hot/warm/cold), or combined; swap the active provenance Policy Group to change
+102. **Shadow evaluation records go to Validation Store — not Audit Store** — Validation Store is queryable and modifiable (records marked reviewed); links to Audit Store via audit_record_uuid; P90D retention after policy promotion/retirement
+103. **Policy minimum review periods are DCM-enforced** — not guidelines; GateKeeper=14d, Validation=7d, Transformation=3d × profile multiplier; emergency bypass requires dual-approval audit
+104. **Artifact status extensions are not permitted** — the five statuses are invariant; use status_metadata for workflow state (no system behavior); policy gates transitions based on status_metadata values
 97. **Confidence scoring is computed by DCM — never self-declared** — the formula (base_score × freshness × corroboration × authority) is standardized and auditable; policies work on bands (very_high/high/medium/low/very_low) not raw values
 98. **Information Provider authority is layer-defined** — static organizational knowledge ("our CMDB is authoritative for business unit") belongs in a platform domain layer; conflict detection happens at ingestion time; policy governs automated resolution
 99. **DCM Provider is the ninth provider type** — always mTLS (non-configurable); sovereignty checks mandatory; local policies govern ALL federated resources; audit records in both DCM instances with shared correlation_id

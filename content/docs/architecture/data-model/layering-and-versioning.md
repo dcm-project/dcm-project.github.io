@@ -118,6 +118,143 @@ Layers are stored in Git following GitOps practices. They are the configuration 
 
 ---
 
+## 3a. Provenance Model Configuration
+
+### 3a.1 The Three Provenance Models
+
+Field-level provenance tracks which layer set each field, which policy modified it, and the full change history. DCM supports three configurable models — organizations choose based on their scale, compliance requirements, and operational preferences. The active Profile provides a recommended default via its activated Policy Group.
+
+**Model A — Full Inline**
+All provenance stored explicitly on every entity record. Every field carries its complete provenance inline: source layer, modifying policies, previous values, timestamps, actor chain.
+
+| Aspect | Detail |
+|--------|--------|
+| Storage cost | Very high — scales with entities × fields × changes |
+| Query simplicity | Highest — all provenance in one record, no traversal |
+| Write performance | Lowest — every field change requires provenance write |
+| Audit clarity | Highest — regulators see everything in one record |
+| Tooling required | Minimal |
+| Best for | Small deployments; FSI/sovereign (regulatory clarity); home lab |
+
+**Model B — Deduplicated (Content-Addressed) ← RECOMMENDED**
+Classical content-addressed deduplication applied to provenance. The layer chain is the deduplication key — every entity sharing the same configuration references the same chain rather than storing a copy. Only fields deviating from the chain store unique delta records.
+
+```
+Full provenance = layer chain content (deduplicated, shared) + entity deltas (unique per entity)
+```
+
+**Why lossless:** Layer chains are immutable. A reference to `layer-chain-abc123` always resolves to exactly the same data — no cache invalidation, no drift. This is what makes the deduplication lossless for audit. The reference always reconstructs the original.
+
+**Storage reduction:** 95-99% for standardized deployments (many entities, few unique chains). 36 layer definitions serving 40,000 VMs produces 36 chain references, not 8 million field provenance entries.
+
+| Aspect | Detail |
+|--------|--------|
+| Storage cost | Low — scales with unique configurations, not entity count |
+| Query simplicity | Medium — chain traversal required for layer-set fields |
+| Write performance | Highest — only deltas write; chain-matching fields are free |
+| Audit clarity | Complete — full reconstruction always possible |
+| Tooling required | Moderate — chain traversal tooling |
+| Best for | Standard and prod deployments; large-scale environments |
+
+**Analogous to:** Git content-addressed objects, Docker image layers, ZFS block deduplication — all content-addressed, deduplicated, lossless.
+
+**Model C — Tiered Archive**
+Hot/warm/cold storage tiers with decreasing detail. Recent provenance at full detail and fast access; older provenance compressed to change events; oldest compressed to hash anchors only (tamper-evidence without full reconstruction).
+
+| Aspect | Detail |
+|--------|--------|
+| Storage cost | Medium — time-dependent, degrades gracefully |
+| Query simplicity | Medium — cross-tier joins for long time ranges |
+| Write performance | Medium |
+| Audit clarity | Full detail in hot tier; change events in warm; anchors in cold |
+| Tooling required | Moderate — tier promotion jobs, consistency checks |
+| Best for | Large deployments with long retention requirements |
+
+**Models B and C are orthogonal** — combine them for maximum efficiency: deduplicate at the entity level (Model B) AND tier the storage of chains and deltas (Model C). This is the highest-efficiency option for very large-scale deployments with long retention requirements.
+
+### 3a.2 Configurable Provenance Model
+
+The provenance model is declared in the DCM deployment configuration and activated via a Policy Group:
+
+```yaml
+provenance_config:
+  model: <full_inline|layer_chain_ref|tiered|layer_chain_ref_tiered>
+
+  # Model A — Full Inline
+  full_inline:
+    include_previous_values: true
+    include_actor_chain: true
+    include_policy_rationale: true
+
+  # Model B — Deduplicated (Content-Addressed)
+  layer_chain_ref:
+    store_layer_derivable: false      # do not store fields matching chain default
+    delta_detail_level: <full|summary>
+    history_document_retention: P7Y
+    chain_store_retention: P7Y       # chains retained while any entity references them
+
+  # Model C — Tiered Archive
+  tiered:
+    hot_tier_duration: P30D          # full detail, fast access
+    warm_tier_duration: P365D        # change events only
+    cold_tier_duration: P10Y         # hash anchors only
+    warm_tier_detail: <change_events_with_values|change_events_only>
+
+  # Model B + C — Deduplicated + Tiered (maximum efficiency)
+  layer_chain_ref_tiered:
+    chain_store_hot: P365D           # chains fast for 1 year
+    chain_store_warm: P7Y            # chains slower for 7 years
+    delta_store_hot: P90D            # deltas fast for 90 days
+    delta_store_warm: P7Y            # deltas slower for 7 years
+```
+
+### 3a.3 Profile-Appropriate Provenance Policy Groups
+
+DCM ships four provenance Policy Groups. The active Profile activates the appropriate group by default. Organizations override by swapping the active group.
+
+| Group Handle | Model | Profile Default | Concern Type |
+|-------------|-------|----------------|-------------|
+| `system/group/provenance-full-inline` | A — Full Inline | minimal, dev, fsi, sovereign | implementation_posture |
+| `system/group/provenance-deduplicated` | B — Deduplicated | standard, prod | implementation_posture |
+| `system/group/provenance-tiered-archive` | C — Tiered | (available — not default) | implementation_posture |
+| `system/group/provenance-deduplicated-tiered` | B+C — Combined | (available for large-scale) | implementation_posture |
+
+**To change provenance model:**
+```yaml
+# Override profile default — swap the active provenance group
+tenant_config:
+  policy_group_overrides:
+    replace:
+      - from: system/group/provenance-full-inline
+        to: system/group/provenance-deduplicated
+        reason: "Deploying at scale — switching to deduplicated model"
+```
+
+### 3a.4 The Audit Completeness Guarantee
+
+Regardless of provenance model, full provenance must always be reconstructable:
+
+```
+OPS-002  Regardless of provenance model, full provenance must always be
+         reconstructable for any entity from the combination of: entity
+         record, layer chain store, and Audit Store. The provenance model
+         governs where data is stored and how it is accessed — not whether
+         it is available.
+```
+
+For Model B: chain reference + entity deltas → full provenance (lossless, immutable source)
+For Model C: hot tier (full) OR warm tier (events) + cold tier (anchors prove integrity)
+For Model A: entity record alone is sufficient
+
+### 3a.5 System Policies
+
+| Policy | Rule |
+|--------|------|
+| `OPS-001` | Field-level provenance model is configurable: full_inline, layer_chain_ref (deduplicated), tiered, or layer_chain_ref_tiered. Profile activates the appropriate Policy Group as default. Organizations override by replacing the active provenance group. Model B (layer_chain_ref) is the recommended default for standard+ profiles. |
+| `OPS-002` | Regardless of provenance model, full provenance must always be reconstructable from the combination of entity record, layer chain store, and Audit Store. The provenance model governs storage location and access pattern — not data availability. |
+
+---
+
 ## 3. Layer Types
 
 DCM defines six layer types. Each has a distinct purpose, scope, ownership model, and position in the assembly precedence chain.
