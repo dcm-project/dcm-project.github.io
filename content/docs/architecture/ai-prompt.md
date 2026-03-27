@@ -2217,7 +2217,72 @@ GRP-011 through GRP-015 — see doc 15. REL-020, REL-021 — see doc 09.
 
 ---
 
-## SECTION 37 — PERSONAS
+## SECTION 37 — AUDIT AND OBSERVABILITY GAPS
+
+### 37.1 Information Provider Trust Score Validation (Q15)
+
+Dual-trigger model — same pattern as conflict validation:
+
+**Event-triggered (primary):** push fails schema validation → degraded; push conflicts with primary authority → degraded; health check fails → degraded; sovereignty declaration change → re-evaluated; registration update → re-verification triggered.
+
+**Scheduled (safety net):** daily health check; weekly full re-verification (identity, sovereignty, certifications, schema). fsi/sovereign: daily full re-verification.
+
+**Trust score → source_trust mapping:**
+- Score ≥ 80: `verified` → confidence multiplier 1.00
+- Score 60-79: `degraded` → confidence multiplier 0.75
+- Score < 60: `suspended` → no new pushes accepted; score = 0
+
+(INF-009)
+
+### 37.2 Confidence Scoring — The Hybrid Descriptor Model (Q15 extended)
+
+**Three-tier model:**
+- **Confidence Descriptor** (primary — stored): `authority_level` + `corroboration` + `source_trust` + `last_updated_at`
+- **Derived Score** (0-100, computed on demand): mathematical composition for placement and conflict resolution
+- **Derived Band** (very_high/high/medium/low/very_low, computed on demand): what humans and policies use
+
+**Who sets each field:**
+- `authority_level`: set at registration from authority declaration layer (static per field per provider)
+- `corroboration`: computed at ingestion (confirmed/single_source/contested based on multi-provider comparison)
+- `source_trust`: maintained by trust scoring system (event-triggered + scheduled)
+- `last_updated_at`: set at each push event
+
+**Score formula:** `min(100, base(authority_level) × freshness_mult × corroboration_mult × trust_mult)`
+
+**Freshness is computed at query time** from `now - last_updated_at` — never stored (avoids staleness). Score and band computed at query time for the same reason.
+
+**Audit reconstruction:** authority_level (from registration) + corroboration (from ingestion event) + source_trust (from trust audit) + last_updated_at (from push event) → score and band fully reconstructable from stored facts.
+
+**Configurable derivation:** base scores, freshness thresholds, and band thresholds configurable via Policy Group — stored as versioned policy artifacts.
+
+### 37.3 Audit vs Observability — Definitively Separate (Q16)
+
+| | Audit | Observability |
+|--|-------|--------------|
+| Purpose | WHAT HAPPENED + WHO authorized | SYSTEM HEALTH + PERFORMANCE |
+| Consumers | Auditors, compliance, legal | SREs, operators, dashboards |
+| Write rate | Low (per action) | Very high (per second) |
+| Retention | P7Y+ | Days to months |
+| Mutability | Never — append-only | Downsampling acceptable |
+| Accuracy | 100% required | Statistical sampling OK |
+| Failure | Missing = compliance violation | Missing = operational inconvenience |
+
+They cannot be combined without violating one contract or the other. Observability may reference audit record UUIDs for correlation. AUD-013.
+
+### 37.4 Curated Observability Event Stream (Q17)
+
+DCM publishes a curated event stream via Message Bus — NOT raw metrics. Policy governs what is published, subscriber roles, and redaction. Published by default: component.health_changed, resource.state_transition, capacity.threshold_crossed, drift.detected, security.gatekeeper_triggered, provider.confidence_changed. NOT published by default: metrics.raw (explicit policy opt-in required).
+
+Observability events on Message Bus do NOT replace audit records. OBS-001.
+
+### 37.5 System Policies
+- `INF-009` — dual-trigger trust score; degraded/suspended states; policy governs thresholds
+- `AUD-013` — audit and observability definitively separate; different contracts/consumers
+- `OBS-001` — curated observability event stream via Message Bus; policy-filtered; raw metrics opt-in only
+
+---
+
+## SECTION 38 — PERSONAS
 
 | Persona | Primary Concern |
 |---------|----------------|
@@ -2234,7 +2299,7 @@ GRP-011 through GRP-015 — see doc 15. REL-020, REL-021 — see doc 09.
 
 ---
 
-## SECTION 38 — TERMINOLOGY GLOSSARY
+## SECTION 39 — TERMINOLOGY GLOSSARY
 
 | Term | Definition |
 |------|-----------|
@@ -2297,6 +2362,12 @@ GRP-011 through GRP-015 — see doc 15. REL-020, REL-021 — see doc 09.
 | **Raft** | Consensus protocol used by Commit Log (etcd) for quorum writes; guarantees durability even if minority of replicas fail |
 | **DCMGroup** | Universal group entity — all grouping constructs in DCM expressed as DCMGroup with group_class |
 | **group_class** | Determines system behavior of a DCMGroup — closed built-in set: tenant_boundary, resource_grouping, policy_collection, policy_profile, layer_grouping, composite, federation |
+| **confidence_descriptor** | Primary confidence data model: authority_level (from registration), corroboration (from ingestion), source_trust (from trust system), last_updated_at (from push) — stored fields |
+| **freshness** | Derived confidence field computed at query time from (now - last_updated_at) vs thresholds: high (<1h), medium (<1d), low (<7d), stale (>7d) |
+| **corroboration** | Confidence descriptor field: confirmed (2+ sources agree), single_source, contested (sources disagree) |
+| **source_trust** | Confidence descriptor field maintained by trust scoring system: verified (score ≥80), degraded (60-79), suspended (<60) |
+| **OBS-001** | Policy: DCM publishes curated Observability Event Stream via Message Bus; policy-filtered; raw metrics opt-in; does not replace audit records |
+| **AUD-013** | Policy: Audit and Observability are definitively separate components — opposite trade-offs; cannot be combined |
 | **group_subclass** | Advisory label on a DCMGroup — no system behavior; used for organization-specific semantics (e.g., cost_center, business_unit) |
 | **composite group** | DCMGroup with group_class: composite — permits cross-type membership (resources, policies, layers, groups) |
 | **federation group** | DCMGroup with group_class: federation — peer association of tenant_boundary groups; enables shared policies and consolidated reporting |
@@ -2413,7 +2484,7 @@ GRP-011 through GRP-015 — see doc 15. REL-020, REL-021 — see doc 09.
 
 ---
 
-## SECTION 39 — OPEN QUESTIONS
+## SECTION 40 — OPEN QUESTIONS
 
 These items are explicitly unresolved. Do not make assumptions about them — flag them and ask for guidance.
 
@@ -2510,7 +2581,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ---
 
-## SECTION 40 — DOCUMENTATION STRUCTURE
+## SECTION 41 — DOCUMENTATION STRUCTURE
 
 DCM documentation follows a hierarchical structure:
 
@@ -2558,7 +2629,7 @@ content/
 
 ---
 
-## SECTION 41 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 42 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, follow these instructions:
 
@@ -2607,6 +2678,10 @@ When working on this project, follow these instructions:
 67. **Composite groups default to targeting all member types** — always declare member_type_filter when writing policies that target a composite group unless genuinely intending to govern all member types simultaneously
 68. **Nested tenant governance: most restrictive wins** — a child policy that is more restrictive than a parent policy wins; parent policies cascade where the child has no policy; this is the same principle as save_overrides_destroy and field override control
 69. **former_group_membership records are permanent** — group destruction does not erase membership history; queries against membership history are valid at any time via provenance store; use this for compliance and audit queries about past associations
+111. **Confidence descriptor is primary — score and band are derived** — authority_level/corroboration/source_trust/last_updated_at are stored facts; freshness/score/band computed at query time from stored facts; never stored as primary (avoids staleness); all reconstructable from audit records
+112. **source_trust drives the confidence trust_multiplier** — verified=1.00, degraded=0.75, suspended=0.00; maintained by dual-trigger trust scoring (event-triggered + weekly scheduled); push failures and schema errors degrade trust automatically
+113. **Audit and Observability answer different questions** — Audit: what happened and who authorized it; Observability: is the system healthy; different consumers, opposite storage trade-offs; Observability may reference audit record UUIDs but lives in a separate store
+114. **Curated Observability Event Stream is policy-filtered** — not raw metrics; policy governs what is published and subscriber role requirements; raw metrics.raw requires explicit policy opt-in; published events do not replace audit records
 108. **Tenant decommission is four-phase and never silent** — pre-decommission validation blocks the operation until all resources, cross-tenant relationships, compliance holds, and child groups are resolved; audit records enter post-lifecycle retention and are never destroyed
 109. **Group policy inheritance is class-specific** — tenant_boundary uses opt_out for standard/prod (parent cascades) and opt_in for fsi/sovereign; federation always opt_in; resource_grouping and policy_collection are not applicable
 110. **Relationship graph depth differs from dependency depth** — depth is graph traversal distance between any two entities, not relationship count; circular detection always enforced; profile-governed max 15 (standard/prod) or 10 (fsi/sovereign)
