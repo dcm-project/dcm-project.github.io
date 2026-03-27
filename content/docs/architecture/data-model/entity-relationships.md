@@ -915,9 +915,9 @@ Relationships follow the universal versioning and deprecation model. A relations
 | # | Question | Impact | Status |
 |---|----------|--------|--------|
 | 1 | How are relationship conflicts resolved — two policies declare different lifecycle policies for the same relationship? | Policy model | ✅ Resolved — standard Policy Engine authority hierarchy; REL-008 and REL-009 |
-| 2 | Should relationship roles be validated against the role registry at request time, or is validation advisory? | Operational complexity | ❓ Unresolved |
+| 2 | Should relationship roles be validated against the role registry at request time, or is validation advisory? | Operational complexity | ✅ Resolved — advisory default; Resource Type Spec may declare permitted_relationship_roles with role_validation: advisory/enforced; community role catalog; see doc 09 Section 12 (REL-020) |
 | 3 | How does the relationship graph interact with multi-tenant scenarios — can a relationship cross Tenant boundaries? | Multi-tenancy | ✅ Resolved — nature governs; constituent never; operational with dual auth; informational unless deny_all; REL-010/011/012 |
-| 4 | Should there be a maximum relationship graph depth to prevent runaway complexity? | Operational governance | ❓ Unresolved |
+| 4 | Should there be a maximum relationship graph depth to prevent runaway complexity? | Operational governance | ✅ Resolved — profile-governed max depth: 15 standard/prod, 10 fsi/sovereign; circular detection always enforced; depth = traversal distance; see doc 09 Section 12 (REL-021) |
 | 5 | How are shared entities represented in the relationship graph — an entity required by multiple parents? | Graph model | ✅ Resolved — sharing_model declaration; active_relationship_count; save_overrides_destroy hierarchy (REL-018); lifecycle_conflict_record; REL-015 through REL-019 |
 
 ---

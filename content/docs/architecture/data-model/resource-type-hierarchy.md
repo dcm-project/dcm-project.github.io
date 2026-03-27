@@ -1,5 +1,5 @@
 ---
-title: "Resource Type Hierarchy"
+title: "Resource Type Hierarchy and Service Catalog"
 type: docs
 weight: 4
 ---
@@ -12,7 +12,7 @@ weight: 4
 
 
 **Document Status:** 🔄 In Progress  
-**Related Documents:** [Context and Purpose](../context-and-purpose/) | [Entity Types](01-entity-types.md) | [Four States](../four-states/) | [Layering and Versioning](../layering-and-versioning/) | [Examples](04-examples.md)
+**Related Documents:** [Context and Purpose](00-context-and-purpose.md) | [Entity Types](01-entity-types.md) | [Four States](02-four-states.md) | [Layering and Versioning](03-layering-and-versioning.md) | [Examples](04-examples.md)
 
 ---
 
@@ -425,12 +425,12 @@ Once a version is published it is immutable. Any change — even a documentation
 
 | # | Question | Impact | Status |
 |---|----------|--------|--------|
-| 1 | What is the governance model for proposing and approving new Resource Types to the DCM registry? | Community adoption, quality control | ❓ Unresolved |
-| 2 | Should the registry support a formal review/approval workflow before a Resource Type becomes `active`? | Registry integrity, community trust | ❓ Unresolved |
-| 3 | What is the minimum sunset period for deprecated definitions? | Migration planning, operational stability | ❓ Unresolved |
-| 4 | Should version constraints in requests be strictly enforced or advisory? | Operational flexibility vs. predictability | ❓ Unresolved |
-| 5 | How are conflicts resolved when multiple providers satisfy all narrowing criteria equally? | Request resolution determinism | ❓ Unresolved |
-| 6 | Should the registry be distributed or centralized? How does this interact with sovereignty requirements? | Registry availability, sovereignty | ❓ Unresolved |
+| 1 | What is the governance model for proposing and approving new Resource Types to the DCM registry? | Community adoption, quality control | ✅ Resolved — three-tier registry (DCM Core / Verified Community / Organization); PR-based proposals with automated validation gates; shadow validation period before active promotion; see doc 20 (REG-001, REG-002) |
+| 2 | Should the registry support a formal review/approval workflow before a Resource Type becomes `active`? | Registry integrity, community trust | ✅ Resolved — PR-based workflow with automated gates (schema, FQN conflict, dependency resolution) and mandatory shadow validation before active; review periods by change type; see doc 20 (REG-002) |
+| 3 | What is the minimum sunset period for deprecated definitions? | Migration planning, operational stability | ✅ Resolved — default sunset policies REG-DP-002: Tier 1=P12M, Tier 2=P6M; overridable via standard policy priority; locked as immutable in fsi/sovereign profiles; see doc 20 |
+| 4 | Should version constraints in requests be strictly enforced or advisory? | Operational flexibility vs. predictability | ✅ Resolved — strictly enforced; version_policy options: exact/compatible/latest_minor/latest; DCM never auto-upgrades across major versions; profile-governed defaults (fsi/sovereign=exact); see doc 20 (REG-004) |
+| 5 | How are conflicts resolved when multiple providers satisfy all narrowing criteria equally? | Request resolution determinism | ✅ Resolved — six-step tie-breaking: policy preference → provider priority → tenant affinity → cost analysis (if available) → least loaded → consistent hash on request_uuid; see doc 20 (REG-005) |
+| 6 | Should the registry be distributed or centralized? How does this interact with sovereignty requirements? | Registry availability, sovereignty | ✅ Resolved — federated model: DCM Project registry → Organization mirror → Sovereign DCM (offline/signed bundles); air-gap via signed bundle import; see doc 20 (REG-006) |
 
 ---
 

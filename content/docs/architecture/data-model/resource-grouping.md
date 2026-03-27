@@ -1,5 +1,5 @@
 ---
-title: "Resource Grouping"
+title: "Resource Grouping and Tenancy"
 type: docs
 weight: 7
 ---
@@ -278,11 +278,11 @@ custom_group_type_registration:
 
 | # | Question | Impact | Status |
 |---|----------|--------|--------|
-| 1 | Should there be a DCM-maintained registry of well-known custom group types to encourage standardization? | Interoperability | ❓ Unresolved |
-| 2 | How does group membership interact with sovereignty — can a group span sovereignty boundaries? | Sovereignty model | ❓ Unresolved |
-| 3 | When a Tenant is decommissioned, what happens to its resources and group memberships? | Lifecycle management | ❓ Unresolved |
-| 4 | Should Resource Groups support time-bounded membership — a resource belongs to a group for a defined period? | Operational flexibility | ❓ Unresolved |
-| 5 | How are group-level policies inherited by nested child groups — is inheritance opt-in or opt-out? | Policy model | ❓ Unresolved |
+| 1 | Should there be a DCM-maintained registry of well-known custom group types to encourage standardization? | Interoperability | ✅ Resolved — group_subclass open and advisory; community subclass catalog as non-authoritative reference; no validation or enforcement; see doc 15 (GRP-011) |
+| 2 | How does group membership interact with sovereignty — can a group span sovereignty boundaries? | Sovereignty model | ✅ Resolved — class-specific: tenant_boundary never cross-sovereignty (structural); resource_grouping permitted+policy restriction; policy_collection always permitted; composite governed by most restrictive member; see doc 15 (GRP-012) |
+| 3 | When a Tenant is decommissioned, what happens to its resources and group memberships? | Lifecycle management | ✅ Resolved — four-phase staged decommission: pre-validation → resource decommission → membership cleanup → audit archival; child groups must be resolved first; audit records never destroyed; see doc 15 (GRP-013) |
+| 4 | Should Resource Groups support time-bounded membership — a resource belongs to a group for a defined period? | Operational flexibility | ✅ Resolved — valid_from/valid_until already in Universal Group Model; on_expiry (remove/notify/suspend_member); Lifecycle Constraint Enforcer handles; MEMBER_REMOVE audit record; see doc 15 (GRP-014) |
+| 5 | How are group-level policies inherited by nested child groups — is inheritance opt-in or opt-out? | Policy model | ✅ Resolved — class-specific defaults profile-governed; tenant_boundary: opt_out (standard/prod), opt_in (fsi/sovereign); federation always opt_in; composite opt_out; see doc 15 (GRP-015) |
 
 ---
 
