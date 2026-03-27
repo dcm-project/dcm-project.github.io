@@ -2682,7 +2682,100 @@ Linting warning (not error) when composite group policy targeting has no member_
 
 ---
 
-## SECTION 44 — PERSONAS
+## SECTION 44 — FOUNDATIONAL CAPABILITIES MATRIX
+
+### 44.1 Overview
+
+DCM has 95 foundational capabilities across 15 domains. Each capability has a unique ID (domain prefix + sequence number), three perspectives (Consumer, Producer, Platform/Admin), and declared dependencies. This matrix drives Jira ticket creation and implementation planning.
+
+### 44.2 Minimum Viable Capability Set (21 capabilities for end-to-end demo)
+
+IAM-001 → IAM-002 → IAM-003 → IAM-007 → CAT-001 → REQ-001 → REQ-002 → REQ-003 → REQ-004 → REQ-005 → REQ-006 → REQ-007 → PRV-001 → PRV-002 → PRV-003 → PRV-004 → PRV-005 → LCM-001 → DRF-001 → DRF-002 → AUD-001
+
+### 44.3 Domain Summary
+
+| Prefix | Domain | Count |
+|--------|--------|-------|
+| IAM | Identity and Access Management | 7 |
+| CAT | Service Catalog | 7 |
+| REQ | Request Lifecycle Management | 10 |
+| PRV | Provider Contract and Realization | 9 |
+| LCM | Resource Lifecycle Management | 7 |
+| DRF | Drift Detection and Remediation | 5 |
+| POL | Policy Management | 7 |
+| LAY | Data Layer Management | 5 |
+| INF | Information and Data Integration | 6 |
+| ING | Ingestion and Brownfield Management | 4 |
+| AUD | Audit and Compliance | 5 |
+| OBS | Observability and Operations | 5 |
+| STO | Storage and State Management | 6 |
+| FED | DCM Federation and Multi-Instance | 5 |
+| GOV | Platform Governance and Administration | 7 |
+| **Total** | | **95** |
+
+### 44.4 Perspectives
+
+- **Consumer** — what the end user / application team experiences or can do
+- **Producer** — what the Service Provider or platform component must implement
+- **Platform/Admin** — what the platform engineer or SRE must configure or operate
+
+Empty perspective = that capability does not have a direct touchpoint for that role.
+
+### 44.5 Key Dependency Chain
+
+```
+IAM-001 (Auth) → IAM-003 (RBAC) → CAT-001 (Catalog) → REQ-001 (Submit)
+  → REQ-003 (Layers) → REQ-004 (Policy) → REQ-005 (Placement) → REQ-007 (Dispatch)
+    → PRV-001 (Provider Reg) → PRV-003 (Realization) → PRV-005 (Realized State)
+      → LCM-001 (State Transitions) → DRF-001 (Discovery) → DRF-002 (Drift)
+```
+
+### 44.6 Resources
+- Interactive map: DCM-Capabilities-Map.html
+- CSV for Jira import: DCM-Capabilities-Matrix.csv
+- Markdown reference: DCM-Capabilities-Matrix.md
+- Taxonomy: DCM-Taxonomy.md
+
+---
+
+## SECTION 45 — DCM TAXONOMY
+
+The DCM Taxonomy is the authoritative vocabulary for all DCM work — code, documentation, Jira tickets, design discussions. Four parts:
+
+### 45.1 Core Vocabulary (key terms)
+- **Service Provider** — provisions/configures/manages infrastructure; implements naturalization, realization, denaturalization, capacity reporting, sovereignty maintenance. *NOT "producer."*
+- **Hub DCM** — central/global instance; authoritative registry origin. *NOT "Shore."*
+- **Regional DCM** — distributed regional instance; treated as DCM Provider by Hub placement engine. *NOT "Ship."*
+- **Sovereign DCM** — air-gapped/compliance-isolated; signed bundle updates only. *NOT "Enclave."*
+- **Layer** — passive data (what values should fields have); distinct from Policy (executable logic)
+- **Policy** — executable rule evaluating assembled payload; distinct from Layer
+- **Confidence Descriptor** — primary data model for Information Provider confidence: authority_level + corroboration + source_trust + last_updated_at (stored); score + band derived at query time
+- **Rehydration** — replaying Intent State to new provider; UUID always preserved
+- **Targeted Delta** — post-realization field update; does not re-run layer assembly chain
+- **Fulfillment** — complete process from consumer submission to Service Provider realization
+- **Reserve Query** — placement engine asking providers "can you fulfill this right now?"
+
+### 45.2 Anti-Vocabulary (terms to avoid)
+| Avoid | Use Instead |
+|-------|-------------|
+| Producer | **Service Provider** |
+| Shore / Ship / Enclave | **Hub DCM** / **Regional DCM** / **Sovereign DCM** |
+| Realize / Realization | **Provision** / **Install** / **Fulfill** |
+| Widgets | Specific resource type name |
+| Data Center | **Region** / **Zone** |
+| User (generic) | **Developer**, **Application Owner**, **Platform Engineer** |
+| Service (unqualified) | **Catalog Item** / **Resource Type** / **Service Provider** |
+| Manage (unqualified) | **Provision** / **Configure** / **Monitor** / **Decommission** |
+
+### 45.3 Roles and Personas
+Developer/Application Owner (consumer), Platform Engineer (platform ops), Policy Owner (governance), Platform Admin (highest-privilege ops), SRE (operational health), Tenant Admin (tenant management), Service Provider Team (provider integration).
+
+### 45.4 Capability Domain Prefixes
+IAM, CAT, REQ, PRV, LCM, DRF, POL, LAY, INF, ING, AUD, OBS, STO, FED, GOV — see Section 44.
+
+---
+
+## SECTION 46 — PERSONAS
 
 | Persona | Primary Concern |
 |---------|----------------|
@@ -2699,7 +2792,7 @@ Linting warning (not error) when composite group policy targeting has no member_
 
 ---
 
-## SECTION 45 — TERMINOLOGY GLOSSARY
+## SECTION 47 — TERMINOLOGY GLOSSARY
 
 | Term | Definition |
 |------|-----------|
@@ -2926,7 +3019,7 @@ Linting warning (not error) when composite group policy targeting has no member_
 
 ---
 
-## SECTION 46 — OPEN QUESTIONS
+## SECTION 48 — OPEN QUESTIONS
 
 These items are explicitly unresolved. Do not make assumptions about them — flag them and ask for guidance.
 
@@ -3023,7 +3116,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ---
 
-## SECTION 47 — DOCUMENTATION STRUCTURE
+## SECTION 49 — DOCUMENTATION STRUCTURE
 
 DCM documentation follows a hierarchical structure:
 
@@ -3071,7 +3164,7 @@ content/
 
 ---
 
-## SECTION 48 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 50 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, follow these instructions:
 
