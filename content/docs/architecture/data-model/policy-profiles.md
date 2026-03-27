@@ -1,7 +1,7 @@
 ---
 title: "Policy Organization: Groups, Profiles, and Providers"
 type: docs
-weight: 13
+weight: 14
 ---
 
 > **⚠️ Active Development Notice**
@@ -1493,6 +1493,57 @@ policy_provider_airgap:
 | `PROF-007` | Policy Provider trust elevation requires a formal approval workflow (standard: 1 platform admin; prod: platform admin + security owner; fsi/sovereign: dual approval + compliance officer). Elevated providers run in shadow mode for P7D before activation. All elevations produce a POLICY_PROVIDER_ELEVATED audit record. |
 | `PROF-008` | The default TTL for dev profile resources is declared in the system domain layer and overridable at the platform domain level. Per-resource-type TTL overrides are supported. The on_expiry action is configurable. |
 | `PROF-009` | Policy Provider delivery in air-gapped deployments uses signed bundles identical to the registry bundle model. Mode 4 providers in sovereign profiles may only call endpoints within the sovereignty boundary. |
+
+
+
+---
+
+## 9. Recovery Posture Policy Groups
+
+### 9.1 recovery_posture as a Concern Type
+
+`recovery_posture` is a Policy Group concern_type that governs how DCM responds to provisioning failures, timeouts, and ambiguous states. It is the fifth concern type alongside security, compliance, operational, and implementation posture.
+
+Recovery posture groups contain Recovery Policies — a formal DCM policy type that maps trigger conditions (DISPATCH_TIMEOUT, PARTIAL_REALIZATION, etc.) to response actions (DRIFT_RECONCILE, DISCARD_AND_REQUEUE, NOTIFY_AND_WAIT, etc.).
+
+See [Operational Models](24-operational-models.md) Section 5 for the complete Recovery Policy model, trigger vocabulary, and action vocabulary.
+
+### 9.2 Four Built-in Recovery Posture Groups
+
+| Group Handle | Posture | Appropriate For |
+|-------------|---------|----------------|
+| `system/group/recovery-automated-reconciliation` | Let drift detection converge on correct state | Dev, standard environments |
+| `system/group/recovery-discard-and-requeue` | Clean up and restart on any ambiguity | Consistency-critical environments |
+| `system/group/recovery-notify-and-wait` | Always notify human; never act automatically | FSI, sovereign, regulated environments |
+| `system/group/recovery-aggressive-retry` | Retry everything before giving up | High-transient-failure environments |
+
+### 9.3 Profile Binding Defaults
+
+| Profile | Default Recovery Posture |
+|---------|------------------------|
+| `minimal` | recovery-automated-reconciliation |
+| `dev` | recovery-automated-reconciliation |
+| `standard` | recovery-automated-reconciliation |
+| `prod` | recovery-notify-and-wait |
+| `fsi` | recovery-notify-and-wait |
+| `sovereign` | recovery-notify-and-wait |
+
+### 9.4 Override Hierarchy
+
+Organizations override recovery posture at Tenant or resource-type level without changing the deployment profile:
+
+```yaml
+# Tenant override — all resources in this Tenant use discard-and-requeue
+tenant_config:
+  recovery_profile_override: recovery-discard-and-requeue
+
+# Resource-type override — VMs get aggressive retry regardless of Tenant/profile
+resource_type_recovery_override:
+  resource_type: Compute.VirtualMachine
+  recovery_profile: recovery-aggressive-retry
+```
+
+Resource-type override wins over Tenant override wins over profile default.
 
 
 ---

@@ -370,16 +370,22 @@ Response 200:
 ### 4.3 Consumer Request Status Lifecycle
 
 ```
-ACKNOWLEDGED    → request received; intent created
-ASSEMBLING      → Request Payload Processor running layer assembly
-AWAITING_APPROVAL → policy requires human review before dispatch (PR open)
-APPROVED        → PR merged; dispatching to provider
-DISPATCHED      → provider received payload; awaiting confirmation
-PROVISIONING    → provider executing
-COMPLETED       → provider confirmed realization; Realized State written
-FAILED          → terminal; failure_reason and retry_eligible populated
-CANCELLED       → consumer-initiated cancellation before PROVISIONING
-CANCELLING      → cancellation in progress (provider notified)
+ACKNOWLEDGED            → request received; intent created
+ASSEMBLING              → Request Payload Processor running layer assembly
+AWAITING_APPROVAL       → policy requires human review before dispatch
+APPROVED                → proceeding to assembly and dispatch
+DISPATCHED              → provider received payload; awaiting confirmation
+PROVISIONING            → provider executing
+COMPLETED               → provider confirmed realization; Realized State written
+FAILED                  → terminal; failure_reason and retry_eligible populated
+CANCELLED               → consumer-initiated cancellation; clean terminal
+CANCELLING              → cancellation in progress; provider notified
+TIMEOUT_PENDING         → dispatch timeout fired; recovery policy evaluating
+LATE_REALIZATION_PENDING → provider responded after timeout; recovery decision pending
+INDETERMINATE_REALIZATION → state ambiguous; drift detection resolving
+COMPENSATION_IN_PROGRESS → compound service rollback underway
+COMPENSATION_FAILED     → rollback failed; platform admin notified; orphan detection active
+PENDING_REVIEW          → conflict detected requiring human resolution
 ```
 
 ### 4.4 Cancel Request
@@ -669,6 +675,60 @@ Response 202 Accepted:
 **On approval:** A new Requested State record is created (`source_type: provider_update`, actor: consumer approver). A new Realized State snapshot is written. The entity exits PENDING_REVIEW.
 
 **On rejection:** The notification is rejected. The discrepancy between provider state and DCM Realized State becomes a drift event. The entity exits PENDING_REVIEW with an active drift record.
+
+
+
+### 5.8 Recovery Decisions
+
+When a recovery policy fires `NOTIFY_AND_WAIT`, the entity owner can query and respond to the pending decision.
+
+```
+GET /api/v1/resources/{entity_uuid}/recovery-decisions
+
+Response 200:
+{
+  "recovery_decision_uuid": "<uuid>",
+  "trigger": "DISPATCH_TIMEOUT",
+  "entity_uuid": "<uuid>",
+  "entity_state": "TIMEOUT_PENDING",
+  "deadline": "<ISO 8601>",
+  "deadline_action": "ESCALATE",
+  "context": {
+    "timeout_fired_at": "<ISO 8601>",
+    "cancellation_sent": true,
+    "cancellation_status": "unknown"
+  },
+  "available_actions": [
+    {
+      "action": "DRIFT_RECONCILE",
+      "description": "Let discovery determine actual state and reconcile automatically"
+    },
+    {
+      "action": "DISCARD_AND_REQUEUE",
+      "description": "Best-effort cleanup; new request cycle created immediately"
+    },
+    {
+      "action": "DISCARD_NO_REQUEUE",
+      "description": "Best-effort cleanup only; no automatic requeue"
+    }
+  ]
+}
+
+POST /api/v1/resources/{entity_uuid}/recovery-decisions/{recovery_decision_uuid}
+{
+  "action": "DISCARD_AND_REQUEUE",
+  "reason": "Provider was known degraded; clean restart preferred"
+}
+
+Response 202 Accepted:
+{
+  "recovery_decision_uuid": "<uuid>",
+  "action_taken": "DISCARD_AND_REQUEUE",
+  "new_request_uuid": "<uuid>"    # the new request cycle UUID
+}
+```
+
+**Note:** Recovery decisions are only available when the active recovery profile includes `NOTIFY_AND_WAIT`. With other profiles (automated-reconciliation, discard-and-requeue) the system acts automatically and no decision endpoint is exposed.
 
 
 ## 6. Audit Trail

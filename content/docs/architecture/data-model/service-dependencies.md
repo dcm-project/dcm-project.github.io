@@ -1,7 +1,7 @@
 ---
 title: "Service Dependencies"
 type: docs
-weight: 6
+weight: 7
 ---
 
 > **⚠️ Active Development Notice**
@@ -483,6 +483,60 @@ meta_provider_registration:
 - **Intent Portability** — rehydration uses Intent State to allow replay with different providers
 - **Field-Level Provenance** — dependency payload data is recorded with source Entity UUID
 - **Resource Grouping** — rehydration can be scoped to groups and tenants
+
+
+---
+
+## 8. Compound Service Compensation Declaration
+
+### 8.1 Overview
+
+Compound services (delivered by Meta Providers) must declare compensation behavior for each component. This declaration is part of the service definition — not discovered at runtime. See [Operational Models](24-operational-models.md) Section 6 for the full compensation execution model.
+
+### 8.2 Compensation Fields on Service Components
+
+```yaml
+service_component:
+  id: vm
+  resource_type: Compute.VirtualMachine
+  required_for_delivery: <atomic|partial>
+  # atomic: must succeed; failure triggers full compensation rollback
+  # partial: failure → DEGRADED state; compound service delivered partially
+
+  compensation_on_failure: <decommission_immediately|release_allocation|skip|notify>
+  # decommission_immediately: decommission this component as part of rollback
+  # release_allocation:       release allocation back to pool (for allocatable resources)
+  # skip:                     do not compensate; used for partial delivery components
+  # notify:                   notify owner; human decides compensation
+
+  compensation_order: <integer>
+  # Lower numbers compensate first; higher numbers compensate last
+  # Reverse dependency order is the default if not declared
+
+  depends_on: [<component_ids>]
+```
+
+### 8.3 Partial Delivery Policy
+
+```yaml
+partial_delivery_policy:
+  min_required_components: [vm, ip]  # compound DEGRADED if only these succeed
+  degraded_is_acceptable: true
+  auto_retry_optional_components:
+    enabled: true
+    max_attempts: 3
+    interval: PT15M
+    on_exhaustion: notify_owner
+```
+
+### 8.4 System Policies — Compensation
+
+| Policy | Rule |
+|--------|------|
+| `DEP-010` | Compensation executes in reverse dependency order (highest compensation_order first). |
+| `DEP-011` | Compensation failure triggers COMPENSATION_FAILED state and immediate orphan detection. |
+| `DEP-012` | Components with required_for_delivery: partial are not compensation-triggering. Their failure produces a DEGRADED compound entity. |
+
 
 ---
 

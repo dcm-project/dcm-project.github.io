@@ -547,6 +547,67 @@ Providers may declare categories of updates they routinely make — enabling org
 This declaration is part of provider registration (Section 3.3) and is surfaced in the Service Catalog to help consumers understand what provider-side changes they can expect.
 
 
+
+---
+
+## 7b. Cancellation API
+
+This section defines the cancellation endpoint that Service Providers implement for Level 2+ conformance. Providers that declare `supports_cancellation: true` in their registration must implement this endpoint.
+
+### 7b.1 Cancellation Endpoint
+
+```
+POST /cancel (on the provider, called by DCM)
+Authorization: DCM mTLS certificate
+
+Body:
+{
+  "cancellation_uuid": "<uuid>",
+  "entity_uuid": "<uuid>",
+  "requested_state_uuid": "<uuid>",
+  "reason": "consumer_requested | timeout | policy_triggered",
+  "requested_at": "<ISO 8601>",
+  "best_effort": true
+}
+```
+
+### 7b.2 Response
+
+| Code | Meaning |
+|------|---------|
+| `200 OK` (status: cancelled) | Cancellation clean; no resources provisioned |
+| `200 OK` (status: partial_rollback) | Cancellation attempted; some resources may remain |
+| `200 OK` (status: too_late) | Provider completed before cancellation arrived; late response forthcoming |
+| `409 Conflict` | Already cancelled or already completed |
+
+```json
+{
+  "cancellation_uuid": "<uuid>",
+  "status": "cancelled | partial_rollback | too_late",
+  "resources_remaining": [],
+  "late_response_expected": false,
+  "notes": "<string>"
+}
+```
+
+### 7b.3 Late Response After Cancellation
+
+If the provider returns `status: too_late`, it must still send the completed realization response via the standard realized-state callback. DCM's Late Response Pipeline handles this — the provider does not need to do anything different. The `LATE_RESPONSE_RECEIVED` Recovery Policy fires on the DCM side.
+
+### 7b.4 Capability Declaration
+
+```json
+{
+  "cancellation_capabilities": {
+    "supports_cancellation": true,
+    "cancellation_supported_during": ["DISPATCHED", "PROVISIONING"],
+    "partial_rollback_possible": true,
+    "cancellation_response_time_seconds": 30
+  }
+}
+```
+
+
 ## 7. Field Mapping Specification
 
 *Required for Level 2 conformance.*

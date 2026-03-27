@@ -111,6 +111,22 @@ The **Discovered State** is what DCM observes actually existing through active d
 
 **Content:** Raw discovered resource state in DCM Unified Data Model format, with discovery metadata (timestamp, discovery method, provider interrogated)
 
+
+### 2.5 Recovery States
+
+Five additional states apply to Infrastructure Resource Entities when the normal provisioning lifecycle encounters timeouts, cancellation failures, or partial realization. These states are governed by Recovery Policies (see [Operational Models](24-operational-models.md) Section 5).
+
+| State | Meaning | Entry Trigger |
+|-------|---------|--------------|
+| `TIMEOUT_PENDING` | Dispatch timeout fired; cancellation sent to provider | `DISPATCH_TIMEOUT` recovery trigger |
+| `LATE_REALIZATION_PENDING` | Provider responded after timeout; NOTIFY_AND_WAIT active | `LATE_RESPONSE_RECEIVED` recovery trigger |
+| `INDETERMINATE_REALIZATION` | State ambiguous; drift detection resolving | `DRIFT_RECONCILE` recovery action |
+| `COMPENSATION_IN_PROGRESS` | Compound service rollback underway | `PARTIAL_REALIZATION` trigger |
+| `COMPENSATION_FAILED` | Rollback itself failed; orphaned resources possible | Compensation step failure |
+
+See [Operational Models](24-operational-models.md) for the complete recovery state machine and Recovery Policy model.
+
+
 ---
 
 ## 3. The Entity UUID — Universal Linking Key

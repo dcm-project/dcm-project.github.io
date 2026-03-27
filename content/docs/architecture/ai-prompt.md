@@ -417,6 +417,19 @@ Providers are **custodians** of the underlying infrastructure — they are not t
 | Model | Description | Example |
 |-------|-------------|---------|
 | **Allocation** | Provider retains internal ownership. Consumer owns the Entity (the allocation). Provider has reclaim rights on decommission. | VM, Container, IP Address |
+| **Recovery Policy** | Formal DCM policy type mapping trigger conditions (DISPATCH_TIMEOUT, PARTIAL_REALIZATION, etc.) to response actions; same authoring model as GateKeeper/Validation/Transformation |
+| **recovery_posture** | Fifth Policy Group concern_type governing failure and ambiguity response; binds a recovery profile group to the deployment |
+| **DRIFT_RECONCILE** | Recovery action: schedule discovery; let drift detection resolve actual state |
+| **DISCARD_AND_REQUEUE** | Recovery action: best-effort cleanup; new request cycle created immediately |
+| **NOTIFY_AND_WAIT** | Recovery action: notify human; wait for explicit decision up to declared deadline |
+| **TIMEOUT_PENDING** | Infrastructure Resource Entity state: dispatch timeout fired; recovery policy evaluating |
+| **LATE_REALIZATION_PENDING** | Entity state: provider responded after timeout; NOTIFY_AND_WAIT recovery decision pending |
+| **INDETERMINATE_REALIZATION** | Entity state: state ambiguous; drift detection resolving |
+| **COMPENSATION_FAILED** | Entity state: compound service rollback itself failed; orphan detection active |
+| **orphan_candidate** | Resource discovered at provider with no corresponding Realized State record; surfaced to platform admin for human resolution |
+| **Discovery Scheduler** | DCM control plane component maintaining priority queue of discovery requests; dispatches to provider discovery endpoints |
+| **recovery-automated-reconciliation** | Built-in recovery profile: trust drift detection; accept late responses; appropriate for dev/standard |
+| **recovery-notify-and-wait** | Built-in recovery profile: notify human; never act automatically; appropriate for prod/fsi/sovereign |
 | **Notification Provider** | Ninth DCM provider type; translates unified notification envelope to delivery channel; handles delivery, retry, dead letter, and delivery confirmation callbacks |
 | **Notification Router** | DCM control plane component that resolves notification audiences and routes envelopes to Notification Providers |
 | **audience resolution** | Deriving notification recipients by traversing the entity relationship graph from the changed entity at event time |
@@ -2456,7 +2469,20 @@ The Ship/Shore/Enclave terminology from defense IT contexts has been replaced th
 
 | Former Term | Replacement | Meaning |
 |-------------|-------------|---------|
-| Shore | **Notification Provider** | Ninth DCM provider type; translates unified notification envelope to delivery channel; handles delivery, retry, dead letter, and delivery confirmation callbacks |
+| Shore | **Recovery Policy** | Formal DCM policy type mapping trigger conditions (DISPATCH_TIMEOUT, PARTIAL_REALIZATION, etc.) to response actions; same authoring model as GateKeeper/Validation/Transformation |
+| **recovery_posture** | Fifth Policy Group concern_type governing failure and ambiguity response; binds a recovery profile group to the deployment |
+| **DRIFT_RECONCILE** | Recovery action: schedule discovery; let drift detection resolve actual state |
+| **DISCARD_AND_REQUEUE** | Recovery action: best-effort cleanup; new request cycle created immediately |
+| **NOTIFY_AND_WAIT** | Recovery action: notify human; wait for explicit decision up to declared deadline |
+| **TIMEOUT_PENDING** | Infrastructure Resource Entity state: dispatch timeout fired; recovery policy evaluating |
+| **LATE_REALIZATION_PENDING** | Entity state: provider responded after timeout; NOTIFY_AND_WAIT recovery decision pending |
+| **INDETERMINATE_REALIZATION** | Entity state: state ambiguous; drift detection resolving |
+| **COMPENSATION_FAILED** | Entity state: compound service rollback itself failed; orphan detection active |
+| **orphan_candidate** | Resource discovered at provider with no corresponding Realized State record; surfaced to platform admin for human resolution |
+| **Discovery Scheduler** | DCM control plane component maintaining priority queue of discovery requests; dispatches to provider discovery endpoints |
+| **recovery-automated-reconciliation** | Built-in recovery profile: trust drift detection; accept late responses; appropriate for dev/standard |
+| **recovery-notify-and-wait** | Built-in recovery profile: notify human; never act automatically; appropriate for prod/fsi/sovereign |
+| **Notification Provider** | Ninth DCM provider type; translates unified notification envelope to delivery channel; handles delivery, retry, dead letter, and delivery confirmation callbacks |
 | **Notification Router** | DCM control plane component that resolves notification audiences and routes envelopes to Notification Providers |
 | **audience resolution** | Deriving notification recipients by traversing the entity relationship graph from the changed entity at event time |
 | **notification_uuid** | Idempotency key on notification envelopes; Notification Providers use this to deduplicate on retry |
@@ -3039,7 +3065,95 @@ REL-022 through REL-024: traversal depth declared in Resource Type Spec; default
 
 ---
 
-## SECTION 49 — PERSONAS
+## SECTION 49 — GROUP 2: OPERATIONAL MODELS
+
+### 49.1 Three Timeout Scopes
+
+All three independently configurable and audited:
+- **Assembly timeout** — max time for Request Payload Processor nine-step assembly (standard: PT3M; prod: PT2M)
+- **Dispatch timeout** — max time waiting for provider realization after dispatch (standard/prod: PT30M-PT1H; resource-type overrides for legitimately long types)
+- **Reserve-query timeout** — max time for a single provider to respond to reserve query (prod: PT5S); on timeout: skip that candidate, continue placement loop
+
+### 49.2 Cancellation — Three Scenarios
+
+1. **Before dispatch:** Clean cancel; no provider interaction; entity → CANCELLED
+2. **After dispatch, provider not started:** DCM sends cancellation; provider confirms; entity → CANCELLED
+3. **During PROVISIONING:** Provider capability-dependent:
+   - Supports cancellation: send cancel; provider attempts rollback; outcome → Recovery Policy
+   - No cancellation support: CANCEL_PENDING; wait for completion; LATE_RESPONSE_RECEIVED fires
+
+Cancellation is always best-effort — never guaranteed. Provider declares `supports_cancellation` and `partial_rollback_possible` at registration.
+
+### 49.3 Discovery Scheduling — Three Trigger Types
+
+1. **Scheduled (cron):** Each Resource Type Spec declares discovery interval; profile overrides; profile_min=PT4H minimal, PT5M fsi/sovereign
+2. **Event-triggered:** After entity.realized (PT30S delay), drift.resolved (PT60S), provider.degraded (immediate), TIMEOUT_PENDING (PT5M orphan detection), COMPENSATION_FAILED (immediate)
+3. **On-demand:** `POST /api/v1/admin/discovery/trigger` by platform admin; also used by CI/CD pre-validation and brownfield ingestion
+
+Discovery Scheduler component maintains priority queue (Critical → High → Standard → Background). Queue depth bounded per profile.
+
+### 49.4 Recovery Policy Model — The Unified Framework
+
+Recovery Policies are a formal DCM policy type (alongside GateKeeper, Validation, Transformation). Same authoring, GitOps store, shadow mode, activation workflow, and audit trail.
+
+**Trigger vocabulary (closed):** ASSEMBLY_TIMEOUT, DISPATCH_TIMEOUT, RESERVE_QUERY_ALL_EXHAUSTED, LATE_RESPONSE_RECEIVED, CANCELLATION_SENT, CANCELLATION_CONFIRMED, CANCELLATION_FAILED, PARTIAL_REALIZATION, COMPENSATION_IN_PROGRESS, COMPENSATION_FAILED
+
+**Action vocabulary (closed):** DRIFT_RECONCILE, DISCARD_AND_REQUEUE, DISCARD_NO_REQUEUE, ACCEPT_LATE_REALIZATION, COMPENSATE_AND_FAIL, NOTIFY_AND_WAIT (with deadline + on_deadline_exceeded), ESCALATE, RETRY (with backoff + max_attempts + on_exhaustion)
+
+### 49.5 Four Built-in Recovery Profile Groups
+
+| Group | Posture | Profile Default |
+|-------|---------|----------------|
+| `recovery-automated-reconciliation` | Trust drift detection to converge | minimal/dev/standard |
+| `recovery-discard-and-requeue` | Clean up and restart on ambiguity | (opt-in) |
+| `recovery-notify-and-wait` | Notify human; never act automatically | prod/fsi/sovereign |
+| `recovery-aggressive-retry` | Retry everything before giving up | (opt-in) |
+
+Binding hierarchy: resource-type override > Tenant override > profile default > system default (automated-reconciliation).
+
+`recovery_posture` is the fifth Policy Group concern_type (alongside security, compliance, operational, implementation posture).
+
+### 49.6 Late Response Pipeline
+
+Provider responds after DCM timeout:
+1. Late Response Handler activates (entity in TIMEOUT_PENDING state)
+2. Cancel the pending cancellation if not yet sent
+3. Write realized payload to Realized Store
+4. Entity → LATE_REALIZATION_PENDING (if NOTIFY_AND_WAIT) or action per policy (if DRIFT_RECONCILE or DISCARD_AND_REQUEUE)
+
+NOTIFY_AND_WAIT consumer interface: `GET /api/v1/resources/{uuid}/recovery-decisions` and `POST` with chosen action. Platform admin can resolve any entity's pending decision via Admin API.
+
+### 49.7 Compound Service Compensation
+
+Declared per component in service definition:
+- `required_for_delivery: atomic` — failure triggers full compensation rollback
+- `required_for_delivery: partial` — failure → DEGRADED (not FAILED); no compensation triggered
+- `compensation_on_failure: decommission_immediately | release_allocation | skip | notify`
+- `compensation_order: <integer>` — reverse order = first-decommissioned; lowest compensation_order runs last in reverse
+
+Partial delivery policy: `min_required_components` declares minimum for DEGRADED delivery; `auto_retry_optional_components` retries failed optional components.
+
+### 49.8 Five New Lifecycle States
+
+| State | Entry | Recovery Trigger |
+|-------|-------|-----------------|
+| TIMEOUT_PENDING | Dispatch timeout fired | DISPATCH_TIMEOUT |
+| LATE_REALIZATION_PENDING | Late response received + NOTIFY_AND_WAIT | LATE_RESPONSE_RECEIVED |
+| INDETERMINATE_REALIZATION | DRIFT_RECONCILE action taken | — |
+| COMPENSATION_IN_PROGRESS | Compound rollback underway | — |
+| COMPENSATION_FAILED | Rollback itself failed | COMPENSATION_FAILED |
+
+### 49.9 Orphan Detection Pipeline
+
+Triggers: timeout with cancellation sent, cancellation failed, compensation failed, DISCARD_NO_REQUEUE. Queries provider for resources matching Requested State characteristics in the provisioning time window, excluding known Realized State UUIDs. Creates ORPHAN_CANDIDATE records; notifies platform admin (urgency: high); human resolves (manual decommission, adopt into DCM, or mark false positive).
+
+### 49.10 Policies
+
+OPS-010 through OPS-019. Key: cancellation always best-effort (OPS-011); recovery policies are formal DCM policy type (OPS-014); four built-in recovery profiles (OPS-015); binding hierarchy resource-type > Tenant > profile (OPS-016); compensation in reverse dependency order (OPS-017); orphan detection on any uncertain cleanup (OPS-018); NOTIFY_AND_WAIT deadline always has on_deadline_exceeded action (OPS-019).
+
+---
+
+## SECTION 50 — PERSONAS
 
 | Persona | Primary Concern |
 |---------|----------------|
@@ -3056,7 +3170,7 @@ REL-022 through REL-024: traversal depth declared in Resource Type Spec; default
 
 ---
 
-## SECTION 50 — TERMINOLOGY GLOSSARY
+## SECTION 51 — TERMINOLOGY GLOSSARY
 
 | Term | Definition |
 |------|-----------|
@@ -3119,6 +3233,19 @@ REL-022 through REL-024: traversal depth declared in Resource Type Spec; default
 | **Raft** | Consensus protocol used by Commit Log (etcd) for quorum writes; guarantees durability even if minority of replicas fail |
 | **DCMGroup** | Universal group entity — all grouping constructs in DCM expressed as DCMGroup with group_class |
 | **group_class** | Determines system behavior of a DCMGroup — closed built-in set: tenant_boundary, resource_grouping, policy_collection, policy_profile, layer_grouping, composite, federation |
+| **Recovery Policy** | Formal DCM policy type mapping trigger conditions (DISPATCH_TIMEOUT, PARTIAL_REALIZATION, etc.) to response actions; same authoring model as GateKeeper/Validation/Transformation |
+| **recovery_posture** | Fifth Policy Group concern_type governing failure and ambiguity response; binds a recovery profile group to the deployment |
+| **DRIFT_RECONCILE** | Recovery action: schedule discovery; let drift detection resolve actual state |
+| **DISCARD_AND_REQUEUE** | Recovery action: best-effort cleanup; new request cycle created immediately |
+| **NOTIFY_AND_WAIT** | Recovery action: notify human; wait for explicit decision up to declared deadline |
+| **TIMEOUT_PENDING** | Infrastructure Resource Entity state: dispatch timeout fired; recovery policy evaluating |
+| **LATE_REALIZATION_PENDING** | Entity state: provider responded after timeout; NOTIFY_AND_WAIT recovery decision pending |
+| **INDETERMINATE_REALIZATION** | Entity state: state ambiguous; drift detection resolving |
+| **COMPENSATION_FAILED** | Entity state: compound service rollback itself failed; orphan detection active |
+| **orphan_candidate** | Resource discovered at provider with no corresponding Realized State record; surfaced to platform admin for human resolution |
+| **Discovery Scheduler** | DCM control plane component maintaining priority queue of discovery requests; dispatches to provider discovery endpoints |
+| **recovery-automated-reconciliation** | Built-in recovery profile: trust drift detection; accept late responses; appropriate for dev/standard |
+| **recovery-notify-and-wait** | Built-in recovery profile: notify human; never act automatically; appropriate for prod/fsi/sovereign |
 | **Notification Provider** | Ninth DCM provider type; translates unified notification envelope to delivery channel; handles delivery, retry, dead letter, and delivery confirmation callbacks |
 | **Notification Router** | DCM control plane component that resolves notification audiences and routes envelopes to Notification Providers |
 | **audience resolution** | Deriving notification recipients by traversing the entity relationship graph from the changed entity at event time |
@@ -3307,7 +3434,7 @@ REL-022 through REL-024: traversal depth declared in Resource Type Spec; default
 
 ---
 
-## SECTION 51 — OPEN QUESTIONS
+## SECTION 52 — OPEN QUESTIONS
 
 These items are explicitly unresolved. Do not make assumptions about them — flag them and ask for guidance.
 
@@ -3404,7 +3531,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ---
 
-## SECTION 52 — DOCUMENTATION STRUCTURE
+## SECTION 53 — DOCUMENTATION STRUCTURE
 
 DCM documentation follows a hierarchical structure:
 
@@ -3452,7 +3579,7 @@ content/
 
 ---
 
-## SECTION 53 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 54 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, follow these instructions:
 
