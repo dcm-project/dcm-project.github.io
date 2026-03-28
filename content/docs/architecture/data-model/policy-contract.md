@@ -284,6 +284,15 @@ recovery_output:
 
 ## 12. Output Schema — Orchestration Flow
 
+**The two-level orchestration model:**
+
+Orchestration in DCM operates at two levels that compose through the same Policy Engine:
+
+- **Level 1 — Named Workflow Artifacts:** Orchestration Flow Policies with `ordered: true` declare an explicit, visible, auditable sequence of steps. Each step references a payload type from the closed vocabulary. This is what operators see and reason about. Adding a step = adding to a workflow Policy.
+- **Level 2 — Dynamic Policies:** GateKeeper, Transformation, Recovery, and Governance Matrix Policies fire when their conditions match, within or alongside workflow steps, without being declared in the workflow. Adding conditional behavior = writing a dynamic policy.
+
+The Request Orchestrator (event bus) routes all payload type events through the Policy Engine. Both named workflow steps and dynamic policies evaluate against the same events. The workflow provides the skeleton; dynamic policies fill in conditional behavior.
+
 **Fires on:** Pipeline payload type events.
 **Produces:** A flow directive governing step ordering.
 
@@ -298,6 +307,22 @@ orchestration_flow_output:
   parallel_groups:                       # steps that may execute in parallel
     - [step_1_id, step_2_id]
 ```
+
+**Step vocabulary** — steps reference payload types from the closed vocabulary, mapping to control plane operations:
+
+| Payload type | Maps to |
+|-------------|---------|
+| `request.initiated` | Start of request pipeline |
+| `request.layers_assembled` | Layer assembly complete |
+| `request.policies_evaluated` | All policies evaluated |
+| `request.placement_complete` | Provider selected |
+| `request.dispatched` | Sent to provider |
+| `discovery.cycle_complete` | Discovery cycle done |
+| `drift.detected` | Drift found |
+| `recovery.timeout_fired` | Dispatch timeout |
+| `provider_update.received` | Provider update notification |
+
+Custom steps extend this vocabulary by publishing new payload types.
 
 **Policy Engine behavior:** When `ordered: true`, steps execute in declared sequence. When `ordered: false`, the Policy Engine executes steps in parallel where no data dependencies exist. Orchestration Flow policies compose with standard GateKeeper and Transformation policies — both types evaluate in the same pipeline.
 

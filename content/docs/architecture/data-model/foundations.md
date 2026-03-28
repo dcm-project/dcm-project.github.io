@@ -186,7 +186,15 @@ Data fields are assembled from multiple contributing layers in a deterministic p
 
 **The unified Policy base contract** is defined in [B-policy-contract.md](B-policy-contract.md). All seven Policy types implement this base contract. What varies is the output schema.
 
-**Policies as orchestration:** Static and dynamic workflows are both Policy. An Orchestration Flow Policy with `ordered: true` is a static workflow. A conditional GateKeeper or Transformation Policy is a dynamic workflow. Both are evaluated by the same Policy Engine. Adding a pipeline step = writing a Policy. Removing a step = deactivating a Policy.
+**Policies as orchestration — two levels that compose:**
+
+*Level 1 — Named Workflow Artifacts (explicit, visible, auditable):*
+An Orchestration Flow Policy with `concern_type: orchestration_flow` and `ordered: true` is a named workflow. It declares steps in explicit sequence. Named workflows are first-class Data artifacts — versioned, GitOps-managed, profile-bound. Adding an explicit pipeline step = adding a step to a workflow Policy artifact.
+
+*Level 2 — Dynamic Policies (conditional, inline):*
+GateKeeper, Transformation, Recovery, and Governance Matrix Policies fire when their match conditions are satisfied — within or alongside workflow steps, without being declared in the workflow. Adding conditional behavior = writing a dynamic policy.
+
+Both levels are evaluated by the same Policy Engine and triggered through the same Request Orchestrator event bus. They compose naturally: a named workflow provides the sequence skeleton; dynamic policies provide conditional behavior within it.
 
 **The Governance Matrix as Policy:** The Governance Matrix rules (doc 27) are typed Policies with the `boundary_control` output schema. They fire at every cross-boundary interaction. They follow the same match conditions, enforcement levels, and lifecycle as all other Policies. The governance matrix is not a separate system — it is the Policy abstraction applied at interaction boundaries.
 

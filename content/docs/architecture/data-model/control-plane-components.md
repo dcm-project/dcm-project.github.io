@@ -151,6 +151,33 @@ static_flow_policy_group:
 
 A static flow is a Policy Group with `concern_type: orchestration_flow` and `ordered: true`. The Request Orchestrator respects the declared order. Static flows integrate with dynamic policies — a dynamic policy can fire alongside the static flow steps.
 
+### 2.5a Named Workflows vs Dynamic Policies — How They Compose
+
+The Request Orchestrator does not distinguish between named workflows and dynamic policies — both arrive as events and are routed to the Policy Engine. The distinction is in *how they are declared*:
+
+**Named Workflow Artifacts** (Orchestration Flow Policies with `ordered: true`) declare an explicit step sequence. An operator reading the workflow can see every step in order. Steps reference payload types from the closed vocabulary. Named workflows are the *explicit, visible skeleton* of a process.
+
+**Dynamic Policies** (GateKeeper, Transformation, Recovery) fire when their match conditions are satisfied, regardless of workflow position. They are not declared in the workflow artifact. They are the *conditional behavior* that fills in the skeleton.
+
+**Example — request lifecycle:**
+```
+Named workflow "system/workflows/request-lifecycle" declares:
+  Step 1: request.initiated    → capture intent
+  Step 2: request.intent_captured → run layer assembly
+  Step 3: request.layers_assembled → run placement
+  Step 4: request.placement_complete → dispatch
+
+Dynamic policies also fire:
+  GateKeeper "vm-size-limits" fires on request.layers_assembled
+    if cpu_count > 32 → deny
+  Transformation "inject-monitoring" fires on request.layers_assembled
+    → adds monitoring_endpoint field
+  Recovery "notify-on-timeout" fires on recovery.timeout_fired
+    → NOTIFY_AND_WAIT action
+```
+
+The named workflow and the dynamic policies are independent artifacts. Adding a new GateKeeper does not modify the workflow. Modifying the workflow does not affect dynamic policies. They compose through the same Policy Engine evaluation on the same events.
+
 ### 2.6 Request Orchestrator Responsibilities
 
 | Responsibility | Description |

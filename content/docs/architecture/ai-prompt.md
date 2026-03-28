@@ -477,8 +477,9 @@ Providers are **custodians** of the underlying infrastructure — they are not t
 |-------|-------------|---------|
 | **Allocation** | Provider retains internal ownership. Consumer owns the Entity (the allocation). Provider has reclaim rights on decommission. | VM, Container, IP Address |
 | **Cost Analysis Information Provider** | Specialized Information Provider supplying cost estimates, placement cost signals, cost actuals, and budget alerts; DCM provides input data; provider performs calculations |
-| **Orchestrator** | DCM control plane component sequencing multi-step workflows; conducts request lifecycle pipeline; executes named workflow artifacts |
-| **Workflow (DCM)** | First-class versioned GitOps artifact defining named sequence of operations; included in Profiles; triggered manually/scheduled/event/policy |
+| **Orchestration Flow Policy** | Named workflow artifact: Orchestration Flow Policy with `ordered: true`; declares explicit step sequence using payload type vocabulary; first-class Data artifact; versioned, GitOps-managed, profile-bound |
+| **Request Orchestrator** | Runtime event bus; routes lifecycle events to Policy Engine; has no pipeline logic; both named workflows and dynamic policies are evaluated through it |
+| **orchestration (DCM)** | Two-level composable model: Level 1 = named Orchestration Flow Policies (explicit sequence); Level 2 = dynamic policies (conditional, inline); both evaluated by Policy Engine; adding a step = adding to a workflow Policy; adding conditional behavior = writing a dynamic policy |
 | **Provider Catalog Item** | What a specific Service Provider offers consumers: specific resource allocation or process with cost, availability, SLAs; linked to Resource Type Specification version |
 | **cross_tenant_authorization** | DCMGroup with group_class: cross_tenant_authorization; grants one Tenant permission to reference/allocate/stake another Tenant's resources; revocation places active allocations in PENDING_REVIEW |
 | **foundation Tenants** | Three system Tenants created at bootstrap: __platform__, __transitional__, __system__; cannot be decommissioned; declared in bootstrap manifest |
@@ -2578,8 +2579,9 @@ The Ship/Shore/Enclave terminology from defense IT contexts has been replaced th
 | Former Term | Replacement | Meaning |
 |-------------|-------------|---------|
 | Shore | **Cost Analysis Information Provider** | Specialized Information Provider supplying cost estimates, placement cost signals, cost actuals, and budget alerts; DCM provides input data; provider performs calculations |
-| **Orchestrator** | DCM control plane component sequencing multi-step workflows; conducts request lifecycle pipeline; executes named workflow artifacts |
-| **Workflow (DCM)** | First-class versioned GitOps artifact defining named sequence of operations; included in Profiles; triggered manually/scheduled/event/policy |
+| **Orchestration Flow Policy** | Named workflow artifact: Orchestration Flow Policy with `ordered: true`; declares explicit step sequence using payload type vocabulary; first-class Data artifact; versioned, GitOps-managed, profile-bound |
+| **Request Orchestrator** | Runtime event bus; routes lifecycle events to Policy Engine; has no pipeline logic; both named workflows and dynamic policies are evaluated through it |
+| **orchestration (DCM)** | Two-level composable model: Level 1 = named Orchestration Flow Policies (explicit sequence); Level 2 = dynamic policies (conditional, inline); both evaluated by Policy Engine; adding a step = adding to a workflow Policy; adding conditional behavior = writing a dynamic policy |
 | **Provider Catalog Item** | What a specific Service Provider offers consumers: specific resource allocation or process with cost, availability, SLAs; linked to Resource Type Specification version |
 | **cross_tenant_authorization** | DCMGroup with group_class: cross_tenant_authorization; grants one Tenant permission to reference/allocate/stake another Tenant's resources; revocation places active allocations in PENDING_REVIEW |
 | **foundation Tenants** | Three system Tenants created at bootstrap: __platform__, __transitional__, __system__; cannot be decommissioned; declared in bootstrap manifest |
@@ -3324,17 +3326,23 @@ Cost Analysis is an **Information Provider** — not a built-in DCM component. D
 
 CMP-001, CMP-002.
 
-### 50.2 The Orchestrator — Workflow Engine (Group 3)
+### 50.2 Orchestration — Reconciled Model (Replaces Conflicting Earlier Statements)
 
-The **Orchestrator** sequences and executes multi-step DCM operations. Primary use case: the request lifecycle pipeline. General use case: any named workflow artifact.
+DCM orchestration operates at two levels that compose through the same Policy Engine and event bus:
 
-**Workflows are first-class DCM artifacts** — versioned, GitOps-managed, same lifecycle as all other artifacts. Workflows can be triggered: manually, scheduled (cron), event-triggered, or by policy output. Profiles include workflow bindings — activating `fsi` profile automatically activates compliance, drift remediation, sovereignty verification, and audit verification workflows.
+**Level 1 — Named Workflow Artifacts (explicit, visible, auditable):**
+An Orchestration Flow Policy with `concern_type: orchestration_flow` and `ordered: true` is a named workflow. It declares steps in explicit sequence using the closed payload type vocabulary as step identifiers. Named workflows are first-class Data artifacts — versioned, GitOps-managed, profile-bound, same lifecycle as all other artifacts. The request lifecycle pipeline is a built-in system Orchestration Flow Policy that cannot be deactivated but can be extended. Workflows are triggered: by events on the Request Orchestrator, by schedule (via Discovery Scheduler pattern), manually via Admin API, or by output of another policy.
 
-**Step types:** discovery_trigger, policy_evaluation, policy_evaluation_batch, notification_trigger, provider_dispatch, wait_for_event, wait_for_condition, report_generation, entity_state_transition, sub_workflow, parallel, human_approval, cost_analysis_query, data_transform.
+**Level 2 — Dynamic Policies (conditional, inline):**
+GateKeeper, Transformation, Recovery, Governance Matrix, and Lifecycle Policies fire when their match conditions are satisfied — within or alongside workflow steps. They are not declared in workflow artifacts; they evaluate whenever payload state matches their conditions.
 
-**Request lifecycle pipeline is a built-in system workflow** — cannot be deactivated; can be extended via Policy Groups.
+**How they compose:** A named workflow step fires when its declared payload type event occurs. Dynamic policies also fire on the same event if their conditions match. Both are evaluated by the same Policy Engine. Both are triggered by events on the Request Orchestrator event bus. The workflow provides the explicit sequence skeleton; dynamic policies provide conditional behavior within it.
 
-**Workflow execution records** have UUID, state machine, step results, and full audit trail. CMP-003, CMP-004, CMP-005.
+**The "Orchestrator" term** in earlier sections refers to the combination of: Request Orchestrator (event bus) + Orchestration Flow Policy evaluation (named workflows) + Policy Engine (dynamic policy evaluation). There is no separate "Orchestrator" component — the Request Orchestrator is the event bus, and workflows are Policies.
+
+**Adding an explicit pipeline step** = add a step to an Orchestration Flow Policy artifact.
+**Adding conditional behavior** = write a GateKeeper, Transformation, or Recovery policy.
+**Both are Data artifacts evaluated by the Policy Engine.**
 
 ### 50.3 Ingress API vs Consumer API (Group 5 fix)
 
@@ -3551,6 +3559,55 @@ DRC-001 through DRC-005. Nine control plane components now fully defined in doc 
 
 ---
 
+## SECTION 58 — EXAMPLES AND USE CASES (dcm-examples.md)
+
+### Orchestration Examples (8 scenarios)
+
+**1.1 Basic request lifecycle** — submit → layers_assembled (GateKeeper + Transformation fire) → placement (6-step) → dispatch → realized. Shows named workflow + dynamic policies composing on same events.
+
+**1.2 Human approval gate** — GateKeeper with `requires_approval: true` flag inserts AWAITING_APPROVAL step without modifying named workflow. Manager approves via API → pipeline resumes.
+
+**1.3 Policy-gated hard block** — GateKeeper denies unsupported OS. Consumer receives clear error with policy_uuid and suggestion. No requires_approval flag → terminal FAILED.
+
+**1.4 Compound service (Meta Provider)** — VM + IP + DNS + LoadBalancer. Dependency-ordered execution (parallel where no deps). DNS fails (partial delivery) → DEGRADED state. Recovery: NOTIFY_AND_WAIT. Consumer chooses: accept degraded or trigger DNS retry.
+
+**1.5 Drift detection + remediation** — Discovery finds memory_gb changed (unsanctioned). Drift: significant + unsanctioned → critical. Policy: ESCALATE. Consumer submits REVERT → new request cycle → next discovery clean.
+
+**1.6 Dispatch timeout + late response** — Provider silent for PT30M → TIMEOUT_PENDING → Recovery: NOTIFY_AND_WAIT (prod profile). Provider responds at T+45M → LATE_RESPONSE_RECEIVED. Consumer chooses DISCARD_AND_REQUEUE.
+
+**1.7 Federation-routed request** — Local providers at capacity. Placement queries Hub DCM (Peer DCM provider). Hub routes to Regional DCM B. Governance Matrix checked at each hop. Realized State flows back chain. entity_uuid preserved.
+
+**1.8 Brownfield ingestion** — Discovery finds unmanaged VM. Orchestration Flow Policy: discover → INGEST → ENRICH (CMDB query) → await operator → PROMOTE to tenant. Drift detection activated post-promotion.
+
+### Provider Examples (4 scenarios)
+
+**2.1 Service Provider dispatch cycle** — Full payload showing DCM unified format → naturalize to OpenStack Nova → execute → denaturalize back. Shows provenance on injected fields (monitoring_endpoint from policy).
+
+**2.2 Information Provider enrichment** — CMDB query during layer assembly. Response with confidence descriptor. Fields injected with source_type: information_provider and source_uuid.
+
+**2.3 Policy Provider Mode 3 (OPA sidecar)** — Exact OPA HTTP API call format, input document structure, response parsing.
+
+**2.4 Notification Provider delivery** — VLAN decommission event. Audience: owner (NetworkOps) + 2 stakeholders (required stakes) + 1 observer (optional stake). Per-actor envelopes with stakeholder_reason field. Slack message format.
+
+### Consumer API Examples (2 scenarios)
+
+**3.1 Complete request lifecycle** — catalog browse → describe (see constraints) → submit → poll status sequence → get realized resource with confidence scores.
+
+**3.2 Provider update approval** — Provider submits auto-scale notification → REQUIRES_CONSUMER_APPROVAL → consumer reviews pending notifications → approve → new Realized State.
+
+### Admin API Examples (2 scenarios)
+
+**4.1 Provider registration review** — List pending registrations (with validation results) → approve with review notes.
+
+**4.2 Orphan resolution** — List orphan candidates → investigate → adopt_into_dcm → entity promoted to full lifecycle.
+
+### Registration Flow Example (1 scenario)
+
+**5.1 Complete provider onboarding** — Admin issues registration token → provider submits registration payload (mTLS + token) → 8 automated validation checks shown → PENDING_APPROVAL → admin reviews → ACTIVE. Full capability declaration structure for Service Provider.
+
+---
+
+
 ## SECTION 54 — TERMINOLOGY GLOSSARY
 
 | Term | Definition |
@@ -3615,8 +3672,9 @@ DRC-001 through DRC-005. Nine control plane components now fully defined in doc 
 | **DCMGroup** | Universal group entity — all grouping constructs in DCM expressed as DCMGroup with group_class |
 | **group_class** | Determines system behavior of a DCMGroup — closed built-in set: tenant_boundary, resource_grouping, policy_collection, policy_profile, layer_grouping, composite, federation |
 | **Cost Analysis Information Provider** | Specialized Information Provider supplying cost estimates, placement cost signals, cost actuals, and budget alerts; DCM provides input data; provider performs calculations |
-| **Orchestrator** | DCM control plane component sequencing multi-step workflows; conducts request lifecycle pipeline; executes named workflow artifacts |
-| **Workflow (DCM)** | First-class versioned GitOps artifact defining named sequence of operations; included in Profiles; triggered manually/scheduled/event/policy |
+| **Orchestration Flow Policy** | Named workflow artifact: Orchestration Flow Policy with `ordered: true`; declares explicit step sequence using payload type vocabulary; first-class Data artifact; versioned, GitOps-managed, profile-bound |
+| **Request Orchestrator** | Runtime event bus; routes lifecycle events to Policy Engine; has no pipeline logic; both named workflows and dynamic policies are evaluated through it |
+| **orchestration (DCM)** | Two-level composable model: Level 1 = named Orchestration Flow Policies (explicit sequence); Level 2 = dynamic policies (conditional, inline); both evaluated by Policy Engine; adding a step = adding to a workflow Policy; adding conditional behavior = writing a dynamic policy |
 | **Provider Catalog Item** | What a specific Service Provider offers consumers: specific resource allocation or process with cost, availability, SLAs; linked to Resource Type Specification version |
 | **cross_tenant_authorization** | DCMGroup with group_class: cross_tenant_authorization; grants one Tenant permission to reference/allocate/stake another Tenant's resources; revocation places active allocations in PENDING_REVIEW |
 | **foundation Tenants** | Three system Tenants created at bootstrap: __platform__, __transitional__, __system__; cannot be decommissioned; declared in bootstrap manifest |
