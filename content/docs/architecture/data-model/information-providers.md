@@ -1,7 +1,7 @@
 ---
 title: "Information Providers"
 type: docs
-weight: 9
+weight: 10
 ---
 
 > **⚠️ Active Development Notice**
@@ -13,6 +13,19 @@ weight: 9
 
 **Document Status:** 🔄 In Progress  
 **Related Documents:** [Resource Type Hierarchy](05-resource-type-hierarchy.md) | [Resource/Service Entities](06-resource-service-entities.md) | [Entity Relationships](09-entity-relationships.md)
+
+> **Foundation Document Reference**
+>
+> This document is a detailed reference for a specific domain of the DCM architecture.
+> The three foundational abstractions — Data, Provider, and Policy — are defined in
+> [00-foundations.md](00-foundations.md). All concepts in this document map to one or
+> more of those three abstractions.
+>
+> **This document maps to: PROVIDER**
+>
+> The Provider abstraction — Information Provider capability extension
+
+
 
 ---
 

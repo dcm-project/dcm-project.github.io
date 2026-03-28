@@ -12,6 +12,19 @@ weight: 27
 
 **Document Status:** 🔄 In Progress
 **Document Type:** Architecture Reference
+
+> **Foundation Document Reference**
+>
+> This document is a detailed reference for a specific domain of the DCM architecture.
+> The three foundational abstractions — Data, Provider, and Policy — are defined in
+> [00-foundations.md](00-foundations.md). All concepts in this document map to one or
+> more of those three abstractions.
+>
+> **This document maps to: POLICY**
+>
+> The Policy abstraction — Governance Matrix Rule output schema for boundary control
+
+
 **Related Documents:** [Accreditation and Authorization Matrix](26-accreditation-and-authorization-matrix.md) | [DCM Federation](22-dcm-federation.md) | [Policy Profiles](14-policy-profiles.md) | [Layering and Versioning](03-layering-and-versioning.md) | [Control Plane Components](25-control-plane-components.md)
 
 ---

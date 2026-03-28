@@ -12,6 +12,19 @@ weight: 25
 
 **Document Status:** 🔄 In Progress
 **Document Type:** Architecture Reference
+
+> **Foundation Document Reference**
+>
+> This document is a detailed reference for a specific domain of the DCM architecture.
+> The three foundational abstractions — Data, Provider, and Policy — are defined in
+> [00-foundations.md](00-foundations.md). All concepts in this document map to one or
+> more of those three abstractions.
+>
+> **This document maps to: RUNTIME**
+>
+> Runtime implementations of the three abstractions — not a fourth abstraction
+
+
 **Related Documents:** [Context and Purpose](00-context-and-purpose.md) | [Four States](02-four-states.md) | [Resource/Service Entities](06-resource-service-entities.md) | [Operational Models](24-operational-models.md) | [Policy Profiles](14-policy-profiles.md)
 
 ---

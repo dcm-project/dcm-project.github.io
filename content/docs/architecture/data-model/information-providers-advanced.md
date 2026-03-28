@@ -1,7 +1,7 @@
 ---
-title: "Information Providers: Confidence Scoring and Authority"
+title: "Information Providers: Advanced"
 type: docs
-weight: 20
+weight: 21
 ---
 
 > **⚠️ Active Development Notice**
@@ -12,6 +12,19 @@ weight: 20
 
 **Document Status:** 🔄 In Progress  
 **Related Documents:** [Information Providers](10-information-providers.md) | [Policy Organization](14-policy-profiles.md) | [Universal Audit Model](16-universal-audit.md) | [DCM Federation](22-dcm-federation.md)
+
+> **Foundation Document Reference**
+>
+> This document is a detailed reference for a specific domain of the DCM architecture.
+> The three foundational abstractions — Data, Provider, and Policy — are defined in
+> [00-foundations.md](00-foundations.md). All concepts in this document map to one or
+> more of those three abstractions.
+>
+> **This document maps to: PROVIDER**
+>
+> The Provider abstraction — Information Provider advanced capabilities
+
+
 
 ---
 

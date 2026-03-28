@@ -1,7 +1,7 @@
 ---
 title: "Authentication, Authorization, and Auth Providers"
 type: docs
-weight: 18
+weight: 19
 ---
 
 > **⚠️ Active Development Notice**
@@ -12,6 +12,19 @@ weight: 18
 
 **Document Status:** 🔄 In Progress  
 **Related Documents:** [Webhooks and Messaging](18-webhooks-messaging.md) | [Policy Organization](14-policy-profiles.md) | [Deployment and Redundancy](17-deployment-redundancy.md)
+
+> **Foundation Document Reference**
+>
+> This document is a detailed reference for a specific domain of the DCM architecture.
+> The three foundational abstractions — Data, Provider, and Policy — are defined in
+> [00-foundations.md](00-foundations.md). All concepts in this document map to one or
+> more of those three abstractions.
+>
+> **This document maps to: PROVIDER**
+>
+> The Provider abstraction — Auth Provider and Credential Provider extensions
+
+
 
 ---
 

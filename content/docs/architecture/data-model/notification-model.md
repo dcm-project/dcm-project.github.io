@@ -12,6 +12,19 @@ weight: 23
 
 **Document Status:** 🔄 In Progress
 **Document Type:** Architecture Reference
+
+> **Foundation Document Reference**
+>
+> This document is a detailed reference for a specific domain of the DCM architecture.
+> The three foundational abstractions — Data, Provider, and Policy — are defined in
+> [00-foundations.md](00-foundations.md). All concepts in this document map to one or
+> more of those three abstractions.
+>
+> **This document maps to: PROVIDER + POLICY**
+>
+> Provider: Notification Provider. Policy: audience resolution and subscription rules
+
+
 **Related Documents:** [Webhooks, Messaging, and External Integration](18-webhooks-messaging.md) | [Entity Relationships](09-entity-relationships.md) | [Resource/Service Entities](06-resource-service-entities.md) | [Auth Providers](19-auth-providers.md) | [Universal Audit](16-universal-audit.md)
 
 ---

@@ -14,6 +14,19 @@ weight: 9
 **Document Status:** 🔄 In Progress  
 **Related Documents:** [Context and Purpose](00-context-and-purpose.md) | [Resource Type Hierarchy](05-resource-type-hierarchy.md) | [Resource/Service Entities](06-resource-service-entities.md) | [Service Dependencies](07-service-dependencies.md) | [Resource Grouping](08-resource-grouping.md) | [Information Providers](10-information-providers.md)
 
+> **Foundation Document Reference**
+>
+> This document is a detailed reference for a specific domain of the DCM architecture.
+> The three foundational abstractions — Data, Provider, and Policy — are defined in
+> [00-foundations.md](00-foundations.md). All concepts in this document map to one or
+> more of those three abstractions.
+>
+> **This document maps to: DATA + POLICY**
+>
+> Data: relationship records. Policy: Lifecycle Policy output schema
+
+
+
 ---
 
 ## 1. Purpose

@@ -15,6 +15,19 @@ weight: 14
 **Document Status:** 🔄 In Progress  
 **Related Documents:** [Context and Purpose](00-context-and-purpose.md) | [Data Layers and Assembly](03-layering-and-versioning.md) | [Entity Relationships](09-entity-relationships.md) | [Storage Providers](11-storage-providers.md)
 
+> **Foundation Document Reference**
+>
+> This document is a detailed reference for a specific domain of the DCM architecture.
+> The three foundational abstractions — Data, Provider, and Policy — are defined in
+> [00-foundations.md](00-foundations.md). All concepts in this document map to one or
+> more of those three abstractions.
+>
+> **This document maps to: DATA + POLICY**
+>
+> Data: Policy Group and Profile artifacts. Policy: concern types and composition
+
+
+
 ---
 
 ## 1. Purpose

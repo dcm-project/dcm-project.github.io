@@ -1,3 +1,62 @@
+## SECTION 0 — THE THREE FOUNDATIONAL ABSTRACTIONS (READ FIRST)
+
+DCM is built on three foundational abstractions. Every concept maps to one or more of these three. There is no fourth.
+
+### DATA — Everything That Exists
+Any structured artifact with a type, UUID, lifecycle state, fields, data classification, and provenance. Entities, layers, policies, accreditations, audit records, groups, relationships, sovereignty zones, registration tokens — all Data.
+
+**Universal Data properties:** UUID (stable across full lifecycle) · typed · lifecycle state · artifact metadata (handle, version, status, owned_by) · field-level provenance · data_classification per field · immutable if versioned
+
+**Data lifecycle stages (four states):** Intent State (consumer declaration) → Requested State (assembled, policy-validated) → Realized State (provider-confirmed) → Discovered State (independently observed). These are the same entity at four lifecycle stages stored in different stores optimized for each access pattern.
+
+**Data is assembled via layers** in deterministic precedence order. Every field carries provenance of its origin and all modifications.
+
+### PROVIDER — Everything External
+Any external component DCM calls or that calls DCM. All providers implement the **unified base contract** (registration, health, sovereignty, accreditation, governance matrix enforcement, zero trust) plus a **typed capability extension** that declares what operations they expose.
+
+**Eleven provider types (all implement the same base contract):**
+Service Provider (realize resources) · Information Provider (serve external data) · Storage Provider (persist DCM state) · Meta Provider (compose providers) · Policy Provider (evaluate policies externally) · Credential Provider (manage secrets) · Auth Provider (authenticate identities) · Notification Provider (deliver notifications) · Message Bus Provider (async event streaming) · Registry Provider (serve resource type registry) · Peer DCM (federation — another DCM instance IS a typed provider)
+
+**Adding a new provider type** = implement base contract + define capability extension. No core changes.
+
+### POLICY — Everything That Decides
+Any rule artifact that fires when Data matches conditions, produces a typed output, and is enforced at a declared level. Policies govern every transition, transformation, and constraint.
+
+**Seven policy types (all implement the same base contract):**
+GateKeeper (allow/deny) · Validation (pass/fail) · Transformation (field mutations) · Recovery (failure actions) · Orchestration Flow (pipeline ordering) · Governance Matrix Rule (boundary control) · Lifecycle Policy (relationship event actions)
+
+**Policies ARE the orchestration.** Pipeline steps are policies firing on payload type events. Static flows = Orchestration Flow policies with `ordered: true`. Dynamic flows = conditional policies. Adding/removing pipeline steps = adding/removing policies.
+
+**Adding a new policy type** = define a new output schema. Base contract inherited automatically.
+
+### THE RUNTIME — Connecting the Three
+```
+Event (Data state change)
+  → Policy Engine evaluates all matching Policies
+  → Policies produce decisions / mutations / actions
+  → Actions invoke Providers or produce new Data
+  → New Data triggers new Events
+  → Repeat
+```
+
+Control plane "components" are runtime specializations — not a fourth abstraction:
+- Request Orchestrator = event bus (runtime)
+- Policy Engine = policy evaluator (runtime)
+- Placement Engine = GateKeeper policy specialized for provider selection
+- Cost Analysis = Information Provider (internal; data derivation)
+- Lifecycle Constraint Enforcer = scheduled Recovery Policy trigger
+- Discovery Scheduler = scheduled Provider invocation
+- Notification Router = Transformation Policy + Notification Provider invocation
+- Drift Reconciliation = Data comparison producing Drift Record artifacts
+- Search Index = Storage Provider sub-type (queryable projection)
+
+### THE CORE ETHOS
+Effective at the core mission · Easy to use · Easy to implement · Easy to extend and integrate
+
+**Foundation documents:** 00-foundations.md (three abstractions) · A-provider-contract.md (unified provider base) · B-policy-contract.md (unified policy base)
+
+---
+
 # DCM Project — AI Model Prompt Script
 
 **Purpose:** This script provides an AI model with the full context needed to participate effectively in DCM project work. It should be provided at the start of any AI-assisted session involving DCM architecture, documentation, code, or design work.

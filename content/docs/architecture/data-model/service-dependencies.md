@@ -14,6 +14,19 @@ weight: 7
 **Document Status:** 🔄 In Progress  
 **Related Documents:** [Entity Relationships](09-entity-relationships.md) | [Resource Type Hierarchy](05-resource-type-hierarchy.md) | [Resource/Service Entities](06-resource-service-entities.md)
 
+> **Foundation Document Reference**
+>
+> This document is a detailed reference for a specific domain of the DCM architecture.
+> The three foundational abstractions — Data, Provider, and Policy — are defined in
+> [00-foundations.md](00-foundations.md). All concepts in this document map to one or
+> more of those three abstractions.
+>
+> **This document maps to: DATA**
+>
+> The Data abstraction — dependency graph as embedded data structure
+
+
+
 > **Note:** The dependency graph data structure has been superseded by the universal Entity Relationship model defined in [Entity Relationships](09-entity-relationships.md). This document retains content specific to dependency declaration, rehydration ordering, and failure handling — all of which operate on the Entity Relationship Graph defined in that document.
 
 ---

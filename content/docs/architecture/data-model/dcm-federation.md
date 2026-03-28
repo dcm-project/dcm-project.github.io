@@ -13,6 +13,19 @@ weight: 22
 **Document Status:** 🔄 In Progress  
 **Related Documents:** [Universal Group Model](15-universal-groups.md) | [Storage Providers](11-storage-providers.md) | [Auth Providers](19-auth-providers.md) | [Information Providers Advanced](21-information-providers-advanced.md)
 
+> **Foundation Document Reference**
+>
+> This document is a detailed reference for a specific domain of the DCM architecture.
+> The three foundational abstractions — Data, Provider, and Policy — are defined in
+> [00-foundations.md](00-foundations.md). All concepts in this document map to one or
+> more of those three abstractions.
+>
+> **This document maps to: PROVIDER + POLICY**
+>
+> Provider: Peer DCM as typed Provider. Policy: federation governance rules
+
+
+
 ---
 
 ## 1. Purpose

@@ -13,6 +13,19 @@ weight: 17
 **Document Status:** 🔄 In Progress  
 **Related Documents:** [Context and Purpose](00-context-and-purpose.md) | [Storage Providers](11-storage-providers.md) | [Universal Audit Model](16-universal-audit.md) | [Policy Organization](14-policy-profiles.md)
 
+> **Foundation Document Reference**
+>
+> This document is a detailed reference for a specific domain of the DCM architecture.
+> The three foundational abstractions — Data, Provider, and Policy — are defined in
+> [00-foundations.md](00-foundations.md). All concepts in this document map to one or
+> more of those three abstractions.
+>
+> **This document maps to: DATA + PROVIDER**
+>
+> Data: deployment specification. Provider: Storage Provider redundancy
+
+
+
 ---
 
 ## 1. Purpose

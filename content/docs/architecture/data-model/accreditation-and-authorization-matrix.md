@@ -12,6 +12,19 @@ weight: 26
 
 **Document Status:** 🔄 In Progress
 **Document Type:** Architecture Reference
+
+> **Foundation Document Reference**
+>
+> This document is a detailed reference for a specific domain of the DCM architecture.
+> The three foundational abstractions — Data, Provider, and Policy — are defined in
+> [00-foundations.md](00-foundations.md). All concepts in this document map to one or
+> more of those three abstractions.
+>
+> **This document maps to: DATA + POLICY**
+>
+> Data: Accreditation artifacts. Policy: Zero Trust posture as policy concern type
+
+
 **Related Documents:** [Policy Profiles](14-policy-profiles.md) | [Resource/Service Entities](06-resource-service-entities.md) | [DCM Federation](22-dcm-federation.md) | [Layering and Versioning](03-layering-and-versioning.md) | [Operational Models](24-operational-models.md)
 
 ---
