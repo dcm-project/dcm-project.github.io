@@ -557,6 +557,39 @@ The following table supersedes the table in Section 7.2 with clearer DCM respons
 | `RSE-013` | Provider Update Notifications that require consumer approval place the entity in PENDING_REVIEW state. The provider receives a "pending_approval" response and the change is queued until resolution. |
 
 
+
+### 7c. Provider Accreditation Registration
+
+Every Service Provider must declare its accreditation status during registration. Accreditation declarations are references to accreditation records registered in DCM's accreditation registry (see [doc 26](26-accreditation-and-authorization-matrix.md)).
+
+```yaml
+provider_registration:
+  # ... existing fields ...
+  accreditations:
+    - accreditation_uuid: <uuid>       # reference to registered accreditation record
+      framework: fedramp_high
+      status: active
+      valid_until: "2026-12-31"
+
+    - accreditation_uuid: <uuid>
+      framework: hipaa
+      accreditation_type: baa
+      status: active
+
+  # Self-declared compliance (lowest trust; used when no formal accreditation exists)
+  self_declared_compliance:
+    frameworks: [iso_27001]
+    last_self_review: "2026-01-15"
+    evidence_ref: <url>
+
+  # Maximum data classification this provider is permitted to handle
+  # DCM computes this from active accreditations; self_declared_max is the fallback
+  self_declared_max_data_classification: confidential
+```
+
+Providers without any accreditation records are treated as `self_declared` level and are subject to the most restrictive authorization matrix rules. They may only receive data classified as `public` or `internal`.
+
+
 ## 8. Entity Relationships
 
 Every Resource/Service Entity carries a `relationships` section declaring its relationships to other entities — internal DCM entities, external data entities, and business context entities. The relationship model is universal — the same structure is used for all relationship types.

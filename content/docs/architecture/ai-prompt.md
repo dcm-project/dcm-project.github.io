@@ -424,6 +424,17 @@ Providers are **custodians** of the underlying infrastructure — they are not t
 | **cross_tenant_authorization** | DCMGroup with group_class: cross_tenant_authorization; grants one Tenant permission to reference/allocate/stake another Tenant's resources; revocation places active allocations in PENDING_REVIEW |
 | **foundation Tenants** | Three system Tenants created at bootstrap: __platform__, __transitional__, __system__; cannot be decommissioned; declared in bootstrap manifest |
 | **QUOTA_EXCEEDED** | GateKeeper rejection code when resource quota policy fires at Step 5 (pre-placement) |
+| **data_classification** | First-class field metadata: public/internal/confidential/restricted/phi/pci/sovereign/classified; phi/sovereign/classified are immutable once set |
+| **Accreditation** | Formal versioned attestation that a component satisfies a compliance framework; issued by an Accreditor; carries validity period; lifecycle: developing→proposed→active→expired/revoked |
+| **Accreditor** | Entity that issues accreditations: government body, regulatory body, QSA, certification body, or internal audit team |
+| **Accreditation Gap** | Missing, expired, or revoked accreditation required for an active interaction; always high/critical severity; Recovery Policy governs response |
+| **Data/Capability Authorization Matrix** | Policy Group artifact (concern_type: data_authorization_boundary) declaring what data fields and capabilities are permitted across interaction boundaries given data classification and accreditation level |
+| **zero_trust_posture** | Sixth Policy Group concern type; four levels: none/boundary/full/hardware_attested; profile defaults: minimal=none, dev/standard=boundary, prod/fsi=full, sovereign=hardware_attested |
+| **Five-check boundary model** | Identity → Authorization → Accreditation → Matrix → Sovereignty; all five checks at every DCM interaction boundary; all produce audit records |
+| **Federation tunnel** | Mutually authenticated, encrypted, scoped DCM-to-DCM channel; zero trust model; establishes secure transport only, not implicit trust; per-message signing; scoped non-transferable credentials |
+| **hard_constraint** | Data/Capability Matrix declaration that cannot be overridden by any policy; sovereign/classified data never crossing federation boundaries is a hard_constraint |
+| **STRIP_FIELD** | Matrix enforcement action: remove non-permitted field from payload and proceed; if stripped field is required → escalates to DENY_REQUEST |
+| **DENY_REQUEST** | Matrix enforcement action: block entire interaction; entity enters PENDING_REVIEW; notification dispatched |
 | **Request Orchestrator** | DCM control plane event bus; routes lifecycle events to Policy Engine; coordinates pipeline via event-condition-action; does not contain hardcoded pipeline logic |
 | **Cost Analysis Component** | Internal DCM control plane component; three functions: pre-request estimation, placement input, ongoing attribution; not a billing system; not a provider type |
 | **Module** | DCM capability extension adding new functions; distinct from Profile (which configures behavior) |
@@ -2497,6 +2508,17 @@ The Ship/Shore/Enclave terminology from defense IT contexts has been replaced th
 | **cross_tenant_authorization** | DCMGroup with group_class: cross_tenant_authorization; grants one Tenant permission to reference/allocate/stake another Tenant's resources; revocation places active allocations in PENDING_REVIEW |
 | **foundation Tenants** | Three system Tenants created at bootstrap: __platform__, __transitional__, __system__; cannot be decommissioned; declared in bootstrap manifest |
 | **QUOTA_EXCEEDED** | GateKeeper rejection code when resource quota policy fires at Step 5 (pre-placement) |
+| **data_classification** | First-class field metadata: public/internal/confidential/restricted/phi/pci/sovereign/classified; phi/sovereign/classified are immutable once set |
+| **Accreditation** | Formal versioned attestation that a component satisfies a compliance framework; issued by an Accreditor; carries validity period; lifecycle: developing→proposed→active→expired/revoked |
+| **Accreditor** | Entity that issues accreditations: government body, regulatory body, QSA, certification body, or internal audit team |
+| **Accreditation Gap** | Missing, expired, or revoked accreditation required for an active interaction; always high/critical severity; Recovery Policy governs response |
+| **Data/Capability Authorization Matrix** | Policy Group artifact (concern_type: data_authorization_boundary) declaring what data fields and capabilities are permitted across interaction boundaries given data classification and accreditation level |
+| **zero_trust_posture** | Sixth Policy Group concern type; four levels: none/boundary/full/hardware_attested; profile defaults: minimal=none, dev/standard=boundary, prod/fsi=full, sovereign=hardware_attested |
+| **Five-check boundary model** | Identity → Authorization → Accreditation → Matrix → Sovereignty; all five checks at every DCM interaction boundary; all produce audit records |
+| **Federation tunnel** | Mutually authenticated, encrypted, scoped DCM-to-DCM channel; zero trust model; establishes secure transport only, not implicit trust; per-message signing; scoped non-transferable credentials |
+| **hard_constraint** | Data/Capability Matrix declaration that cannot be overridden by any policy; sovereign/classified data never crossing federation boundaries is a hard_constraint |
+| **STRIP_FIELD** | Matrix enforcement action: remove non-permitted field from payload and proceed; if stripped field is required → escalates to DENY_REQUEST |
+| **DENY_REQUEST** | Matrix enforcement action: block entire interaction; entity enters PENDING_REVIEW; notification dispatched |
 | **Request Orchestrator** | DCM control plane event bus; routes lifecycle events to Policy Engine; coordinates pipeline via event-condition-action; does not contain hardcoded pipeline logic |
 | **Cost Analysis Component** | Internal DCM control plane component; three functions: pre-request estimation, placement input, ongoing attribution; not a billing system; not a provider type |
 | **Module** | DCM capability extension adding new functions; distinct from Profile (which configures behavior) |
@@ -3281,7 +3303,83 @@ Hub selects Regional DCM using DCM-010. Regional DCM applies BBQ-001 for its own
 
 ---
 
-## SECTION 51 — PERSONAS
+## SECTION 51 — ACCREDITATION, DATA AUTHORIZATION MATRIX, AND ZERO TRUST
+
+### 51.1 Three Interconnected Models
+
+Three models compose to govern trust and data handling across all DCM boundaries:
+1. **Accreditation** — is this component certified to handle this data type?
+2. **Data/Capability Authorization Matrix** — given certification, what data/capabilities are permitted across this boundary?
+3. **Zero Trust** — is this specific call, right now, from who it claims to be, permitted to do what it's attempting?
+
+All three checks run at every interaction boundary. All five boundary checks (identity → authorization → accreditation → matrix → sovereignty) produce audit records regardless of outcome.
+
+### 51.2 Data Classification — First-Class Field Metadata
+
+Seven classification levels: `public | internal | confidential | restricted | phi | pci | sovereign | classified`
+
+Carried as `data_classification` on every field in every DCM payload. Declared in: Resource Type Specification (default per field), Data Layer (domain-wide override), explicit field instance (highest precedence). `phi`, `sovereign`, `classified` are **immutable once set** — no layer or policy may downgrade them (ACC-003). Default for unclassified fields: `internal`.
+
+### 51.3 Accreditation Model
+
+First-class versioned artifacts. Seven types (ascending trust): `self_declared`, `first_party`, `third_party`, `qsa_assessment`, `baa`, `regulatory_certification`, `sovereign_authorization`. Lifecycle: developing → proposed → active → deprecated → retired. Renewal warning P90D before expiry. On expiry/revocation: **Accreditation Gap** record created; Recovery Policy evaluates response; affected entities potentially blocked.
+
+Accreditations cover: `data_classifications`, `capabilities`, `geographic_scope`. DCM deployments themselves carry accreditations (enabling federated trust verification). Providers declare accreditations via `POST /api/v1/provider/accreditations` → proposed → platform admin activates.
+
+### 51.4 Data/Capability Authorization Matrix
+
+Policy Group artifact with `concern_type: data_authorization_boundary`. Activated as part of compliance domain group (HIPAA domain → HIPAA boundary matrix). Three sections:
+
+**Outbound data permissions:** `data_classification × required_accreditation_type → ALLOW | STRIP_FIELD | DENY_REQUEST | WARN_AND_ALLOW`. PHI requires BAA — no BAA → DENY_REQUEST. Restricted requires third_party — no third_party → STRIP_FIELD.
+
+**Capability permissions:** STORE_AT_REST on PHI requires BAA. REPLICATE_CROSS_REGION on PHI requires BAA + replication target also has BAA. EXPORT_TO_EXTERNAL_SYSTEM on PHI/restricted/sovereign requires regulatory_cert.
+
+**Inbound data permissions:** What provider may return; which partition stores it; consumer visibility requirements.
+
+**Federation boundary matrix:** `sovereign` and `classified` data = `hard_constraint: true` → NEVER crosses any federation boundary regardless of accreditation. This cannot be overridden by any policy.
+
+**Enforcement pipeline:** Classification inventory → Accreditation resolution → Matrix evaluation per field → ALLOW/STRIP/DENY/WARN → Audit record.
+
+### 51.5 Zero Trust Interaction Model
+
+**Network position grants zero trust.** Five checks at every boundary:
+1. Identity verification (mTLS mutual; certificate pinning; hardware attestation for sovereign)
+2. Authorization verification (explicit permission; scoped credential; not revoked)
+3. Accreditation check (target holds required cert; current; in-scope)
+4. Data/Capability Matrix check (fields and capabilities permitted)
+5. Sovereignty check (BBQ-001; endpoint within boundary)
+
+All five produce audit records on pass AND fail.
+
+**Credentials:** Scoped (minimum necessary operation), short-lived (PT15M for fsi/sovereign; PT30M prod; PT1H standard), non-transferable. Bound to specific entity + provider + operation type.
+
+### 51.6 Zero Trust Posture — Sixth Policy Group Concern Type
+
+Four levels: `none` (minimal) → `boundary` (dev/standard; external boundaries only) → `full` (prod/fsi; everywhere including internal) → `hardware_attested` (sovereign; TPM/HSM required).
+
+Profile defaults: minimal=none, dev/standard=boundary, prod/fsi=full, sovereign=hardware_attested.
+
+### 51.7 Federation Tunnel Zero Trust
+
+Federation tunnels = secure transport, not implicit trust. Structure: mTLS with certificate pinning + per-message signing (ed25519) + replay protection (nonce + PT5M window). Federation credentials scoped to specific operation + specific tunnel + specific resource types. Non-transferable.
+
+Hub-spoke: Hub presents its own credential to Regional DCMs. Regional DCM credentials are never relayed. Each DCM instance verifies the Hub's accreditation before accepting federation messages.
+
+Data boundary: sovereign/classified NEVER crosses federation tunnel (hard_constraint). fsi: max classification = restricted within same jurisdiction. sovereign: internal only, same instance.
+
+### 51.8 Policies
+
+ZT-001 through ZT-005 (zero trust) + ACC-001 through ACC-006 (accreditation). Key:
+- ZT-001: network position = zero trust
+- ZT-003: sovereign/classified never crosses any boundary (hard constraint)
+- ZT-004: federation tunnel = secure transport, not trust
+- ACC-003: phi/sovereign/classified classification is immutable
+- ACC-004: matrix enforced at every outbound boundary before dispatch
+- ACC-006: zero_trust_posture is the sixth Policy Group concern type
+
+---
+
+## SECTION 52 — PERSONAS
 
 | Persona | Primary Concern |
 |---------|----------------|
@@ -3298,7 +3396,7 @@ Hub selects Regional DCM using DCM-010. Regional DCM applies BBQ-001 for its own
 
 ---
 
-## SECTION 52 — TERMINOLOGY GLOSSARY
+## SECTION 53 — TERMINOLOGY GLOSSARY
 
 | Term | Definition |
 |------|-----------|
@@ -3368,6 +3466,17 @@ Hub selects Regional DCM using DCM-010. Regional DCM applies BBQ-001 for its own
 | **cross_tenant_authorization** | DCMGroup with group_class: cross_tenant_authorization; grants one Tenant permission to reference/allocate/stake another Tenant's resources; revocation places active allocations in PENDING_REVIEW |
 | **foundation Tenants** | Three system Tenants created at bootstrap: __platform__, __transitional__, __system__; cannot be decommissioned; declared in bootstrap manifest |
 | **QUOTA_EXCEEDED** | GateKeeper rejection code when resource quota policy fires at Step 5 (pre-placement) |
+| **data_classification** | First-class field metadata: public/internal/confidential/restricted/phi/pci/sovereign/classified; phi/sovereign/classified are immutable once set |
+| **Accreditation** | Formal versioned attestation that a component satisfies a compliance framework; issued by an Accreditor; carries validity period; lifecycle: developing→proposed→active→expired/revoked |
+| **Accreditor** | Entity that issues accreditations: government body, regulatory body, QSA, certification body, or internal audit team |
+| **Accreditation Gap** | Missing, expired, or revoked accreditation required for an active interaction; always high/critical severity; Recovery Policy governs response |
+| **Data/Capability Authorization Matrix** | Policy Group artifact (concern_type: data_authorization_boundary) declaring what data fields and capabilities are permitted across interaction boundaries given data classification and accreditation level |
+| **zero_trust_posture** | Sixth Policy Group concern type; four levels: none/boundary/full/hardware_attested; profile defaults: minimal=none, dev/standard=boundary, prod/fsi=full, sovereign=hardware_attested |
+| **Five-check boundary model** | Identity → Authorization → Accreditation → Matrix → Sovereignty; all five checks at every DCM interaction boundary; all produce audit records |
+| **Federation tunnel** | Mutually authenticated, encrypted, scoped DCM-to-DCM channel; zero trust model; establishes secure transport only, not implicit trust; per-message signing; scoped non-transferable credentials |
+| **hard_constraint** | Data/Capability Matrix declaration that cannot be overridden by any policy; sovereign/classified data never crossing federation boundaries is a hard_constraint |
+| **STRIP_FIELD** | Matrix enforcement action: remove non-permitted field from payload and proceed; if stripped field is required → escalates to DENY_REQUEST |
+| **DENY_REQUEST** | Matrix enforcement action: block entire interaction; entity enters PENDING_REVIEW; notification dispatched |
 | **Request Orchestrator** | DCM control plane event bus; routes lifecycle events to Policy Engine; coordinates pipeline via event-condition-action; does not contain hardcoded pipeline logic |
 | **Cost Analysis Component** | Internal DCM control plane component; three functions: pre-request estimation, placement input, ongoing attribution; not a billing system; not a provider type |
 | **Module** | DCM capability extension adding new functions; distinct from Profile (which configures behavior) |
@@ -3583,7 +3692,7 @@ Hub selects Regional DCM using DCM-010. Regional DCM applies BBQ-001 for its own
 
 ---
 
-## SECTION 53 — OPEN QUESTIONS
+## SECTION 54 — OPEN QUESTIONS
 
 These items are explicitly unresolved. Do not make assumptions about them — flag them and ask for guidance.
 
@@ -3680,7 +3789,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ---
 
-## SECTION 54 — DOCUMENTATION STRUCTURE
+## SECTION 55 — DOCUMENTATION STRUCTURE
 
 DCM documentation follows a hierarchical structure:
 
@@ -3728,7 +3837,7 @@ content/
 
 ---
 
-## SECTION 55 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 56 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, follow these instructions:
 

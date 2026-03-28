@@ -1574,6 +1574,42 @@ resource_type_recovery_override:
 Resource-type override wins over Tenant override wins over profile default.
 
 
+
+---
+
+## 10. Zero Trust Posture Policy Groups
+
+### 10.1 zero_trust_posture as a Concern Type
+
+`zero_trust_posture` is the sixth Policy Group concern type. It governs authentication requirements, credential lifetime, revocation check frequency, and hardware attestation requirements for all DCM interactions.
+
+See [Accreditation and Authorization Matrix](26-accreditation-and-authorization-matrix.md) Section 5 for the complete zero trust model.
+
+### 10.2 Four Zero Trust Posture Levels
+
+| Posture | Boundary | Internal | Hardware | Profile Default |
+|---------|---------|----------|----------|----------------|
+| `none` | Perimeter model | Trusted | Not required | minimal |
+| `boundary` | Zero trust at external boundaries | Service mesh | Not required | dev, standard |
+| `full` | Zero trust everywhere | Per-call auth | Not required | prod, fsi |
+| `hardware_attested` | Zero trust everywhere | Per-call auth | Required (TPM/HSM) | sovereign |
+
+### 10.3 Credential Lifetime Defaults
+
+| Profile | Max credential lifetime |
+|---------|------------------------|
+| minimal | PT8H |
+| dev | PT4H |
+| standard | PT1H |
+| prod | PT30M |
+| fsi | PT15M |
+| sovereign | PT15M + hardware attestation |
+
+### 10.4 Hard Data Boundary Constraints
+
+The sovereign profile enforces a hard constraint via the Data/Capability Authorization Matrix: **data classified as `sovereign` or `classified` never crosses any interaction boundary**. This constraint is declared with `hard_constraint: true` in the federation boundary matrix and cannot be overridden by any policy, profile, or operator action. It is enforced at the matrix level, not the policy level.
+
+
 ---
 
 *Document maintained by the DCM Project. For questions or contributions see [GitHub](https://github.com/dcm-project).*

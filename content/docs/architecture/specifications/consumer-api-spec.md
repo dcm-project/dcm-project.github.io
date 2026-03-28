@@ -261,7 +261,18 @@ Response 200:
   "sovereignty": {
     "available_in_regions": ["EU-WEST", "EU-NORTH"],
     "data_residency_guarantee": "EU"
-  }
+  },
+  "accreditations": [
+    {
+      "framework": "hipaa",
+      "accreditation_type": "baa",
+      "status": "active",
+      "valid_until": "<ISO 8601>",
+      "max_data_classification": "phi"
+    }
+  ],
+  "zero_trust_posture": "full",
+  "max_data_classification_accepted": "phi"
 }
 ```
 
@@ -489,6 +500,12 @@ Response 200:
 
   "rehydration_constraints": {
     "min_auth_level": "oidc_mfa"
+  },
+
+  "data_classification_summary": {
+    "fields_with_phi": 0,
+    "fields_with_restricted": 2,
+    "highest_classification": "restricted"
   },
 
   "pending_provider_notifications": [
