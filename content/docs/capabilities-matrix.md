@@ -264,16 +264,7 @@
 
 ---
 
-## 20. Cluster as a Service
 
-| ID | Capability | Consumer | Service Provider | Platform/Admin | Depends On |
-|----|-----------|---------|---------|---------------|-----------|
-| CAS-001 | Cluster Catalog Item | Request a full Kubernetes cluster as a catalog item; own the cluster entity and all resources within it | Implement Platform.KubernetesCluster Service Provider (CAPI-based or managed K8s); compose cluster constituents as Meta Provider (compute + network + storage + DNS + credentials) | Register Cluster-as-a-Service provider; configure Platform.KubernetesCluster Resource Type Spec | CAT-001, PRV-009, PRV-001 |
-| CAS-002 | Cluster Sovereignty Placement | Request cluster with sovereignty constraints (jurisdiction, compliance domain); cluster placed on provider satisfying constraints | Declare sovereignty zones and accreditations for cluster provider | Configure placement constraints for cluster resource type; manage cluster provider sovereignty registry | CAS-001, GMX-004, REQ-005 |
-| CAS-003 | Cluster Lifecycle Management | Manage cluster lifecycle: scale nodes, upgrade Kubernetes version, suspend, decommission | Handle cluster lifecycle payloads; report cluster health and version | Configure cluster lifecycle policies; manage cluster decommission with workload drain | CAS-001, LCM-001 |
-| CAS-004 | Cluster as Nested Provider Registration | After cluster provisioned, register it as a Service Provider for workload resources; request workloads against own cluster through same DCM catalog | Cluster registers as workload Service Provider following unified Provider base contract | Configure nested provider registration; manage workload resource type scoping to owning Tenant | CAS-001, PRV-001 |
-| CAS-005 | Cluster-Scoped Resource Ownership | Access cluster-scoped resources (ClusterRoles, StorageClasses, PersistentVolumes) as part of owned cluster entity; resources owned by requesting Tenant | Report cluster-scoped resources in Realized State payload | Distinguish owned-cluster cluster-scoped resources (Tenant-owned) from shared-cluster infrastructure resources (__platform__-owned) | CAS-001, GOV-001 |
-| CAS-006 | Kubeconfig and Credential Management | Receive kubeconfig via Credential Provider after cluster provisioned; credentials scoped and short-lived | Issue kubeconfig credentials via Credential Provider integration; rotate on declared schedule | Configure Credential Provider for kubeconfig issuance; manage credential scope and TTL | CAS-001, ZTS-002 |
 
 ---
 
@@ -301,8 +292,7 @@
 | Zero Trust and Security Posture | 6 |
 | Unified Governance Matrix | 7 |
 | Drift Reconciliation | 5 |
-| Cluster as a Service | 6 |
-| **Total** | **130** |
+| **Total** | **119** |
 
 ---
 

@@ -3943,9 +3943,9 @@ All 21 previously open community/implementation questions are now resolved. Key 
 ### Operator Interface Specification (6 resolved)
 - **CNCF submission:** specification project (not sandbox project requiring implementation); SIG engagement first
 - **Conformance certification:** self-certified via automated test suite (low friction gate) + optional DCM Verified badge via project review
-- **Cluster-scoped resources — two models:** (A) **Cluster as a Service (primary):** Tenant requests and owns an entire `Platform.KubernetesCluster` catalog item; Tenant owns all cluster-scoped resources within that cluster; cluster is the ownership boundary; (B) **Shared cluster infrastructure (exception):** cluster-scoped resources governing shared multi-tenant cluster infrastructure belong to `__platform__` Tenant. Cluster-as-a-Service is the expected primary model — users and Tenant owners request and own clusters through the catalog the same way they request VMs
+- **Cluster-scoped resources — two models:** (A) **Cluster as a catalog item (example):** When a Service Provider offers Kubernetes clusters as a resource type, a Tenant that owns a provisioned cluster entity owns all cluster-scoped resources within it — the cluster entity is the ownership boundary; (B) **Shared cluster infrastructure:** cluster-scoped resources governing shared multi-tenant cluster infrastructure belong to `__platform__` Tenant. Note: Cluster-as-a-Service is an example Service Provider implementation, not a DCM architectural feature — DCM treats the cluster as any other resource entity
 - **Non-Go frameworks:** spec is language-agnostic; Go SDK is reference implementation; community Java/Python SDKs encouraged; not maintained by DCM project in v1
-- **Cluster API / Cluster as a Service:** `Platform.KubernetesCluster` is a first-class catalog item — Tenants request and own clusters through the service catalog; CAPI operator or managed K8s service registers as Service Provider; provisioned cluster is a full Tenant-owned entity; it can then register as a nested Service Provider for workload resources (DCM provisions cluster → cluster becomes workload provider → Tenant manages workloads via same DCM catalog); Meta Provider composes compute + network + storage + DNS + credentials
+- **Cluster API as an example Service Provider:** A CAPI-based operator can register as a Service Provider for a `Platform.KubernetesCluster` resource type — this is an example of what DCM's Provider model enables, not a special architectural feature. DCM has no built-in knowledge of Kubernetes; a CAPI Service Provider is structurally identical to any other Service Provider. Once provisioned, the cluster entity can optionally register as a nested Service Provider for workload resources (the Meta Provider pattern — composing compute + network + storage + DNS + credentials)
 - **Level 0:** exists — label-based passive discovery, no operator code changes; DCM discovers and tracks but does not control; lowest adoption friction
 
 ### Operator SDK (5 resolved)
@@ -4058,7 +4058,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ## SECTION 59b — CAPABILITIES MATRIX UPDATE (130 capabilities, 20 domains)
 
-Five new domains added to the capabilities matrix. Total: 130 capabilities across 20 domains.
+Five new domains added to the capabilities matrix. Total: 119 capabilities across 19 domains.
 
 **New domains:**
 
@@ -4070,7 +4070,6 @@ Five new domains added to the capabilities matrix. Total: 130 capabilities acros
 
 **19. Drift Reconciliation (DRC-001–005):** Drift record production with field-level detail, unsanctioned change classification and severity escalation, drift severity classification (field criticality × change magnitude), drift resolution tracking with clean-state confirmation, governance matrix integration for expected provider change detection.
 
-**20. Cluster as a Service (CAS-001–006):** Cluster catalog item (Tenant owns entire cluster entity), cluster sovereignty placement, cluster lifecycle management (scale/upgrade/decommission), cluster as nested provider registration (DCM provisions cluster → cluster becomes workload Service Provider), cluster-scoped resource ownership model (Tenant-owned within cluster vs __platform__-owned shared infrastructure), kubeconfig and credential management via Credential Provider.
 
 **6 specifications graduated from WIP to Draft:**
 dcm-registration-spec.md · dcm-opa-integration-spec.md · 11-kubernetes-compatibility.md · dcm-operator-interface-spec.md · dcm-operator-sdk-api.md · dcm-admin-api-spec.md
