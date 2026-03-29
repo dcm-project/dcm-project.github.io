@@ -4,16 +4,12 @@ type: docs
 weight: 0
 ---
 
-> **⚠️ Work in Progress**
+> **📋 Draft**
 >
-> **This specification is a work in progress and is less mature than the core DCM data model documentation.** API endpoint paths, request/response structures, and authentication flows represent design intent and will be refined as implementation proceeds.
->
-> **Do not build against this specification yet.** It is published to share design direction and invite feedback.
->
-> Feedback and contributions welcome via [GitHub Issues](https://github.com/dcm-project/issues).
+> This specification covers the full Consumer API surface. Endpoint paths, request/response structures, and authentication flows represent design intent and will be refined as implementation proceeds. Feedback and contributions welcome via [GitHub Issues](https://github.com/dcm-project/issues).
 
 **Version:** 0.1.0-draft
-**Status:** Design — Not yet implemented
+**Status:** Draft — Ready for implementation feedback
 **Document Type:** Technical Specification
 **Related Documents:** [DCM Operator Interface Specification](dcm-operator-interface-spec.md) | [Four States](../data-model/02-four-states.md) | [Auth Providers](../data-model/19-auth-providers.md) | [Webhooks and Messaging](../data-model/18-webhooks-messaging.md)
 
@@ -748,6 +744,708 @@ Response 202 Accepted:
 **Note:** Recovery decisions are only available when the active recovery profile includes `NOTIFY_AND_WAIT`. With other profiles (automated-reconciliation, discard-and-requeue) the system acts automatically and no decision endpoint is exposed.
 
 
+
+
+### 5.13 Bulk Decommission
+
+Decommissions all resources matching a filter. Creates individual decommission requests for each resource. Useful for teardown of environments or project cleanup.
+
+```
+POST /api/v1/resources/bulk-decommission
+
+Request body:
+{
+  "filter": {
+    "group_uuid": "<uuid>",           # all resources in a group
+    "tag": "environment:dev",         # all resources with a tag
+    "resource_type": "Compute.VirtualMachine"   # combined with other filters
+  },
+  "reason": "Dev environment teardown — project complete",
+  "dry_run": true,                    # true: return what would be decommissioned; no action taken
+  "force": false
+}
+
+Response 200 (dry_run=true):
+{
+  "dry_run": true,
+  "would_decommission": [
+    { "entity_uuid": "<uuid>", "display_name": "dev-vm-01", "resource_type": "Compute.VirtualMachine" },
+    { "entity_uuid": "<uuid>", "display_name": "dev-vm-02", "resource_type": "Compute.VirtualMachine" }
+  ],
+  "blocked": [
+    {
+      "entity_uuid": "<uuid>",
+      "display_name": "shared-vlan-01",
+      "reason": "Active required stakes from resources outside the decommission set"
+    }
+  ]
+}
+
+Response 202 Accepted (dry_run=false):
+{
+  "bulk_decommission_uuid": "<uuid>",
+  "decommission_requests": [
+    { "entity_uuid": "<uuid>", "request_uuid": "<uuid>" },
+    { "entity_uuid": "<uuid>", "request_uuid": "<uuid>" }
+  ],
+  "blocked_count": 1
+}
+```
+
+
+### 5.9 Resume Resource
+
+Resumes a suspended resource. The resource must be in SUSPENDED lifecycle state.
+
+```
+POST /api/v1/resources/{entity_uuid}/resume
+
+Request body:
+{
+  "reason": "Maintenance window complete"
+}
+
+Response 202 Accepted:
+{
+  "entity_uuid": "<uuid>",
+  "status": "RESUMING"
+}
+
+Response 409 Conflict:
+{
+  "error": "not_suspended",
+  "reason": "Resource is not in SUSPENDED state",
+  "current_state": "OPERATIONAL"
+}
+```
+
+---
+
+### 5.10 Ownership Transfer
+
+Transfers ownership of a resource entity to a different Tenant. Both Tenants must have an active cross-tenant authorization record permitting the transfer. The receiving Tenant admin must confirm the transfer.
+
+```
+POST /api/v1/resources/{entity_uuid}/transfer
+
+Request body:
+{
+  "target_tenant_uuid": "<uuid>",
+  "reason": "Project moving from Dev to Production Tenant",
+  "notify_target_tenant_admin": true
+}
+
+Response 202 Accepted:
+{
+  "transfer_uuid": "<uuid>",
+  "entity_uuid": "<uuid>",
+  "from_tenant_uuid": "<uuid>",
+  "to_tenant_uuid": "<uuid>",
+  "status": "PENDING_TARGET_ACCEPTANCE",
+  "expires_at": "<ISO 8601>"    # transfer offer expires after PT72H
+}
+
+Response 403 Forbidden:
+{
+  "error": "transfer_not_authorized",
+  "reason": "No cross-tenant authorization record between source and target Tenant"
+}
+```
+
+Target Tenant admin accepts or rejects:
+
+```
+POST /api/v1/resources/transfers/{transfer_uuid}/accept
+POST /api/v1/resources/transfers/{transfer_uuid}/reject
+{
+  "reason": "<optional>"
+}
+```
+
+---
+
+### 5.11 Extend Resource TTL
+
+Extends the TTL of a resource entity that has a lifecycle time constraint declared. Extension is subject to policy — a GateKeeper may reject or cap the extension.
+
+```
+POST /api/v1/resources/{entity_uuid}/extend-ttl
+
+Request body:
+{
+  "extend_by": "P30D",           # ISO 8601 duration
+  "reason": "Project deadline extended by one month"
+}
+
+Response 200:
+{
+  "entity_uuid": "<uuid>",
+  "previous_expiry": "<ISO 8601>",
+  "new_expiry": "<ISO 8601>",
+  "extension_granted": "P30D"
+}
+
+Response 422 Unprocessable:
+{
+  "error": "ttl_extension_rejected",
+  "reason": "Policy limits maximum TTL extension to P14D for this resource type",
+  "max_extension": "P14D",
+  "policy_uuid": "<uuid>"
+}
+
+Response 404 Not Found:
+{
+  "error": "no_ttl_constraint",
+  "reason": "Resource has no declared lifecycle time constraint"
+}
+```
+
+---
+
+### 5.12 List Expiring Resources
+
+Returns resources approaching their TTL expiry, sorted by time remaining.
+
+```
+GET /api/v1/resources/expiring
+
+Query parameters:
+  within=<ISO 8601 duration>    resources expiring within this duration (default: P7D)
+  resource_type=<fqn>
+  page=<int>
+  page_size=<int>
+
+Response 200:
+{
+  "expiring_resources": [
+    {
+      "entity_uuid": "<uuid>",
+      "resource_type": "Compute.VirtualMachine",
+      "display_name": "lab-server-01",
+      "expires_at": "<ISO 8601>",
+      "time_remaining": "P2DT4H",
+      "on_expiry_action": "decommission",
+      "extend_url": "/api/v1/resources/{entity_uuid}/extend-ttl"
+    }
+  ],
+  "total": 3
+}
+```
+
+---
+
+## 5b. Drift Management
+
+### 5b.1 List Drift Records for a Resource
+
+```
+GET /api/v1/resources/{entity_uuid}/drift
+
+Query parameters:
+  status=<open|acknowledged|resolved|escalated>
+  severity=<minor|significant|critical>
+  page=<int>
+  page_size=<int>
+
+Response 200:
+{
+  "drift_records": [
+    {
+      "drift_uuid": "<uuid>",
+      "detected_at": "<ISO 8601>",
+      "overall_severity": "significant",
+      "unsanctioned": true,
+      "status": "open",
+      "drifted_fields": [
+        {
+          "field_path": "fields.memory_gb",
+          "realized_value": 8,
+          "discovered_value": 16,
+          "field_severity": "significant"
+        }
+      ],
+      "available_actions": ["REVERT", "ACCEPT_DRIFT", "ESCALATE"]
+    }
+  ],
+  "total": 1
+}
+```
+
+### 5b.2 Acknowledge Drift Record
+
+Marks a drift record as acknowledged. The entity remains drifted — this signals the owner has reviewed it.
+
+```
+POST /api/v1/resources/{entity_uuid}/drift/{drift_uuid}/acknowledge
+{
+  "reason": "Reviewing with provider before deciding on action"
+}
+
+Response 200:
+{
+  "drift_uuid": "<uuid>",
+  "status": "acknowledged",
+  "acknowledged_at": "<ISO 8601>"
+}
+```
+
+### 5b.3 Accept Drift (Update Definition)
+
+Accepts the discovered state as the new authoritative desired state. Creates a new Requested State and Realized State snapshot reflecting the discovered values. Resolves the drift record.
+
+```
+POST /api/v1/resources/{entity_uuid}/drift/{drift_uuid}/accept
+{
+  "accept_all_fields": true,         # accept all drifted fields
+  "accept_fields": ["fields.memory_gb"],   # or select specific fields
+  "reason": "Auto-scale event was legitimate; accepting new memory configuration"
+}
+
+Response 202 Accepted:
+{
+  "drift_uuid": "<uuid>",
+  "status": "resolved",
+  "resolution_type": "updated_definition",
+  "new_realized_state_uuid": "<uuid>"
+}
+```
+
+### 5b.4 Revert Drift
+
+Submits a revert request — dispatches a new request to restore the resource to its Realized State values.
+
+```
+POST /api/v1/resources/{entity_uuid}/drift/{drift_uuid}/revert
+{
+  "reason": "Unauthorized change — reverting to declared state"
+}
+
+Response 202 Accepted:
+{
+  "drift_uuid": "<uuid>",
+  "revert_request_uuid": "<uuid>",
+  "status": "DISPATCHED",
+  "status_url": "/api/v1/requests/{revert_request_uuid}/status"
+}
+```
+
+---
+
+## 5c. Groups and Relationships
+
+### 5c.1 List Resource Groups
+
+Returns all Resource Groups in the actor's Tenant.
+
+```
+GET /api/v1/groups
+
+Query parameters:
+  group_class=<resource_grouping|policy_collection|composite>
+  tag=<string>
+  page=<int>
+  page_size=<int>
+
+Response 200:
+{
+  "groups": [
+    {
+      "group_uuid": "<uuid>",
+      "handle": "tenant/payments/prod-vms",
+      "display_name": "Production VMs — Payments",
+      "group_class": "resource_grouping",
+      "member_count": 12,
+      "tags": ["production", "payments"]
+    }
+  ],
+  "total": 4
+}
+```
+
+### 5c.2 Describe Group
+
+```
+GET /api/v1/groups/{group_uuid}
+
+Response 200:
+{
+  "group_uuid": "<uuid>",
+  "handle": "tenant/payments/prod-vms",
+  "display_name": "Production VMs — Payments",
+  "group_class": "resource_grouping",
+  "members": [
+    {
+      "entity_uuid": "<uuid>",
+      "resource_type": "Compute.VirtualMachine",
+      "display_name": "payments-api-01",
+      "membership_valid_until": null     # null = permanent membership
+    }
+  ],
+  "tags": ["production", "payments"]
+}
+```
+
+### 5c.3 Add Resource to Group
+
+```
+POST /api/v1/groups/{group_uuid}/members
+{
+  "entity_uuid": "<uuid>",
+  "valid_until": "2026-12-31T23:59:59Z"   # optional; null = permanent
+}
+
+Response 201 Created:
+{
+  "group_uuid": "<uuid>",
+  "entity_uuid": "<uuid>",
+  "membership_created_at": "<ISO 8601>"
+}
+```
+
+### 5c.4 Remove Resource from Group
+
+```
+DELETE /api/v1/groups/{group_uuid}/members/{entity_uuid}
+
+Response 204 No Content
+```
+
+### 5c.5 View Resource Relationships
+
+```
+GET /api/v1/resources/{entity_uuid}/relationships
+
+Query parameters:
+  relationship_type=<type>     filter by relationship type
+  direction=<inbound|outbound|both>   default: both
+
+Response 200:
+{
+  "relationships": [
+    {
+      "relationship_uuid": "<uuid>",
+      "relationship_type": "attached_to",
+      "direction": "outbound",
+      "related_entity_uuid": "<uuid>",
+      "related_entity_type": "Network.VLAN",
+      "related_entity_display_name": "VLAN-100",
+      "stake_strength": "required",
+      "nature": "operational"
+    }
+  ],
+  "total": 3
+}
+```
+
+---
+
+## 6b. Requests Management
+
+### 6b.1 List Requests
+
+```
+GET /api/v1/requests
+
+Query parameters:
+  status=<status>               filter by lifecycle status (see 4.3)
+  resource_type=<fqn>
+  from=<ISO 8601>
+  to=<ISO 8601>
+  page=<int>
+  page_size=<int>
+
+Response 200:
+{
+  "requests": [
+    {
+      "request_uuid": "<uuid>",
+      "entity_uuid": "<uuid>",
+      "catalog_item_uuid": "<uuid>",
+      "resource_type": "Compute.VirtualMachine",
+      "status": "COMPLETED",
+      "submitted_at": "<ISO 8601>",
+      "completed_at": "<ISO 8601>"
+    }
+  ],
+  "total": 47
+}
+```
+
+### 6b.2 List Pending Approvals (as Approver)
+
+Returns requests awaiting approval where the authenticated actor is an eligible approver (by role or group membership).
+
+```
+GET /api/v1/approvals/pending
+
+Response 200:
+{
+  "pending_approvals": [
+    {
+      "approval_uuid": "<uuid>",
+      "request_uuid": "<uuid>",
+      "entity_uuid": "<uuid>",
+      "resource_type": "Compute.VirtualMachine",
+      "requester": { "uuid": "<uuid>", "display_name": "Bob Smith" },
+      "estimated_cost_per_month": 230.40,
+      "submitted_at": "<ISO 8601>",
+      "deadline": "<ISO 8601>",
+      "policy_name": "prod-vm-approval-gate"
+    }
+  ],
+  "total": 2
+}
+```
+
+### 6b.3 Approve or Reject a Request
+
+```
+POST /api/v1/approvals/{approval_uuid}
+{
+  "decision": "approve | reject",
+  "reason": "<required for reject; optional for approve>"
+}
+
+Response 202 Accepted:
+{
+  "approval_uuid": "<uuid>",
+  "decision": "approve",
+  "processed_at": "<ISO 8601>",
+  "request_uuid": "<uuid>",
+  "request_status": "ASSEMBLING"   # pipeline resumes on approve
+}
+```
+
+---
+
+## 7b. Cost and Quota
+
+### 7b.1 Get Cost Estimate (Pre-Submission)
+
+Returns a cost estimate for a hypothetical request without submitting it.
+
+```
+POST /api/v1/cost/estimate
+{
+  "catalog_item_uuid": "<uuid>",
+  "fields": {
+    "cpu_count": 4,
+    "memory_gb": 8
+  }
+}
+
+Response 200:
+{
+  "estimated_cost": {
+    "breakdown": [
+      { "component": "compute", "unit": "per-hour", "amount": 0.28, "currency": "USD" },
+      { "component": "ip-allocation", "unit": "per-hour", "amount": 0.04, "currency": "USD" }
+    ],
+    "total_per_hour": 0.32,
+    "total_per_month": 230.40,
+    "currency": "USD"
+  },
+  "cost_confidence": "high"
+}
+```
+
+### 7b.2 Get Cost Actuals for a Resource
+
+```
+GET /api/v1/resources/{entity_uuid}/cost
+
+Query parameters:
+  from=<ISO 8601>    start of billing period (default: start of current month)
+  to=<ISO 8601>      end of billing period (default: now)
+
+Response 200:
+{
+  "entity_uuid": "<uuid>",
+  "billing_state": "billable",
+  "period": {
+    "from": "2026-03-01T00:00:00Z",
+    "to": "2026-03-28T15:00:00Z"
+  },
+  "actuals": {
+    "total": 168.96,
+    "currency": "USD",
+    "breakdown": [
+      { "component": "compute", "hours": 651, "amount": 182.28 },
+      { "component": "ip-allocation", "hours": 651, "amount": 26.04 }
+    ]
+  },
+  "current_rate_per_hour": 0.32
+}
+```
+
+### 7b.3 View Quota Usage
+
+Returns current quota consumption for the authenticated Tenant.
+
+```
+GET /api/v1/quota
+
+Response 200:
+{
+  "tenant_uuid": "<uuid>",
+  "quotas": [
+    {
+      "resource_type": "Compute.VirtualMachine",
+      "limit": 100,
+      "current_usage": 47,
+      "percent_used": 47,
+      "reserved": 3           # in-flight requests consuming quota
+    },
+    {
+      "resource_type": "Network.IPAddress",
+      "limit": 500,
+      "current_usage": 189,
+      "percent_used": 37.8,
+      "reserved": 0
+    }
+  ]
+}
+```
+
+---
+
+## 7c. Notifications and Webhooks
+
+### 7c.1 List Notifications
+
+Returns notifications delivered to the authenticated actor, most recent first.
+
+```
+GET /api/v1/notifications
+
+Query parameters:
+  status=<unread|read|all>   default: unread
+  urgency=<low|medium|high|critical>
+  event_type=<type>
+  page=<int>
+  page_size=<int>
+
+Response 200:
+{
+  "notifications": [
+    {
+      "notification_uuid": "<uuid>",
+      "event_type": "entity.decommissioning",
+      "urgency": "high",
+      "status": "unread",
+      "delivered_at": "<ISO 8601>",
+      "entity_uuid": "<uuid>",
+      "entity_display_name": "VLAN-100",
+      "audience_role": "stakeholder",
+      "summary": "VLAN-100 is being decommissioned. Your resource VM-A is attached.",
+      "action_url": "/api/v1/resources/<uuid>"
+    }
+  ],
+  "total_unread": 3,
+  "total": 47
+}
+```
+
+### 7c.2 Mark Notification Read
+
+```
+POST /api/v1/notifications/{notification_uuid}/read
+
+Response 200:
+{
+  "notification_uuid": "<uuid>",
+  "status": "read",
+  "read_at": "<ISO 8601>"
+}
+
+POST /api/v1/notifications/read-all    # mark all unread as read
+
+Response 200:
+{
+  "marked_read": 3
+}
+```
+
+### 7c.3 Manage Webhook Subscriptions
+
+```
+GET /api/v1/webhooks
+
+Response 200:
+{
+  "subscriptions": [
+    {
+      "webhook_uuid": "<uuid>",
+      "endpoint_url": "https://my-system.example.com/dcm/events",
+      "events": ["entity.provisioned", "entity.decommissioned", "drift.detected"],
+      "status": "active",
+      "created_at": "<ISO 8601>"
+    }
+  ]
+}
+
+POST /api/v1/webhooks
+{
+  "endpoint_url": "https://my-system.example.com/dcm/events",
+  "events": ["entity.provisioned", "entity.decommissioned"],
+  "hmac_secret": "<consumer-generated-secret>",   # used for payload signing
+  "description": "Production event sink"
+}
+
+Response 201 Created:
+{
+  "webhook_uuid": "<uuid>",
+  "status": "active",
+  "test_event_sent": true
+}
+
+DELETE /api/v1/webhooks/{webhook_uuid}
+Response 204 No Content
+```
+
+---
+
+## 8b. Search
+
+### 8b.1 Cross-Resource Search
+
+Full-text and structured search across all resources in the actor's Tenant. Served from the Search Index — non-authoritative but fast.
+
+```
+GET /api/v1/search
+
+Query parameters:
+  q=<string>                  full-text query
+  resource_type=<fqn>
+  lifecycle_state=<state>
+  drift_status=<clean|drifted|unknown>
+  tag=<string>                repeatable
+  compliance_domain=<domain>
+  data_classification=<level> filter by highest data classification
+  page=<int>
+  page_size=<int>
+
+Response 200:
+{
+  "results": [
+    {
+      "entity_uuid": "<uuid>",
+      "resource_type": "Compute.VirtualMachine",
+      "display_name": "payments-api-server-01",
+      "lifecycle_state": "OPERATIONAL",
+      "drift_status": "clean",
+      "tags": ["production", "payments"],
+      "resource_url": "/api/v1/resources/{entity_uuid}",
+      "score": 0.98           # relevance score for text queries
+    }
+  ],
+  "total": 3,
+  "search_index_staleness_seconds": 12,
+  "authoritative_store_ref": "/api/v1/resources?..."   # fallback URL if stale
+}
+```
+
+
 ## 6. Audit Trail
 
 ### 6.1 Query Audit Records for a Resource
@@ -833,10 +1531,15 @@ All error responses follow a consistent structure:
 | 409 | `decommission_deferred` | Decommission blocked by active stakes or dependencies |
 | 409 | `rehydration_lease_held` | Entity already being rehydrated |
 | 409 | `field_not_editable` | Targeted delta attempted on non-editable field |
+| 409 | `not_suspended` | Resume attempted on a non-suspended resource |
+| 409 | `transfer_not_authorized` | No cross-tenant authorization between source and target Tenant |
+| 409 | `no_ttl_constraint` | TTL extension attempted on resource with no time constraint |
 | 422 | `policy_rejected` | GateKeeper policy rejected the request |
 | 422 | `constraint_violated` | Field value violates declared constraint |
+| 422 | `ttl_extension_rejected` | Policy rejected or capped the TTL extension request |
 | 429 | `rate_limit_exceeded` | Actor has exceeded request rate limit |
 | 503 | `assembly_unavailable` | Request Payload Processor temporarily unavailable |
+| 503 | `search_index_degraded` | Search index unavailable; use authoritative_store_ref fallback |
 
 ---
 
@@ -844,11 +1547,11 @@ All error responses follow a consistent structure:
 
 The Consumer API defines three conformance levels, mirroring the Operator Interface Specification model:
 
-**Level 1 — Read-Only:** Catalog browsing and resource status queries only. No request submission or resource management. Suitable for reporting and dashboard integrations.
+**Level 1 — Read-Only:** Catalog browsing, resource listing, status queries, search, cost estimates, quota views, and notification listing. No request submission or resource management. Suitable for reporting, dashboards, and read-only portal integrations.
 
-**Level 2 — Standard:** Full request submission, status tracking, and basic resource management (update editable fields, decommission). Required for all self-service portal implementations.
+**Level 2 — Standard:** All Level 1 operations plus request submission, status tracking, approvals, and basic resource management (update editable fields, suspend/resume, decommission, bulk decommission, TTL extension, group management). Required for all self-service portal implementations.
 
-**Level 3 — Full:** All Level 2 operations plus rehydration, audit trail access, and correlation queries. Required for ITSM integrations and compliance tooling.
+**Level 3 — Full:** All Level 2 operations plus rehydration, ownership transfer, drift management (acknowledge, accept, revert), audit trail access, correlation queries, webhook subscription management, and cost actuals. Required for ITSM integrations, compliance tooling, and full GitOps automation.
 
 ---
 
