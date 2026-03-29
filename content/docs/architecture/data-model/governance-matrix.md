@@ -1,5 +1,5 @@
 ---
-title: "Unified Governance Matrix"
+title: "DCM Data Model — Unified Governance Matrix"
 type: docs
 weight: 27
 ---
@@ -19,15 +19,18 @@ weight: 27
 > The three foundational abstractions — Data, Provider, and Policy — are defined in
 > [00-foundations.md](00-foundations.md). All concepts in this document map to one or
 > more of those three abstractions.
+> See also: [Provider Contract](A-provider-contract.md) | [Policy Contract](B-policy-contract.md)
 >
 > **This document maps to: POLICY**
 >
 > The Policy abstraction — Governance Matrix Rule output schema for boundary control
 
 
-**Related Documents:** [Accreditation and Authorization Matrix](26-accreditation-and-authorization-matrix.md) | [DCM Federation](22-dcm-federation.md) | [Policy Profiles](14-policy-profiles.md) | [Layering and Versioning](03-layering-and-versioning.md) | [Control Plane Components](25-control-plane-components.md)
+**Related Documents:** [Federated Contribution Model](28-federated-contribution-model.md) | [Accreditation and Authorization Matrix](26-accreditation-and-authorization-matrix.md) | [DCM Federation](22-dcm-federation.md) | [Policy Profiles](14-policy-profiles.md) | [Layering and Versioning](03-layering-and-versioning.md) | [Control Plane Components](25-control-plane-components.md)
 
 ---
+
+> **Federated Contribution:** The Governance Matrix enforces contributor permission boundaries at artifact submission time. See the [Federated Contribution Model](28-federated-contribution-model.md) for the complete contributor permission table and the hard DENY rules applied to out-of-scope contributions.
 
 ## 1. Purpose
 

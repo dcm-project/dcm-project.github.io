@@ -3568,7 +3568,8 @@ DRC-001 through DRC-005. Nine control plane components now fully defined in doc 
 ---
 
 
-## SECTION 61 — FEDERATED CONTRIBUTION MODEL (doc 28)
+
+## SECTION 54 — FEDERATED CONTRIBUTION MODEL (doc 28)
 
 ### Core Principle
 DCM defaults to a federated model for data creation, import, usage, and lifecycle. Every authorized actor type can contribute Data artifacts within their permitted domain scope. The same GitOps PR flow and lifecycle (developing → proposed → active → deprecated → retired) applies to all contributors. Profile-bound auto-approval governs what requires human review.
@@ -3582,7 +3583,7 @@ DCM defaults to a federated model for data creation, import, usage, and lifecycl
 ### Contributor Permission Boundaries (hard DENY — Governance Matrix enforced)
 - Consumers cannot contribute system or platform domain policies
 - Providers cannot contribute specs for resource types they don't offer
-- Provisional peers can only contribute registry entries (no policies)
+- Provisional peers: registry entries only (no policies; committee approval)
 - Vouched peers: registry entries + service layers only (human_review always)
 - Verified peers: registry entries + policy templates + service layers (human_review standard+; auto dev)
 
@@ -3595,14 +3596,14 @@ Submit → Governance Matrix evaluates contributor permissions → proposed stat
 - Peer DCM: registry entries, policy templates (verified peers), service layers (verified/vouched)
 
 ### Contribution Store Directory Structure
-`dcm-policy-store/system/` (platform admin), `platform/` (platform admin), `tenant/<handle>/` (consumer), `provider/<handle>/` (provider), `federated/<peer-dcm-uuid>/` (peer DCM)
-`dcm-registry/core/` (DCM project), `community/<contributor>/` (community), `organization/<provider>/` (org)
+`dcm-policy-store/system/` (platform admin) · `platform/` (platform admin) · `tenant/<handle>/` (consumer) · `provider/<handle>/` (provider) · `federated/<peer-dcm-uuid>/` (peer DCM)
+`dcm-registry/core/` (DCM project) · `community/<contributor>/` (community) · `organization/<provider>/` (org)
 
-Every artifact includes `contributed_by` block: contributor_type, actor/tenant/provider/peer_dcm UUID, contribution_method (api/flow_gui/git_pr/federation_push), pr_url, reviewed_by.
+Every artifact includes `contributed_by` block: contributor_type, actor/tenant/provider/peer_dcm UUID, contribution_method (api/flow_gui/git_pr/federation_push), pr_url, reviewed_by. Immutable once set.
 
 ### Profile-Governed Auto-Approval
 - minimal/dev: most contributions auto-approved; shadow optional
-- standard: consumer/provider policies → human_review; shadow default on, P7D
+- standard: consumer/provider policies → human_review; shadow default on, P7D review period
 - prod: governance matrix rules → dual_approval; provider specs → human_review; shadow P14D
 - fsi: all consumer/provider contributions → dual_approval; shadow P30D; must review all divergence cases
 - sovereign: all → committee; shadow P30D; orphaned artifacts auto-retire
@@ -3610,13 +3611,15 @@ Every artifact includes `contributed_by` block: contributor_type, actor/tenant/p
 ### Consumer API Contribution Endpoints (Section 9)
 `POST /api/v1/contribute/policy` (generates PR, activates shadow mode) · `POST /api/v1/contribute/resource-group` (activates immediately) · `GET /api/v1/contribute` (list contributions) · `DELETE /api/v1/contribute/{uuid}` (withdraw, closes PR)
 
-### FCM-001 through FCM-008 system policies
-FCM-001: contributor recorded in artifact_metadata.contributed_by; immutable. FCM-002: domain scope violations are hard DENY. FCM-003: all contributions via GitOps PR (except auto-approve profiles). FCM-004: policies enter shadow mode by default. FCM-005: platform admin override always available; audited. FCM-006: orphaned artifacts don't auto-deactivate (except sovereign). FCM-007: federation contribution scoped by trust posture. FCM-008: contributor-tier scope limits absolute — tenant domain policy cannot affect system/platform domain regardless of match conditions.
+### Organization Sub-Tiers (Registry)
+Three-tier model extended to all artifact types: `organization/platform` (platform admin authored), `organization/provider` (provider authored, scoped to their types), `organization/tenant` (consumer authored, scoped to their Tenant). Lower sub-tier = lower inherent trust = may require additional review.
+
+### FCM-001 through FCM-008 System Policies
+FCM-001: contributor recorded in contributed_by; immutable. FCM-002: domain scope violations = hard DENY. FCM-003: all contributions via GitOps PR (except auto-approve). FCM-004: policies enter shadow mode by default. FCM-005: platform admin override always available; audited. FCM-006: orphaned artifacts don't auto-deactivate (except sovereign). FCM-007: federation contribution scoped by trust posture. FCM-008: contributor scope limits absolute.
 
 ---
 
-
-## SECTION 54 — TERMINOLOGY GLOSSARY
+## SECTION 55 — TERMINOLOGY GLOSSARY
 
 | Term | Definition |
 |------|-----------|
@@ -3934,7 +3937,7 @@ FCM-001: contributor recorded in artifact_metadata.contributed_by; immutable. FC
 
 ---
 
-## SECTION 55 — COMMUNITY QUESTIONS RESOLVED
+## SECTION 56 — COMMUNITY QUESTIONS RESOLVED
 
 All 21 previously open community/implementation questions are now resolved. Key decisions:
 
@@ -3971,7 +3974,7 @@ All 21 previously open community/implementation questions are now resolved. Key 
 
 ---
 
-## SECTION 56 — PREVIOUSLY OPEN QUESTIONS (NOW CLOSED)
+## SECTION 57 — PREVIOUSLY OPEN QUESTIONS (NOW CLOSED)
 
 These items are explicitly unresolved. Do not make assumptions about them — flag them and ask for guidance.
 
@@ -4068,7 +4071,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ---
 
-## SECTION 57 — EXAMPLES AND USE CASES (dcm-examples.md)
+## SECTION 58 — EXAMPLES AND USE CASES (dcm-examples.md)
 
 ### Orchestration Examples (8 scenarios)
 
@@ -4116,7 +4119,7 @@ These items are explicitly unresolved. Do not make assumptions about them — fl
 
 ---
 
-## SECTION 58 — CAPABILITIES MATRIX UPDATE (119 capabilities, 19 domains)
+## SECTION 59 — CAPABILITIES MATRIX UPDATE (119 capabilities, 19 domains)
 
 Five new domains added to the capabilities matrix. Total: 119 capabilities across 19 domains.
 
@@ -4140,7 +4143,7 @@ consumer-api-spec.md (missing complete lifecycle endpoint coverage) · dcm-flow-
 ---
 
 
-## SECTION 59 — DOCUMENTATION STRUCTURE
+## SECTION 60 — DOCUMENTATION STRUCTURE
 
 DCM documentation follows a hierarchical structure:
 
@@ -4188,7 +4191,7 @@ content/
 
 ---
 
-## SECTION 60 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 61 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, follow these instructions:
 
@@ -4258,6 +4261,11 @@ When working on this project, follow these instructions:
 98. **Information Provider authority is layer-defined** — static organizational knowledge ("our CMDB is authoritative for business unit") belongs in a platform domain layer; conflict detection happens at ingestion time; policy governs automated resolution
 99. **DCM Provider is the ninth provider type** — always mTLS (non-configurable); sovereignty checks mandatory; local policies govern ALL federated resources; audit records in both DCM instances with shared correlation_id
 100. **Provider federation eligibility is layer-defined with policy enforcement** — platform layer sets defaults per provider type; individual registrations may be more restrictive; storage providers default to mode: none; remote DCMs cannot decommission local resources through tunnels
+
+172. **DCM defaults to federated data creation** — platform admins are not the only contributors; consumers author tenant-domain policies; providers publish resource type specs and service layers; peer DCMs contribute registry entries; all via GitOps PR with profile-governed review
+173. **Contributor domain scope is hard DENY at submission** — consumers cannot contribute system/platform policies regardless of declared domain; providers cannot contribute specs for types they don't offer; enforced by Governance Matrix at contribution time (FCM-002)
+174. **All contributed policies enter shadow mode by default** — proposed status with shadow evaluation before activation; shadow_review_period is profile-governed (P7D standard → P30D fsi/sovereign); platform admin reviews divergence cases before promoting
+175. **Orphaned artifacts do not auto-deactivate** — when contributor's access is revoked, their active artifacts remain active until platform admin assigns new owner or explicitly retires; exception: sovereign profile auto-retires orphaned artifacts (FCM-006)
 93. **Process Resource max_execution_time is mandatory** — it is not optional metadata; enforced by the Lifecycle Constraint Enforcer; profile governs the default on_max_exceeded action (notify/escalate/terminate)
 94. **Dependency graphs are embedded, not separate entities** — declared graph in Resource Type Specification; resolved graph in placement.yaml (Requested State); realized graph in Realized State events; no separate dependency graph artifact needed
 95. **Billing state is first-class — not metadata** — DCM carries the billing_state field; policy determines the billing model per resource type and state; Cost Analysis consumes it; organizations decide what is billable

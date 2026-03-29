@@ -1,5 +1,5 @@
 ---
-title: "Resource Grouping and Tenancy"
+title: "DCM Data Model — Resource Grouping"
 type: docs
 weight: 8
 ---
@@ -22,6 +22,7 @@ weight: 8
 > The three foundational abstractions — Data, Provider, and Policy — are defined in
 > [00-foundations.md](00-foundations.md). All concepts in this document map to one or
 > more of those three abstractions.
+> See also: [Provider Contract](A-provider-contract.md) | [Policy Contract](B-policy-contract.md)
 >
 > **This document maps to: DATA**
 >

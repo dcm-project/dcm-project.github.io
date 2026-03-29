@@ -1,5 +1,5 @@
 ---
-title: "DCM Federation and Cross-Instance Coordination"
+title: "DCM Data Model — DCM Federation, Peering, and Cross-Instance Coordination"
 type: docs
 weight: 22
 ---
@@ -11,7 +11,7 @@ weight: 22
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
 **Document Status:** 🔄 In Progress  
-**Related Documents:** [Universal Group Model](15-universal-groups.md) | [Storage Providers](11-storage-providers.md) | [Auth Providers](19-auth-providers.md) | [Information Providers Advanced](21-information-providers-advanced.md)
+**Related Documents:** [Federated Contribution Model](28-federated-contribution-model.md) | [Universal Group Model](15-universal-groups.md) | [Storage Providers](11-storage-providers.md) | [Auth Providers](19-auth-providers.md) | [Information Providers Advanced](21-information-providers-advanced.md)
 
 > **Foundation Document Reference**
 >
@@ -19,6 +19,7 @@ weight: 22
 > The three foundational abstractions — Data, Provider, and Policy — are defined in
 > [00-foundations.md](00-foundations.md). All concepts in this document map to one or
 > more of those three abstractions.
+> See also: [Provider Contract](A-provider-contract.md) | [Policy Contract](B-policy-contract.md)
 >
 > **This document maps to: PROVIDER + POLICY**
 >
@@ -27,6 +28,8 @@ weight: 22
 
 
 ---
+
+> **Federated Contribution:** Federation contribution follows the [Federated Contribution Model](28-federated-contribution-model.md) — peer DCMs are contributors to each other's artifact stores, scoped by their federation trust posture.
 
 ## 1. Purpose
 
