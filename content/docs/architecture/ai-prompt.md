@@ -72,6 +72,22 @@ Effective at the core mission · Easy to use · Easy to implement · Easy to ext
 
 ---
 
+## SECTION 0b — DESIGN PRIORITY ORDER (applies to all decisions)
+
+> **Full specification:** [00-design-priorities.md](data-model/00-design-priorities.md) — includes decision framework, profile scaling table, and DPO-001–006 system policies.
+
+**Priority 1 — Security (industry best practices):** Security properties are architecturally present in ALL profiles. What profiles control is enforcement strictness, threshold values, and automation level — not whether security applies. A `minimal` profile is "security with minimal operational overhead" — not "minimal security."
+
+**Priority 2 — Ease of use:** The secure path must be the easy path. If the right path is also the hard path, teams will find other paths. Auto-approval for ordinary requests, policy authoring without Rego expertise, and profile defaults that eliminate configuration burden all serve this priority.
+
+**Priority 3 — Extensibility/grouping:** Profile system, compliance domain overlays, policy groups, and registry governance enable adaptability through configuration, not code. New compliance requirements are policy additions. New deployment contexts are profile configurations.
+
+**Priority 4 — Fit for purpose (always required):** DCM must manage data center infrastructure lifecycle end-to-end. Everything above serves this purpose. A system that cannot provision, track, and decommission a VM has failed.
+
+**Implication for all design decisions:** When security and convenience conflict, security wins — but find a way to make the secure option easy. When extensibility and fit for purpose conflict, fit for purpose wins. When a profile tempts you to disable a security property rather than raise its threshold, the priority order says: keep the property, raise the threshold.
+
+---
+
 ## SECTION 1 — PROJECT IDENTITY
 
 You are assisting with the **DCM (Data Center Management)** project, an open-source strategic framework developed by the Red Hat FlightPath team developed by the Red Hat FlightPath Team.
@@ -487,6 +503,7 @@ Providers are **custodians** of the underlying infrastructure — they are not t
 | **Federated Contribution Model** | DCM defaults to federated data creation — all authorized actor types (platform admin, consumer/tenant, service provider, peer DCM) can contribute Data artifacts within their domain scope via the GitOps PR model; see doc 28 |
 | **contributor** | Actor type that authored a Data artifact; recorded in artifact_metadata.contributed_by; determines review requirements; platform_admin / consumer / service_provider / peer_dcm |
 | **contributed_by** | Artifact metadata block recording contributor_type, actor UUID, contribution_method, pr_url, reviewed_by; immutable once set |
+| **DPO-001–006** | Design Priority system policies. DPO-001: security properties present in all profiles (not controlled by profiles). DPO-002: every security requirement needs an ease-of-use mechanism. DPO-005: minimal profile = "security with minimal overhead" not "minimal security". DPO-006: when security and ease conflict, redesign ease-of-use, not security. |
 | **FCM-001–008** | Federated Contribution Model system policies; key: FCM-002 (domain scope violations = hard DENY), FCM-003 (GitOps PR for all), FCM-008 (contributor scope limits absolute) |
 | **Unified Governance Matrix** | Single enforcement point for all cross-boundary decisions; four axes (subject/data/target/context); hard vs soft enforcement; field-level granularity (allowlist/blocklist/paths); profile-bound defaults; GMX-001–010 |
 | **governance_matrix_rule** | Artifact declaring match conditions across four axes and a decision (ALLOW/DENY/ALLOW_WITH_CONDITIONS/STRIP_FIELD/REDACT/AUDIT_ONLY) with hard or soft enforcement |
@@ -495,7 +512,7 @@ Providers are **custodians** of the underlying infrastructure — they are not t
 | **REDACT** | Governance matrix decision: replace field value with `<REDACTED>`; field presence preserved; receiver knows field exists but not its value |
 | **Provider Type Registry** | Three-tier registry of approved provider types; each entry declares permissions, default_approval_method, enabled_in_profiles, capability_schema_ref |
 | **registration_token** | Pre-issued by platform admin; scoped to provider_type/handle_pattern/zone; single_use; grants_auto_approval flag; value presented once only |
-| **approval_method** | Registration approval: auto | human_review | dual_approval | committee; resolved as most_restrictive(provider_type_default, profile_min, token_effect) |
+| **approval_method** | Registration approval: auto | reviewed | verified | authorized; resolved as most_restrictive(provider_type_default, profile_min, token_effect) |
 | **Drift Reconciliation Component** | Control plane component; compares Discovered vs Realized State; produces drift records and events; never writes to Realized Store; DRC-001–005 |
 | **drift_record** | Artifact produced by Drift Reconciliation; field-by-field comparison result with severity classification; unsanctioned flag; status tracking through resolution |
 | **Placement Engine** | Six-step algorithm: sovereignty filter → accreditation filter → capability filter → reserve query → tie-breaking (policy/priority/affinity/cost/load/hash) → confirm; PLC-001–006 |
@@ -2593,6 +2610,7 @@ The Ship/Shore/Enclave terminology from defense IT contexts has been replaced th
 | **Federated Contribution Model** | DCM defaults to federated data creation — all authorized actor types (platform admin, consumer/tenant, service provider, peer DCM) can contribute Data artifacts within their domain scope via the GitOps PR model; see doc 28 |
 | **contributor** | Actor type that authored a Data artifact; recorded in artifact_metadata.contributed_by; determines review requirements; platform_admin / consumer / service_provider / peer_dcm |
 | **contributed_by** | Artifact metadata block recording contributor_type, actor UUID, contribution_method, pr_url, reviewed_by; immutable once set |
+| **DPO-001–006** | Design Priority system policies. DPO-001: security properties present in all profiles (not controlled by profiles). DPO-002: every security requirement needs an ease-of-use mechanism. DPO-005: minimal profile = "security with minimal overhead" not "minimal security". DPO-006: when security and ease conflict, redesign ease-of-use, not security. |
 | **FCM-001–008** | Federated Contribution Model system policies; key: FCM-002 (domain scope violations = hard DENY), FCM-003 (GitOps PR for all), FCM-008 (contributor scope limits absolute) |
 | **Unified Governance Matrix** | Single enforcement point for all cross-boundary decisions; four axes (subject/data/target/context); hard vs soft enforcement; field-level granularity (allowlist/blocklist/paths); profile-bound defaults; GMX-001–010 |
 | **governance_matrix_rule** | Artifact declaring match conditions across four axes and a decision (ALLOW/DENY/ALLOW_WITH_CONDITIONS/STRIP_FIELD/REDACT/AUDIT_ONLY) with hard or soft enforcement |
@@ -2601,7 +2619,7 @@ The Ship/Shore/Enclave terminology from defense IT contexts has been replaced th
 | **REDACT** | Governance matrix decision: replace field value with `<REDACTED>`; field presence preserved; receiver knows field exists but not its value |
 | **Provider Type Registry** | Three-tier registry of approved provider types; each entry declares permissions, default_approval_method, enabled_in_profiles, capability_schema_ref |
 | **registration_token** | Pre-issued by platform admin; scoped to provider_type/handle_pattern/zone; single_use; grants_auto_approval flag; value presented once only |
-| **approval_method** | Registration approval: auto | human_review | dual_approval | committee; resolved as most_restrictive(provider_type_default, profile_min, token_effect) |
+| **approval_method** | Registration approval: auto | reviewed | verified | authorized; resolved as most_restrictive(provider_type_default, profile_min, token_effect) |
 | **Drift Reconciliation Component** | Control plane component; compares Discovered vs Realized State; produces drift records and events; never writes to Realized Store; DRC-001–005 |
 | **drift_record** | Artifact produced by Drift Reconciliation; field-by-field comparison result with severity classification; unsanctioned flag; status tracking through resolution |
 | **Placement Engine** | Six-step algorithm: sovereignty filter → accreditation filter → capability filter → reserve query → tie-breaking (policy/priority/affinity/cost/load/hash) → confirm; PLC-001–006 |
@@ -3535,21 +3553,21 @@ The **single enforcement point** for all cross-boundary data and capability deci
 
 ### 53.2 Registration Specification (dcm-registration-spec.md)
 
-**Provider Type Registry:** Three-tier (Core/Community/Organization). Each entry declares permissions, default_approval_method, default_trust_level, enabled_in_profiles, capability_schema_ref. Nine core types: service_provider (human_review), meta_provider (dual_approval), storage_provider (dual_approval), policy_provider-mode-3-4 (dual_approval), credential_provider (dual_approval), auth_provider (dual_approval), information_provider/message_bus/notification_provider (human_review).
+**Provider Type Registry:** Three-tier (Core/Community/Organization). Each entry declares permissions, default_approval_method, default_trust_level, enabled_in_profiles, capability_schema_ref. Nine core types: service_provider (reviewed), meta_provider (verified), storage_provider (verified), policy_provider-mode-3-4 (verified), credential_provider (verified), auth_provider (verified), information_provider/message_bus/notification_provider (reviewed).
 
 **Registration token model:** Pre-issued by platform admin (POST /api/v1/admin/registration-tokens). Scoped to provider_type, handle_pattern, sovereignty_zone. single_use. grants_auto_approval flag. Token value presented once — never retrievable. Max trust level bounded by token scope.
 
 **Approval method resolution:** most_restrictive(provider_type_default, profile_min_method, token_grants_auto). Profile can only tighten. Token can relax to auto ONLY if profile.allow_token_auto_approval=true. Committee approval cannot be relaxed by token.
 
-**Profile defaults:** minimal/dev → human_review, token auto-approval enabled. standard → human_review, token auto-approval enabled (max trust: standard). prod → human_review; high-trust types require dual_approval; no token auto-approval. fsi → dual_approval everything; minimum_accreditation: third_party. sovereign → committee everything; minimum_accreditation: regulatory_certification; hardware_attestation required.
+**Profile defaults:** minimal/dev → reviewed, token auto-approval enabled. standard → reviewed, token auto-approval enabled (max trust: standard). prod → reviewed; high-trust types require verified; no token auto-approval. fsi → verified everything; minimum_accreditation: third_party. sovereign → authorized everything; minimum_accreditation: regulatory_certification; hardware_attestation required.
 
-**Registration pipeline:** SUBMITTED → VALIDATING (8 automated checks: provider type enabled, governance matrix pre-check, registration token, certificate, sovereignty declaration, capability consistency, health endpoint, accreditation) → PENDING_APPROVAL → ACTIVE. Approval methods: auto (immediate), human_review (one admin), dual_approval (two independent admins), committee (DCMGroup quorum).
+**Registration pipeline:** SUBMITTED → VALIDATING (8 automated checks: provider type enabled, governance matrix pre-check, registration token, certificate, sovereignty declaration, capability consistency, health endpoint, accreditation) → PENDING_APPROVAL → ACTIVE. Approval methods: auto (immediate), reviewed (one admin), verified (two independent admins), authorized (DCMGroup quorum).
 
 **Per-type capability schemas:** service_provider (resource types, capacity model, cancellation support, discovery, naturalization format, cost metadata), information_provider (data domains, authority level, query capacity, confidence model), storage_provider (store types, consistency, replication, encryption), policy_provider (mode 1-4, framework, remote endpoint, shadow mode support), auth_provider (auth modes, MFA methods, RBAC model, token lifetime), notification_provider (delivery channels, guarantees, sovereignty-aware delivery), credential_provider (credential types, secret engines, HSM support), message_bus_provider (protocols, durability, external_endpoints flag), meta_provider (constituent types, composition model, compensation support).
 
-**Federated trust postures:** verified (manually approved; full scope), vouched (Hub-introduced; bounded scope), provisional (crypto-verified; catalog_query only if profile permits). Approval: dev auto-promotes provisional; standard human_review for verified; prod/fsi dual_approval; sovereign committee+hardware-attestation. Profile federation_policy block declares all parameters.
+**Federated trust postures:** verified (manually approved; full scope), vouched (Hub-introduced; bounded scope), provisional (crypto-verified; catalog_query only if profile permits). Approval: dev auto-promotes provisional; standard reviewed for verified; prod/fsi verified; sovereign authorized+hardware-attestation. Profile federation_policy block declares all parameters.
 
-**Ongoing lifecycle:** health monitoring (polling; degraded → reduced routing; failure_threshold → UNAVAILABLE; 2×threshold → drift triggered), certificate rotation (P90D default; P14D warning; P7D transition window), capability amendments (simplified flow), graceful deregistration (entity migration plan required), forced deregistration (dual_approval/committee; entities → INDETERMINATE_REALIZATION; Recovery Policy fires).
+**Ongoing lifecycle:** health monitoring (polling; degraded → reduced routing; failure_threshold → UNAVAILABLE; 2×threshold → drift triggered), certificate rotation (P90D default; P14D warning; P7D transition window), capability amendments (simplified flow), graceful deregistration (entity migration plan required), forced deregistration (verified/authorized; entities → INDETERMINATE_REALIZATION; Recovery Policy fires).
 
 ### 53.3 Drift Reconciliation Component (doc 25 Section 7)
 
@@ -3583,12 +3601,12 @@ DCM defaults to a federated model for data creation, import, usage, and lifecycl
 ### Contributor Permission Boundaries (hard DENY — Governance Matrix enforced)
 - Consumers cannot contribute system or platform domain policies
 - Providers cannot contribute specs for resource types they don't offer
-- Provisional peers: registry entries only (no policies; committee approval)
-- Vouched peers: registry entries + service layers only (human_review always)
-- Verified peers: registry entries + policy templates + service layers (human_review standard+; auto dev)
+- Provisional peers: registry entries only (no policies; authorized approval)
+- Vouched peers: registry entries + service layers only (reviewed always)
+- Verified peers: registry entries + policy templates + service layers (reviewed standard+; auto dev)
 
 ### Universal Contribution Pipeline
-Submit → Governance Matrix evaluates contributor permissions → proposed status (shadow mode for policies) → review flow (auto / human_review / dual_approval / committee per profile + artifact type + contributor) → active → lifecycle by contributor (deprecate/retire) → platform admin override at any time
+Submit → Governance Matrix evaluates contributor permissions → proposed status (shadow mode for policies) → review flow (auto / reviewed / verified / authorized per profile + artifact type + contributor) → active → lifecycle by contributor (deprecate/retire) → platform admin override at any time
 
 ### Contribution Artifact Types by Contributor
 - Consumer: tenant policies (all 7 types), resource groups, notification subs, webhooks, cross-tenant auth records, request layers
@@ -3603,10 +3621,10 @@ Every artifact includes `contributed_by` block: contributor_type, actor/tenant/p
 
 ### Profile-Governed Auto-Approval
 - minimal/dev: most contributions auto-approved; shadow optional
-- standard: consumer/provider policies → human_review; shadow default on, P7D review period
-- prod: governance matrix rules → dual_approval; provider specs → human_review; shadow P14D
-- fsi: all consumer/provider contributions → dual_approval; shadow P30D; must review all divergence cases
-- sovereign: all → committee; shadow P30D; orphaned artifacts auto-retire
+- standard: consumer/provider policies → reviewed; shadow default on, P7D review period
+- prod: governance matrix rules → verified; provider specs → reviewed; shadow P14D
+- fsi: all consumer/provider contributions → verified; shadow P30D; must review all divergence cases
+- sovereign: all → authorized; shadow P30D; orphaned artifacts auto-retire
 
 ### Consumer API Contribution Endpoints (Section 9)
 `POST /api/v1/contribute/policy` (generates PR, activates shadow mode) · `POST /api/v1/contribute/resource-group` (activates immediately) · `GET /api/v1/contribute` (list contributions) · `DELETE /api/v1/contribute/{uuid}` (withdraw, closes PR)
@@ -3693,6 +3711,7 @@ FCM-001: contributor recorded in contributed_by; immutable. FCM-002: domain scop
 | **Federated Contribution Model** | DCM defaults to federated data creation — all authorized actor types (platform admin, consumer/tenant, service provider, peer DCM) can contribute Data artifacts within their domain scope via the GitOps PR model; see doc 28 |
 | **contributor** | Actor type that authored a Data artifact; recorded in artifact_metadata.contributed_by; determines review requirements; platform_admin / consumer / service_provider / peer_dcm |
 | **contributed_by** | Artifact metadata block recording contributor_type, actor UUID, contribution_method, pr_url, reviewed_by; immutable once set |
+| **DPO-001–006** | Design Priority system policies. DPO-001: security properties present in all profiles (not controlled by profiles). DPO-002: every security requirement needs an ease-of-use mechanism. DPO-005: minimal profile = "security with minimal overhead" not "minimal security". DPO-006: when security and ease conflict, redesign ease-of-use, not security. |
 | **FCM-001–008** | Federated Contribution Model system policies; key: FCM-002 (domain scope violations = hard DENY), FCM-003 (GitOps PR for all), FCM-008 (contributor scope limits absolute) |
 | **Unified Governance Matrix** | Single enforcement point for all cross-boundary decisions; four axes (subject/data/target/context); hard vs soft enforcement; field-level granularity (allowlist/blocklist/paths); profile-bound defaults; GMX-001–010 |
 | **governance_matrix_rule** | Artifact declaring match conditions across four axes and a decision (ALLOW/DENY/ALLOW_WITH_CONDITIONS/STRIP_FIELD/REDACT/AUDIT_ONLY) with hard or soft enforcement |
@@ -3701,7 +3720,7 @@ FCM-001: contributor recorded in contributed_by; immutable. FCM-002: domain scop
 | **REDACT** | Governance matrix decision: replace field value with `<REDACTED>`; field presence preserved; receiver knows field exists but not its value |
 | **Provider Type Registry** | Three-tier registry of approved provider types; each entry declares permissions, default_approval_method, enabled_in_profiles, capability_schema_ref |
 | **registration_token** | Pre-issued by platform admin; scoped to provider_type/handle_pattern/zone; single_use; grants_auto_approval flag; value presented once only |
-| **approval_method** | Registration approval: auto | human_review | dual_approval | committee; resolved as most_restrictive(provider_type_default, profile_min, token_effect) |
+| **approval_method** | Registration approval: auto | reviewed | verified | authorized; resolved as most_restrictive(provider_type_default, profile_min, token_effect) |
 | **Drift Reconciliation Component** | Control plane component; compares Discovered vs Realized State; produces drift records and events; never writes to Realized Store; DRC-001–005 |
 | **drift_record** | Artifact produced by Drift Reconciliation; field-by-field comparison result with severity classification; unsanctioned flag; status tracking through resolution |
 | **Placement Engine** | Six-step algorithm: sovereignty filter → accreditation filter → capability filter → reserve query → tie-breaking (policy/priority/affinity/cost/load/hash) → confirm; PLC-001–006 |
@@ -4214,9 +4233,10 @@ Questions of fact use boolean gates. Questions of degree use scoring. Secondary 
 5. **Provider accreditation richness** (weight: 0.10, inverse) — weighted portfolio sum; higher richness = lower provider risk contribution
 
 ### Profile-Governed Thresholds → Approval Routing
-auto_approve (<threshold) | human_review | dual_approval | committee (>threshold)
-Default per profile: minimal(<60), dev(<50), standard(<25), prod(<15), fsi(<10), sovereign(<5)
-**SMX-008: auto_approve_below may never exceed 50 in any profile.**
+auto_approve (<threshold) | reviewed | verified | authorized (>threshold)
+Default per profile: minimal(<45), dev(<40), standard(<25), prod(<15), fsi(<10), sovereign(<5)
+SMX-008 applies to ALL profiles including minimal — auto_approve_below may never exceed 50
+**SMX-008: auto_approve_below may never exceed 50 in any profile, including minimal.** minimal achieves higher effective auto-approval through lower signal weights, not higher thresholds.
 Signal weights must sum to 1.00 (validated at profile activation).
 
 ### Profile Enforcement Class Overrides
@@ -4318,7 +4338,127 @@ MPX-001: self constituents use standard Services API. MPX-002: DCM derives order
 
 ### Capabilities: MPX-001–MPX-007 (Domain 22 — 141 total across 22 domains)
 
-## SECTION 63 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 63 — CREDENTIAL PROVIDER MODEL (doc 31)
+
+### Two Credential Categories
+1. **DCM Interaction Credentials** — short-lived (PT15M–PT1H profile-governed), scoped to specific operation+entity+provider. Issued before every provider dispatch. Implements ZTS-002. Never stored beyond use.
+2. **Consumer-Facing Resource Credentials** — SSH keys, API keys, kubeconfigs, service account tokens, database passwords, x509 certificates. Issued as part of resource realization; delivered via Consumer API.
+
+### CPX-001 (most important): Values NEVER in DCM stores
+Credential values are never written to GitOps stores, Realized State Store, or Audit Store. DCM stores only metadata (UUID, type, scope, expiry, status). Values held by Credential Provider; retrieved via authenticated `value_retrieval_endpoint`.
+
+### Credential Record Fields
+credential_uuid, credential_type, status (active/rotating/revoked/expired), issued_at, valid_until, issued_to (actor/entity/component/provider UUID), scope (operations[], resource_types[], tenant_uuid), non_transferable:true, bound_to_ip (fsi/sovereign), value_retrieval_endpoint, value_retrieval_auth, rotation_of (parent UUID if rotation), credential_provider_uuid, entity_uuid
+
+### Issuance Flows
+- **Resource credential:** after VM/resource realized → DCM sub-request to Credential Provider → metadata stored in Realized State → consumer retrieves value via authenticated endpoint
+- **Interaction credential:** before each provider dispatch → Credential Provider issues scoped cred → included in dispatch → expires PT15M regardless; new cred issued for each interaction
+- **Bootstrap:** special mechanism before Credential Provider is registered; see doc 17
+
+### Rotation Protocol
+Trigger types: pre_expiry (default), scheduled, security_event, actor_request, provider_initiated. Standard flow: issue new cred → transition window (both valid) → revoke old at window end → notify consumer. Window: P1D consumer creds; PT5M dcm_interaction; P7D x509. Emergency rotation (security_event): NO transition window — old revoked immediately; fastest-channel delivery of new.
+
+### Revocation Model
+Revocation Triggers: actor_deprovisioned, entity_decommissioned, security_event, provider_deregistered, actor_request, ttl_expired. Propagation: credential record → status:revoked → publish credential.revoked to Message Bus → all components refresh revocation cache within SLA (PT5M standard; PT1M fsi/sovereign) → Credential Provider invalidates stored value within SLA.
+
+### Use-Time Validation (CPX-002 enforcement)
+Providers must validate at use time (not just receipt): check revocation cache, verify valid_until, verify operation within scope, verify IP binding. Reject with 403 if any check fails. Cache refresh: ≤ PT1M standard; ≤ PT30S fsi/sovereign.
+
+### CPX-006: Actor Deprovisioning
+Triggers immediate revocation of ALL credentials issued to actor. Revocation events published to Message Bus BEFORE deprovisioning acknowledged.
+CPX-007: Entity decommissioning triggers revocation of all entity-scoped credentials before decommission confirmed. Decommission that cannot revoke enters COMPENSATION_IN_PROGRESS.
+
+### Consumer API Endpoints
+GET /api/v1/resources/{entity_uuid}/credentials — list credential metadata
+GET /api/v1/credentials/{uuid}/value — retrieve value (step_up_mfa if required); every retrieval audited with retrieval_uuid
+POST /api/v1/credentials/{uuid}/rotate — request rotation; returns old/new UUIDs + transition_window_ends
+
+### Credential Provider API Contract
+POST {issue_endpoint} · POST {rotate_endpoint} · DELETE {revoke_endpoint}/{uuid} · POST {validate_endpoint} (use-time check) · GET {list_endpoint}?entity_uuid=
+
+### Profile-Governed Credential Configuration (doc 31 Section 12)
+credential_profile block controls: permitted_credential_types (homelab: api_key/x509/ssh; sovereign: hsm_backed_key only) · max_lifetime per credential type per profile · scheduled_rotation_required (ALL profiles: true; minimal/dev allow manual trigger and P365D/P180D max intervals) · min_transition_window (minimal: PT0S; standard+: P1D) · value_retrieval_auth_required (minimal: bearer_token; prod: step_up_mfa; sovereign: mtls) · audit_every_retrieval (minimal: false; standard+: true) · idle_detection_threshold (minimal: P30D; dev: P14D; standard: P7D; prod: P3D; fsi: P1D; sovereign: PT12H — NEVER null) · ip_binding_required (minimal-prod: false; fsi/sovereign: true) · fips_140_level_required (minimal: 0; fsi: Level 2; sovereign: Level 3) · approved_algorithms (minimal: forbidden_algorithms list [MD5,SHA-1,DES,3DES,RSA<2048]; standard: Ed25519/ECDSA-P-384; fsi: FIPS-only; sovereign: HSM-generated only) · revocation_check_frequency (minimal: PT5M; fsi: PT30S; sovereign: PT15S) · revocation_sla (minimal: PT10M; sovereign: PT30S)
+
+### Compliance Domain Overlays (additive, never relaxing)
+hipaa: audit_every_retrieval:true, idle_detection:P7D, max rotation api_key:P90D
+pci_dss: max_rotation_interval:P90D (mandatory — req 8.3.9), min_password_complexity:12+4-classes
+fedramp_moderate: fips_level:1 · fedramp_high: fips_level:2, ip_binding:true · dod_il4: fips:2, ip_binding:true
+
+### AAL Mapping (NIST 800-63B)
+minimal/dev=AAL1 · standard=AAL2 (MFA for sensitive types) · prod=AAL2 (MFA all) · fsi=AAL2+ (hardware MFA, FIPS L2) · sovereign=AAL3 (hardware-bound, FIPS L3, tamper evidence)
+
+### New Fields on Credential Record
+algorithm (Ed25519/ECDSA-P-384/RSA-4096/HS256/etc.) · key_usage [authentication|signing|encryption] · retrieved_count_threshold (hours; idle alert threshold)
+
+### CPX-001–CPX-012 System Policies
+CPX-001: values never in DCM stores. CPX-002: every provider interaction must present scoped credential. CPX-003: revocation propagation within declared SLA. CPX-004: emergency rotation has no transition window. CPX-005: every value retrieval audited. CPX-006: actor deprovisioning revokes all actor credentials. CPX-007: entity decommission blocks on credential revocation. CPX-008: fsi/sovereign credentials must be IP-bound or hardware-attested.
+
+### Capabilities: CPX-001–CPX-007 (Domain 23 — 148 total across 23 domains)
+
+---
+
+## SECTION 64 — AUTHORITY TIER MODEL (doc 32 — 32-authority-tier-model.md)
+
+> **Full specification:** [32-authority-tier-model.md](data-model/32-authority-tier-model.md) — ordered tier list, custom tier contribution, dynamic threshold format, impact detection pipeline, ATM-001–ATM-012.
+
+### Core Model
+Authority tiers are a **named, ordered list**. Names are stable references; numeric weight is derived from list position at evaluation time — never hardcoded. Organizations can insert custom tiers between existing ones without breaking any existing name references.
+
+### Default Tier List (ordered)
+```
+auto → reviewed → verified → authorized
+```
+Position determines weight: auto=1, reviewed=2, verified=3, authorized=4.
+If org inserts `compliance_reviewed` after `verified`: auto=1, reviewed=2, verified=3, compliance_reviewed=4, authorized=5.
+All existing references to `authorized` still resolve correctly.
+
+### decision_gravity (stable severity vocabulary)
+- `none` → auto (automated; no human judgment)
+- `routine` → reviewed (standard authority; one qualified reviewer)
+- `elevated` → verified (elevated authority; separation of duties; two distinct reviewers)
+- `critical` → authorized (highest authority weight; DCMGroup + quorum required)
+
+decision_gravity is stable and position-independent. Custom tiers must declare consistent gravity.
+
+### Dynamic Threshold Format
+Profile thresholds are a named-tier list, NOT fixed column keys:
+```yaml
+approval_routing:
+  - { tier: auto,       max_score: 24 }   # ATM-002: never exceed 50
+  - { tier: reviewed,   max_score: 59 }
+  - { tier: verified,   max_score: 79 }
+  - { tier: authorized, max_score: 100 }
+```
+Custom tiers insert into this list. Existing tier names and ranges shift only for the affected range.
+
+### Custom Tiers
+Contributed via standard contribution pipeline; require `verified` tier approval (ATM-004). Must declare decision_gravity consistent with position (ATM-003). Cannot alter dcm_gate semantics of existing DCM system tiers (ATM-005).
+
+### Authorized Tier (dcmgroup_required: true)
+Requires a declared DCMGroup and quorum threshold. Organization defines: group composition (CTO, CISO, board, single delegate — any structure), how members deliberate, what external tools they use. DCM enforces that N members of the declared DCMGroup recorded decisions via Admin API. Organization provides everything else.
+
+### Tier Registry Change Impact Detection (doc 32 Section 7)
+When tier registry changes, DCM computes a **tier_impact_diff** — a structured comparison of proposed vs current ordered list — before activation:
+- **SECURITY_DEGRADATION**: tier's gravity or position decreased → blocks activation until reviewed and accepted (ATM-009)
+- **BROKEN_REFERENCE**: tier name removed but still referenced → blocks activation until resolved (ATM-010)
+- **PROFILE_GAP**: new tier inserted but profile threshold list not updated → warning, does not block (ATM-012)
+- **SECURITY_UPGRADE / STALE_WEIGHT**: informational, does not block
+
+Degradation review gate: each SECURITY_DEGRADATION must be accepted via `POST /admin/api/v1/tier-registry/{change_uuid}/accept-degradation` by a `verified` or `authorized` tier reviewer before activation.
+
+Impact report (ATM-011) stored in Audit Store for every registry change, at proposal and at activation.
+
+Admin API: POST /admin/api/v1/tier-registry/changes (propose) · GET .../impact (report) · POST .../accept-degradation · POST .../activate
+
+### ATM-001–ATM-012 System Policies
+ATM-001: tiers identified by name; weight derived from position. ATM-002: auto tier max_score ≤ 50. ATM-003: custom gravity consistent with position. ATM-004: custom tiers require verified-tier approval. ATM-005: custom tiers cannot change existing tier dcm_gate semantics. ATM-006: dcmgroup_required tiers must have DCMGroup declared before use. ATM-007: four gravity values are DCM vocabulary (org cannot add gravity values). ATM-008: approval records store weight at creation time for point-in-time audit.
+
+### Federation Tier Resolution
+Peer DCM instances may have different custom tier lists. Resolution strategy: `gravity_match` — match by decision_gravity, not tier name. Unknown peer tiers escalate to their declared gravity level.
+
+---
+
+## SECTION 65 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, apply these instructions in addition to the numbered guidance in SECTION 60 (Documentation Structure):
 
@@ -4329,10 +4469,19 @@ When working on this project, apply these instructions in addition to the number
 176. **GateKeeper enforcement_class is required and fail-safe** — if omitted, treated as compliance (boolean deny). Operational-class GateKeepers never halt the request; they contribute a weighted risk_score_contribution to the aggregate. The aggregate risk score determines approval routing, not individual policy outcomes.
 177. **Validation output_class is required and fail-safe** — if omitted, treated as structural (boolean halt). Advisory-class Validations never halt requests; they accumulate completeness score and warning list surfaced to the consumer.
 178. **Governance Matrix is always boolean — never scored** — SMX-004 is absolute. Scoring cannot be used to route around data sovereignty or regulatory boundaries. The Governance Matrix evaluates before the scoring pipeline runs.
-179. **Profile thresholds determine routing, not individual policies** — the approval routing decision (auto/review/dual/committee) emerges from the aggregate risk score crossing profile-configured thresholds, not from individual policy flags. Changing governance sensitivity = adjusting thresholds in the profile.
+179. **Profile thresholds determine routing, not individual policies** — the approval routing decision (auto/review/dual/authorized) emerges from the aggregate risk score crossing profile-configured thresholds, not from individual policy flags. Changing governance sensitivity = adjusting thresholds in the profile.
 180. **SMX-008 is a hard system constraint** — auto_approve_below may never exceed 50 in any profile. Platform admins cannot override this. Profiles submitted with auto_approve_below > 50 fail validation.
 181. **Meta Provider is a compound service definition + standard Service Provider** — not an orchestrator. It declares the dependency graph so DCM can place, sequence, and govern constituents. For `self` constituents it executes as any Service Provider does. DCM handles all orchestration, placement, failure, and compensation.
 182. **Composite Entity has ONE entity UUID** that links Intent, Requested, Realized, and Discovered states; the UUID is assigned at Intent creation and is stable throughout the lifecycle including rehydration
 183. **DEGRADED is a valid terminal state** — not an error; a DEGRADED entity enters standard OPERATIONAL lifecycle; profile governs whether degraded delivery is accepted; Recovery Policy governs failure/compensation decisions
 184. **Parallelism emerges from the dependency graph** — constituents with no unresolved dependencies dispatch concurrently within DCM's pipeline; the Meta Provider does not manage this
+186. **Credential values are NEVER stored in DCM** (CPX-001) — only metadata is stored; values are held by the Credential Provider; retrieved via authenticated endpoint; this applies to ALL credential types including dcm_interaction credentials
+187. **Every provider dispatch requires a scoped interaction credential** (CPX-002) — issued before dispatch, scoped to the specific operation+entity+provider, expires PT15M; provider must validate at use time not just receipt; check revocation cache on each use
+189. **Security properties are present in ALL profiles — minimal profile is "security with minimal operational overhead" not "minimal security"** — rotation required in all profiles (minimal: P365D max, manual OK); idle detection on in all profiles (minimal: P30D); algorithm baseline in all profiles (minimal: forbidden list); CPX-001 (values never in DCM stores) is absolute — homelab (minimal) uses bearer_token retrieval, no scheduled rotation, no FIPS; sovereign uses mtls+hardware attestation, FIPS Level 3, PT15S revocation cache; same API contract, same data model, same CPX-001 (values never in DCM stores)
+194. **Tier registry changes are gated by impact detection** — any change that creates a SECURITY_DEGRADATION (tier gravity or position decreased) blocks activation until each degradation is explicitly accepted by a verified-tier or above reviewer via Admin API; BROKEN_REFERENCE also blocks; PROFILE_GAP is a warning that does not block; all changes produce an impact report in the Audit Store (ATM-009–012)
+193. **Authority tiers are named positions in an ordered list — not fixed enum values** — tier weight derived from list position at evaluation time; organizations insert custom tiers between existing ones without breaking existing name references; 'authorized' tier always means 'highest current gravity' regardless of what's been inserted before it; ATM-001: never hardcode tier weights
+192. **DCM provides the approval gate and audit trail — the review process is the organization's responsibility** — for authorized tier: DCM tracks quorum of a DCMGroup; the authorized deliberation and vote collection happen outside DCM; external systems (ServiceNow, Jira, Slack bots) can call Admin API to record votes; DCM does NOT build authorized management; for reviewed and verified: same principle — DCM holds the pipeline until the API receives the required decisions
+191. **The priority order is a decision framework, not a suggestion** — when security and ease of use conflict, security wins AND you must design an easy mechanism for the secure path; "it's too complex" is a reason to improve the ease-of-use design, not to reduce security; "minimal profile" means minimal overhead, never minimal security (DPO-005, DPO-006)
+190. **key_usage is declared at issuance and validated at use** (CPX-009) — a credential issued for authentication cannot be used for signing; Credential Provider must validate this at the validate endpoint; prevents algorithm confusion attacks
+188. **Actor deprovisioning and entity decommissioning trigger immediate credential revocation** (CPX-006, CPX-007) — deprovisioning publishes revocation events before the deprovisioning is acknowledged; decommission is blocked until all entity-scoped credentials are revoked
 185. **provided_by: external constituents are placed by DCM's Placement Engine** — all governance controls (sovereignty, accreditation, trust) apply; the Meta Provider has no influence over external constituent provider selection

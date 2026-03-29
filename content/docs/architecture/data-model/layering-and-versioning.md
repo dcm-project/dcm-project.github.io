@@ -1,5 +1,5 @@
 ---
-title: "DCM Data Model — Data Layers and the Assembly Process"
+title: "Layering, Versioning, and Override Precedence"
 type: docs
 weight: 3
 ---
@@ -279,7 +279,7 @@ Every layer type has a declared contributor type. The contributor determines wha
 | Base Layer | Platform Admin | system | auto |
 | Core Layer | Platform Admin | platform | auto |
 | Intermediate / Customization Layer | Platform Admin, Consumer/Tenant | platform, tenant | per profile |
-| Service Layer | Platform Admin, Service Provider | provider | human_review (standard+) |
+| Service Layer | Platform Admin, Service Provider | provider | reviewed (standard+) |
 | Request Layer | Consumer/Tenant | tenant | auto (applied directly to request) |
 | Policy Layer | All contributor types | per contributor role | per profile + contributor type |
 

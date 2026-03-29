@@ -1,5 +1,5 @@
 ---
-title: "DCM — Foundational Abstractions"
+title: "DCM Foundational Abstractions"
 type: docs
 weight: 0
 ---
@@ -271,3 +271,38 @@ These three abstractions serve DCM's core ethos:
 ---
 
 *Document maintained by the DCM Project. For questions or contributions see [GitHub](https://github.com/dcm-project).*
+
+
+---
+
+## Design Priority Order
+
+> **Full specification:** See [Design Priorities](00-design-priorities.md) for the complete priority framework, decision framework, profile scaling table, and DPO-001–006 system policies.
+
+
+Every design decision in DCM is evaluated against this priority order. When priorities conflict, higher priorities win. When there is no conflict, all four apply simultaneously.
+
+**1. Industry best practices for security**
+Security is not a feature or a profile option. It is the baseline that every other design decision must respect. Where security and convenience conflict, security wins — but the design must find a way to make the secure path the easy path. A security model that is routinely bypassed because it is too burdensome has failed at both security and usability.
+
+*In practice:* Security properties — value separation, non-transferable credentials, scoped permissions, rotation, audit, revocation propagation — are architecturally present in every profile. What profiles control is the enforcement strictness, operational automation, and threshold values. A `minimal` profile does not disable security; it implements security with minimal operational overhead.
+
+**2. Ease of use**
+DCM exists to enable self-service for application teams. If the right path is also the hard path, teams will find other paths. The goal is to make secure, governed, auditable infrastructure management the path of least resistance — not the path of compliance obligation.
+
+*In practice:* Profile defaults should eliminate configuration burden for common cases. The standard pipeline should auto-approve ordinary requests without human intervention. Policy authoring should not require Rego expertise for common patterns. The Flow GUI, scoring model, and contribution endpoints all serve this priority.
+
+**3. Extensibility and capability grouping**
+The profile system, compliance domain overlays, policy groups, and registry governance exist to make DCM adaptable to arbitrary organizational requirements without code changes. This priority serves at scale — a platform that can only be configured by modifying source code is not a platform.
+
+*In practice:* New compliance requirements should be expressible as policy additions within the existing framework. New provider types should fit the existing Provider base contract. New deployment contexts should be addressable through profile configuration.
+
+**4. Fit for purpose (always required)**
+DCM must actually manage data center infrastructure lifecycle. All of the above is in service of this purpose — not independent of it. An architecturally beautiful system that cannot provision a VM, track its drift, and decommission it cleanly has failed at its reason for existing.
+
+*In practice:* Design decisions that serve priorities 1–3 but break the end-to-end lifecycle (request → provision → operate → decommission) are not acceptable. Every capability added must have a clear answer to "how does this serve the lifecycle management mission?"
+
+---
+
+**The implication for profiles:** A `minimal` profile is "security with minimal operational overhead" — not "minimal security." The security architecture is present and correct in every profile. What varies is how much automation, how strict the thresholds, and how much manual intervention is acceptable. This is the principle that makes DCM trustworthy in a homelab and in a sovereign government deployment using the same codebase.
+

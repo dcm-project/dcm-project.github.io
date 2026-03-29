@@ -19,6 +19,7 @@ DCM is built on three foundational abstractions — **Data**, **Provider**, and 
 ## Documentation Structure
 
 ### Foundation Documents (read these first)
+| [00-design-priorities.md](data-model/00-design-priorities.md) | Design priority framework — decision hierarchy for all contributors |
 | Document | Purpose |
 |----------|---------|
 | [00-foundations.md](data-model/00-foundations.md) | The three abstractions — Data, Provider, Policy |
@@ -51,8 +52,8 @@ Consumer API · Admin API · Operator Interface · OPA Integration · Flow GUI �
 | Policy types | 7 (unified base contract + typed output schemas) |
 | Control plane components | 9 |
 | Four lifecycle states | Intent · Requested · Realized · Discovered |
-| Capabilities | 134 across 21 domains |
-| Data model documents | 34 (29 numbered + 3 foundation + 2 examples) |
+| Capabilities | 155 across 24 domains |
+| Data model documents | 38 (32 numbered + 3 foundation + 2 examples + 1 design priorities) |
 | Specifications | 10 |
 | Unresolved questions | 0 |
 

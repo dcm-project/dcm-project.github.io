@@ -58,6 +58,19 @@ Policy Providers   — external authoritative policy sources
 
 ---
 
+## 1a. Design Priority Order in Policy Profiles
+
+Profiles implement the DCM design priority order (see [Foundational Abstractions](00-foundations.md)):
+
+1. **Security:** Profile defaults implement security correctly. Lower profiles have less strict enforcement — not absent security.
+2. **Ease of use:** Profile defaults minimize configuration burden. `standard` profile should work for most deployments without customization.
+3. **Extensibility:** Profiles compose with compliance domain overlays. Organizations add compliance requirements additively without rewriting base configuration.
+4. **Fit for purpose:** Every profile must support the complete DCM lifecycle.
+
+**The `minimal` profile is not "security optional"** — it is the security model with minimal operational overhead. All security properties are present; thresholds and automation levels are relaxed.
+
+---
+
 ## 1b. Policy Authorship — Federated Contribution Model
 
 Policies in DCM are not exclusively authored by platform admins. The DCM federated contribution model enables all actor types to author policies within their permitted domain scope:
@@ -1489,7 +1502,7 @@ policy_provider_trust_elevation:
     fsi:
       approvers: [platform_admin, security_owner, compliance_officer]
       min_approvers: 2
-      dual_approval_required: true
+      verified_required: true
     sovereign:
       approvers: [platform_admin, security_owner, compliance_officer]
       min_approvers: 3

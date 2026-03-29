@@ -18,6 +18,9 @@ weight: 29
 >
 > The Scoring Model is an extension of the Policy abstraction. Scored signals are Data artifacts with lifecycle and provenance. Profile thresholds are Policy-governed configuration. The Governance Matrix remains a pure boolean gate — scoring never applies to cross-boundary data decisions.
 > See also: [Provider Contract](A-provider-contract.md) | [Policy Contract](B-policy-contract.md)
+> > **See also:** [Authority Tier Model](32-authority-tier-model.md) — the ordered authority tier list, custom tier definition, dynamic threshold format, and ATM system policies.
+
+> **Design Priority:** The Scoring Model is the primary mechanism for Priority 2 (ease of use) in service of Priority 1 (security). The auto-approval threshold (SMX-008: ≤ 50) and compliance-class GateKeepers are non-negotiable security properties. Profile thresholds and signal weights are the ease-of-use scaling mechanism. See [Design Priorities](00-design-priorities.md).
 
 ---
 
@@ -304,20 +307,32 @@ Signal weights are profile-governed and can be adjusted per deployment. The weig
 Every profile declares scoring thresholds that map the continuous risk score to a discrete approval routing decision.
 
 ```yaml
+# Approval routing uses named tier thresholds — see Authority Tier Model (doc 32)
+# Tier names are resolved from the ordered authority tier list; numeric weights are derived.
 scoring_thresholds:
-  auto_approve_below: 25        # score 0–24: auto-approve
-  human_review_above: 25        # score 25–59: one reviewer required
-  dual_approval_above: 60       # score 60–79: two independent reviewers
-  committee_above: 80           # score 80–100: declared DCMGroup reaches quorum
+  approval_routing:
+    - tier: auto
+      max_score: 24          # score 0–24: auto-approve (SMX-008: never exceed 50)
+    - tier: reviewed
+      max_score: 59          # score 25–59: reviewed tier required
+    - tier: verified
+      max_score: 79          # score 60–79: verified tier required
+    - tier: authorized
+      max_score: 100         # score 80–100: authorized tier required
+  # Custom tiers (if defined) are inserted into this list; existing names unchanged.
+  # "authorized" means DCM holds the pipeline and notifies the declared DCMGroup;
+  # the review process and deliberation are the organization's responsibility.
+  # DCM records votes via Admin API; external systems (ServiceNow, Jira, Slack)
+  # may call the API on behalf of authorized group members. See [Design Priorities](00-design-priorities.md).
   # Note: compliance-class GateKeeper deny always halts regardless of score
 ```
 
 ### 5.1 Per-Profile Threshold Defaults
 
-| Profile | auto_approve | human_review | dual_approval | committee | signal_weights |
+| Profile | auto_approve | reviewed | verified | authorized | signal_weights |
 |---------|-------------|-------------|--------------|-----------|----------------|
-| `minimal` | < 60 | 60–79 | 80–100 | — | default |
-| `dev` | < 50 | 50–79 | 80–100 | — | default |
+| `minimal` | < 45 | 45–74 | 75–100 | — | default |
+| `dev` | < 40 | 40–69 | 70–100 | — | default |
 | `standard` | < 25 | 25–59 | 60–79 | 80–100 | default |
 | `prod` | < 15 | 15–49 | 50–74 | 75–100 | gatekeeper_weight: 0.50 |
 | `fsi` | < 10 | 10–39 | 40–69 | 70–100 | gatekeeper_weight: 0.55, actor_weight: 0.25 |
@@ -334,7 +349,7 @@ resource_type_threshold_overrides:
   - resource_type: "Network.VLAN"
     auto_approve_below: 10    # VLANs require more scrutiny
   - resource_type: "Storage.Volume"
-    dual_approval_above: 40   # storage changes escalate earlier
+    verified_above: 40   # storage changes escalate earlier
 ```
 
 ### 5.3 Tenant Threshold Overrides
@@ -392,7 +407,7 @@ score_record:
   evaluated_at: <ISO 8601>
   
   request_risk_score: 47
-  routing_decision: human_review
+  routing_decision: reviewed
   routing_threshold_applied: 25      # the threshold that triggered this tier
   profile_uuid: <uuid>
   
@@ -445,7 +460,7 @@ A platform admin or reviewer can override a score-based routing decision with a 
 
 Consumers receive a simplified score view:
 - `risk_score` on request status (integer 0–100)
-- `routing_decision` (auto_approved | pending_review | pending_dual_approval | pending_committee)
+- `routing_decision` (auto_approved | pending_review | pending_verified | pending_authorized)
 - `advisory_warnings` list from advisory Validation
 - `score_drivers` — human-readable list of the top 3 contributing factors (no raw weights)
 
@@ -478,7 +493,7 @@ Policy Engine evaluation run:
   10. NEW: Aggregate → request_risk_score
   11. NEW: Apply profile thresholds → routing_decision
   12. NEW: Write Score Record to Audit Store
-  13. Route request: auto_approve | queue_for_review | queue_dual | queue_committee
+  13. Route request: auto_approve | queue_for_review | queue_dual | queue_authorized
 ```
 
 Step 2, 3, and 4 are unchanged from the existing model. Steps 5–13 are additive.

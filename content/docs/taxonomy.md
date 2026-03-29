@@ -80,6 +80,23 @@ The DCM taxonomy defines the precise vocabulary used throughout the architecture
 
 
 
+
+### Credential Provider Terms
+
+| Term | Definition |
+|------|-----------|
+| **Credential Record** | DCM Data artifact storing credential metadata (UUID, type, scope, expiry, status). Never contains the credential value — values are held by the Credential Provider. |
+| **DCM Interaction Credential** | Short-lived (PT15M–PT1H profile-governed), scoped credential issued before every provider dispatch. Implements ZTS-002. Never stored beyond the interaction window. |
+| **Credential Revocation Registry** | Fast-queryable store of revoked credential UUIDs. All components that receive interaction credentials must check this registry at each use. Cache TTL: PT1M standard; PT30S fsi/sovereign. |
+| **Transition Window** | Period during rotation when both the old and new credential are valid. Prevents downtime. P1D for consumer credentials; PT5M for dcm_interaction; P7D for x509. |
+| **Emergency Rotation** | Rotation triggered by a security event. No transition window — old credential revoked immediately. Fastest-channel notification delivery. |
+| **CPX-001–CPX-012** | Credential Provider system policies. Key: CPX-001 (values never in DCM stores — every profile), CPX-002 (every dispatch must present scoped interaction credential), CPX-009 (algorithm and key_usage declared at issuance; validated at use), CPX-012 (CPX-001 applies in ALL profiles — no exceptions). |
+| **credential_profile** | Profile-governed credential configuration block controlling: permitted credential types, max lifetime per type, rotation requirements, retrieval auth level (bearer/step-up-mfa/mtls), FIPS level enforcement, approved algorithms, revocation SLA, idle detection threshold, IP binding requirement. |
+| **AAL (Authenticator Assurance Level)** | NIST 800-63B vocabulary: AAL1 (minimal/dev — single factor), AAL2 (standard/prod — MFA required for sensitive credentials), AAL2+ (fsi — hardware MFA, FIPS L2), AAL3 (sovereign — hardware-bound, FIPS L3, tamper evidence). |
+| **Idle Credential** | A credential issued but not retrieved within the profile-governed threshold. Triggers notification but not automatic revocation. Auto-revocation after 2× threshold is profile-configurable. |
+| **key_usage** | Declared purpose of a credential: authentication, signing, or encryption. Non-overlapping — a credential issued for authentication cannot be used for signing even if the algorithm supports both. Validated at use time by Credential Provider. |
+
+
 ### Meta Provider Composability Terms
 
 | Term | Definition |
@@ -94,6 +111,45 @@ The DCM taxonomy defines the precise vocabulary used throughout the architecture
 | **MPX-001–MPX-008** | Meta Provider system policies. Key: MPX-001 (compensation required if partial delivery supported), MPX-002 (dependency-reverse decommission), MPX-006 (DEGRADED is a valid terminal state when accepted), MPX-008 (compound payload fully assembled by DCM before dispatch). |
 
 
+
+
+### Authority Tier Model Terms
+
+| Term | Definition |
+|------|-----------|
+| **Authority Tier Registry** | The ordered list of authority tiers that governs approval routing across all DCM pipelines. Stored as a versioned registry entry. Changes require impact detection before activation.  |
+| **Tier Impact Diff** | Computed before any tier registry change activates. Compares proposed ordered list to current list; classifies each changed tier as SECURITY_DEGRADATION, BROKEN_REFERENCE, PROFILE_GAP, SECURITY_UPGRADE, or NEW. |
+| **SECURITY_DEGRADATION** | Impact classification for a tier whose gravity or position decreased after a registry change. Blocks registry activation until explicitly accepted by a verified-tier or above reviewer (ATM-009). |
+| **BROKEN_REFERENCE** | Impact classification when a tier name referenced in active configuration no longer exists in the registry. Blocks activation until resolved (ATM-010). |
+| **PROFILE_GAP** | Impact classification when a profile's threshold list is incomplete after new tier insertion. Warning only — does not block activation (ATM-012). | Stored as a versioned registry entry. Custom tiers are inserted into the list by position; existing tier names remain stable. |
+| **decision_gravity** | Stable, position-independent severity classification on each tier: `none` (auto), `routine` (reviewed), `elevated` (verified), `critical` (authorized). Used by the scoring model and profile system to reason about tier severity independently of tier names. |
+| **Tier Weight** | Numeric value derived from a tier's position in the ordered list. Never hardcoded — resolved at evaluation time. Stored in approval records for point-in-time audit (ATM-008). |
+| **Custom Tier** | An organization-defined tier inserted between existing tiers. Must declare `decision_gravity` consistent with position. Requires `verified` tier approval to contribute (ATM-004). |
+| **ATM-001–ATM-008** | Authority Tier Model system policies. Key: ATM-001 (tiers identified by name; weight derived from position), ATM-002 (auto tier max_score ≤ 50), ATM-003 (custom tier gravity must be consistent with position), ATM-008 (approval records store weight at creation for point-in-time audit). |
+
+
+### Authority Tier Terms
+
+| Term | Definition |
+|------|-----------|
+| **Authority Tier** | The required organizational authority level for a decision, expressed as a named position in an ordered list. DCM defines four tiers; organizations define what constitutes sufficient authority at each level. |
+| **`auto`** | No human judgment required. System confidence (scoring, validation) is sufficient to proceed. |
+| **`reviewed`** | Standard authority required. One qualified reviewer in the relevant domain must record a decision via the DCM Admin API. Who constitutes a qualified reviewer is the organization's definition. |
+| **`verified`** | Elevated authority required. Two independent, distinct reviewers must each record a decision. The same actor cannot satisfy both. Enforces separation of duties. |
+| **`authorized`** | Highest authority level required. Most consequential decisions — policy governance changes, regulated actions, high-risk provider registrations. N members of a declared DCMGroup must record decisions via the Admin API. The authority group composition (CTO, CISO, security board, one person with delegated authority) is entirely the organization's definition. |
+| **DCMGroup (authority context)** | A declared set of actors who constitute the required authority for `authorized` tier decisions. Platform admin declares membership; quorum threshold (N of M) is profile-governed. |
+| **`recorded_via`** | Audit field on approval decisions capturing which system submitted the decision (dcm_admin_ui, servicenow, jira, slack_bot, api_direct). Informational for audit; not enforced. |
+
+
+### Design Priority Terms
+
+| Term | Definition |
+|------|-----------|
+| **Design Priority Order** | The four-priority hierarchy governing all DCM design decisions: (1) Security — industry best practices are the baseline; (2) Ease of use — secure path must be easy path; (3) Extensibility — adaptable through configuration not code; (4) Fit for purpose — always required. |
+| **DPO-001–006** | Design Priority system policies. Key: DPO-001 (security properties present in all profiles), DPO-002 (every security requirement needs ease-of-use mechanism), DPO-005 (`minimal` profile = minimal overhead not minimal security), DPO-006 (when security and ease conflict, redesign ease-of-use not security). |
+| **Priority 1 (Security)** | Security properties are architecturally present in ALL profiles. Profiles control enforcement strictness and automation level — never whether the property exists. Non-negotiable across all profiles: CPX-001, SMX-004, SMX-008, CPX-003, CPX-005 first retrieval audit, forbidden algorithm baseline. |
+| **Priority 2 (Ease of use)** | The secure path must also be the easy path. Every security requirement must be accompanied by an ease-of-use mechanism. The scoring model auto-approval threshold, profile defaults, and Flow GUI visual condition builder are all Priority 2 implementations. |
+
 ### Scoring Model Terms
 
 | Term | Definition |
@@ -106,7 +162,7 @@ The DCM taxonomy defines the precise vocabulary used throughout the architecture
 | **actor_risk_history_score** | Decay-weighted (λ=0.1, half-life ≈7 days) history of an actor's previous request outcomes. Contributes to request risk score. Not exposed to other consumers. |
 | **quota_pressure_score** | Continuous score representing how close a Tenant is to quota limits for the requested resource type. Zero below 75% utilization; 100 at full quota. |
 | **accreditation_richness_score** | Weighted sum of a provider's accreditation portfolio normalized to 0–100. Influences placement preference and inversely contributes to provider risk signal. |
-| **scoring_threshold** | Profile-governed boundary on the request risk score that maps to an approval routing tier. Four tiers: auto_approve, human_review, dual_approval, committee. `auto_approve_below` may not exceed 50 (SMX-008). |
+| **scoring_threshold** | Profile-governed boundary on the request risk score that maps to an approval routing tier. Four tiers: auto_approve, reviewed, verified, authorized. `auto_approve_below` may not exceed 50 (SMX-008). |
 | **Risk Score Aggregator** | Sub-function of the Policy Engine. Assembles five scoring signals into the request risk score after all compliance-class and Governance Matrix evaluations complete. |
 | **regulatory_mandate** | Policy metadata flag. When `true`, the policy's `enforcement_class: compliance` cannot be demoted to operational by any profile (SMX-003). Set by platform admins, audited. |
 | **score_drivers** | Human-readable list of the top contributing factors to a request risk score. Exposed to consumers (top 3 only). Full breakdown in Score Record for platform admins. |
@@ -181,6 +237,9 @@ Terms to avoid because they introduce ambiguity. Use the precise alternatives in
 | FCM | Federated Contribution Model |
 | SMX | Scoring Model |
 | MPX | Meta Provider Composability |
+| CPX | Credential Provider Model |
+| DPO | Design Priority Order |
+| ATM | Authority Tier Model |
 
 ---
 

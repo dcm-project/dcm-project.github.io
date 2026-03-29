@@ -60,7 +60,7 @@ provider_type_registry_entry:
     may_receive_sovereign_data: false          # hard limit; never overridden
 
   # Approval method defaults (profile may override — see Section 4)
-  default_approval_method: human_review        # auto | human_review | dual_approval | committee
+  default_approval_method: reviewed        # auto | reviewed | verified | authorized
 
   # Minimum trust level granted after approval
   default_trust_level: standard               # minimal | standard | elevated | high
@@ -82,16 +82,16 @@ provider_type_registry_entry:
 
 | # | provider_type_id | Default Approval | Enabled In |
 |---|-----------------|-----------------|------------|
-| 1 | `service_provider` | human_review | all profiles |
-| 2 | `information_provider` | human_review | all profiles |
-| 3 | `meta_provider` | dual_approval | standard+ |
-| 4 | `storage_provider` | dual_approval | all profiles |
-| 5 | `message_bus_provider` | human_review | dev+ (external endpoints: standard+) |
-| 6 | `policy_provider` (Mode 1-2) | human_review | all profiles |
-| 7 | `policy_provider` (Mode 3-4) | dual_approval | standard+ |
-| 8 | `credential_provider` | dual_approval | standard+ |
-| 9 | `auth_provider` | dual_approval | all profiles |
-| 10 | `notification_provider` | human_review | all profiles |
+| 1 | `service_provider` | reviewed | all profiles |
+| 2 | `information_provider` | reviewed | all profiles |
+| 3 | `meta_provider` | verified | standard+ |
+| 4 | `storage_provider` | verified | all profiles |
+| 5 | `message_bus_provider` | reviewed | dev+ (external endpoints: standard+) |
+| 6 | `policy_provider` (Mode 1-2) | reviewed | all profiles |
+| 7 | `policy_provider` (Mode 3-4) | verified | standard+ |
+| 8 | `credential_provider` | verified | standard+ |
+| 9 | `auth_provider` | verified | all profiles |
+| 10 | `notification_provider` | reviewed | all profiles |
 
 Note: Mode 3-4 Policy Providers are treated as a separate registry entry from Mode 1-2 due to the elevated trust requirements.
 
@@ -155,14 +155,16 @@ Token values are presented exactly once — at creation. They are never retrieva
 
 ## 3. Approval Method Configuration
 
+> **Authority Tier Model:** Approval methods (`reviewed`, `verified`, `authorized`) are defined in the [Authority Tier Model](../data-model/32-authority-tier-model.md) as a named, ordered list. Organizations may insert custom tiers. The effective method resolution (Section 3.2) uses tier names; DCM resolves numeric weight from the ordered list at evaluation time (ATM-001).
+
 ### 3.1 The Four Approval Methods
 
 | Method | Description | Approval path |
 |--------|-------------|--------------|
 | `auto` | DCM validates automatically; activates without human review | All validation checks pass → active |
-| `human_review` | One platform admin must explicitly approve | Submitted → validated → pending_approval → one admin approves → active |
-| `dual_approval` | Two platform admins must independently approve | Submitted → validated → pending_approval → two admins approve → active |
-| `committee` | A declared DCMGroup must reach quorum | Submitted → validated → pending_approval → committee votes → quorum → active |
+| `reviewed` | One platform admin must explicitly approve | Submitted → validated → pending_approval → one admin approves → active |
+| `verified` | Two platform admins must independently approve | Submitted → validated → pending_approval → two admins approve → active |
+| `authorized` | N members of a declared DCMGroup must record decisions via the Admin API; quorum tracked by DCM; deliberation process is the organization's responsibility | Submitted → validated → pending_approval → DCMGroup members record votes via Admin API (or external systems calling API) → quorum → active |
 
 ### 3.2 Effective Approval Method Resolution
 
@@ -179,34 +181,34 @@ effective_method = most_restrictive(
 Resolution rules:
 - Profile minimum overrides provider type default (always upward; profiles can only tighten)
 - A valid registration token can relax the effective method to `auto` ONLY if the profile's `allow_token_auto_approval` is true
-- `committee` cannot be relaxed by any token
+- `authorized` cannot be relaxed by any token
 
 ### 3.3 Profile Registration Policy Defaults
 
 ```yaml
 profile_registration_policy:
   minimal:
-    min_approval_method: human_review
+    min_approval_method: reviewed
     allow_token_auto_approval: true        # token can enable auto for any type
     require_sovereignty_declaration: false
     require_health_check_before_approval: false
 
   dev:
-    min_approval_method: human_review
+    min_approval_method: reviewed
     allow_token_auto_approval: true
     require_sovereignty_declaration: false
     require_health_check_before_approval: true
 
   standard:
-    min_approval_method: human_review
+    min_approval_method: reviewed
     allow_token_auto_approval: true        # tokens can auto-approve non-elevated types
     token_auto_approval_max_trust: standard  # tokens cannot auto-approve elevated types
     require_sovereignty_declaration: true
     require_health_check_before_approval: true
 
   prod:
-    min_approval_method: human_review
-    high_trust_types_require: dual_approval  # storage, auth, policy-mode3-4, credential
+    min_approval_method: reviewed
+    high_trust_types_require: verified  # storage, auth, policy-mode3-4, credential
     allow_token_auto_approval: false          # no auto-approval in prod
     require_sovereignty_declaration: true
     require_accreditation_submission: true   # must submit at least self_declared
@@ -214,7 +216,7 @@ profile_registration_policy:
     approval_timeout: P7D                    # auto-reject if not approved within 7 days
 
   fsi:
-    min_approval_method: dual_approval       # everything requires dual approval
+    min_approval_method: verified       # everything requires dual approval
     allow_token_auto_approval: false
     require_sovereignty_declaration: true
     require_accreditation_submission: true
@@ -224,14 +226,14 @@ profile_registration_policy:
     approval_timeout: P14D
 
   sovereign:
-    min_approval_method: committee           # everything requires committee approval
+    min_approval_method: authorized           # everything requires authorized approval
     allow_token_auto_approval: false
     require_sovereignty_declaration: true
     require_accreditation_submission: true
     minimum_accreditation_type: regulatory_certification
     require_hardware_attestation: true
     require_governance_matrix_check: true
-    committee_group_handle: "platform/registration-committee"
+    authorized_group_handle: "platform/registration-authorized"
     approval_timeout: P30D
 ```
 
@@ -341,7 +343,7 @@ Approval flow depends on effective_approval_method:
 
 **auto:** Registration immediately advances to ACTIVE after validation passes.
 
-**human_review:**
+**reviewed:**
 ```
 Registration enters PENDING_APPROVAL
 Platform admin notification dispatched (urgency: medium)
@@ -354,7 +356,7 @@ On rejection: → REJECTED with required reason field
 On timeout (approval_timeout): → REJECTED with reason "approval_timeout"
 ```
 
-**dual_approval:**
+**verified:**
 ```
 Registration enters PENDING_APPROVAL
 Two independent platform admins must approve
@@ -364,10 +366,10 @@ Same actor cannot approve twice
 On timeout: → REJECTED
 ```
 
-**committee:**
+**authorized:**
 ```
 Registration enters PENDING_APPROVAL
-Committee DCMGroup notified (all members)
+Authority group notified (all members)
 Members vote via Admin API within declared quorum window
 Quorum reached: → ACTIVE
 Quorum not reached within approval_timeout: → REJECTED
@@ -676,10 +678,10 @@ Remote DCM requests federation peering
 
   ▼ Approval flow (per profile):
   │   dev:      provisional auto-promoted to verified (if governance matrix permits)
-  │   standard: human_review for verified promotion; provisional gets limited scope
-  │   prod:     dual_approval for verified promotion; no provisional operations
-  │   fsi:      dual_approval + accreditation check; no provisional
-  │   sovereign: committee_approval + hardware attestation; no provisional
+  │   standard: reviewed for verified promotion; provisional gets limited scope
+  │   prod:     verified for verified promotion; no provisional operations
+  │   fsi:      verified + accreditation check; no provisional
+  │   sovereign: authorized_approval + hardware attestation; no provisional
 
   ▼ Scope assignment per trust posture
 
@@ -704,19 +706,19 @@ profile_federation_policy:
 
   standard:
     permitted_trust_postures: [verified, vouched]
-    approval_method_for_verified: human_review
+    approval_method_for_verified: reviewed
     cross_jurisdiction_permitted: true
     accreditation_required_for_federation: false
 
   prod:
     permitted_trust_postures: [verified]
-    approval_method_for_verified: dual_approval
+    approval_method_for_verified: verified
     cross_jurisdiction_permitted: true
     accreditation_required_for_federation: false
 
   fsi:
     permitted_trust_postures: [verified]
-    approval_method_for_verified: dual_approval
+    approval_method_for_verified: verified
     cross_jurisdiction_permitted: false
     accreditation_required_for_federation: true
     minimum_peer_accreditation: third_party
@@ -724,7 +726,7 @@ profile_federation_policy:
 
   sovereign:
     permitted_trust_postures: [verified]
-    approval_method_for_verified: committee
+    approval_method_for_verified: authorized
     cross_jurisdiction_permitted: false
     accreditation_required_for_federation: true
     minimum_peer_accreditation: sovereign_authorization
@@ -805,7 +807,7 @@ Provider status → DEREGISTERED
 ```
 POST /api/v1/admin/providers/{provider_uuid}/force-deregister
 Role: platform_admin
-Requires: dual_approval (fsi/sovereign: committee)
+Requires: verified (fsi/sovereign: authorized)
 
 Immediate effect:
   Provider status → FORCED_DEREGISTERED

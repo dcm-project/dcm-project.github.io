@@ -24,6 +24,29 @@ DCM is **not a provisioning tool**. It is the management plane that sits above p
 
 ---
 
+
+## Design Priority Order
+
+Every design decision in DCM is evaluated against this hierarchy. When priorities conflict, higher priorities win.
+
+| Priority | Principle | What it means |
+|----------|-----------|--------------|
+| **1. Security** | Industry best practices are the baseline | Security properties present in ALL profiles; profiles control enforcement strictness, not whether security applies |
+| **2. Ease of use** | The secure path must be the easy path | Auto-approval for ordinary requests; profile defaults eliminate configuration burden; secure path is easy path |
+| **3. Extensibility** | Adaptable through configuration, not code | New requirements as policy additions; new contexts as profile configuration; new providers as contract implementations; custom authority tiers inserted into ordered list without breaking existing references |
+| **4. Fit for purpose** | Always required | Everything serves the lifecycle management mission: request → provision → operate → decommission |
+
+**The `minimal` profile is "security with minimal operational overhead" — not "minimal security."** All security properties are architecturally present in every profile. What varies is automation level, enforcement thresholds, and acceptable manual intervention.
+
+---
+## Authority Tier Model
+
+DCM governs decisions through an extensible **authority tier model** — a named, ordered list where each tier expresses a required level of organizational decision gravity. The default tiers are `auto → reviewed → verified → authorized`, but organizations can insert custom tiers between existing ones. Tier weight is derived from list position at evaluation time; existing tier name references always resolve correctly.
+
+When the tier registry changes, DCM computes a **tier impact diff** identifying any items whose effective authority requirement changed. Security degradations (lower gravity than before) block activation until explicitly accepted by a verified-tier reviewer. See [Authority Tier Model](data-model/authority-tier-model/).
+
+---
+
 ## The Problem DCM Solves
 
 | Challenge | DCM Response |
@@ -158,7 +181,7 @@ DCM uses a **hybrid model**: questions of fact use boolean gates; questions of d
 
 **Five scoring signals** aggregate into a request risk score (0–100): operational GateKeeper contributions (45%), actor risk history (20%), completeness warnings (15%), quota pressure (10%), provider accreditation richness (10%).
 
-**Profile-governed thresholds** map the score to approval routing: auto-approve / human_review / dual_approval / committee. Thresholds are tunable per profile without touching individual policies. Profiles can also override enforcement class per policy — escalating operational policies to compliance-class, or demoting non-regulatory compliance policies to operational.
+**Profile-governed thresholds** map the score to approval routing: auto / reviewed / verified / authorized (+ custom tiers). Thresholds use a named-tier dynamic list; see [Authority Tier Model](data-model/authority-tier-model/). Thresholds are tunable per profile without touching individual policies. Profiles can also override enforcement class per policy — escalating operational policies to compliance-class, or demoting non-regulatory compliance policies to operational.
 
 The Governance Matrix is **always boolean** — scoring never applies to cross-boundary data decisions.
 

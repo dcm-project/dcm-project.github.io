@@ -1,5 +1,5 @@
 ---
-title: "DCM Data Model — Federated Contribution Model"
+title: "Federated Contribution Model"
 type: docs
 weight: 28
 ---
@@ -19,6 +19,8 @@ weight: 28
 > The federated contribution model governs how Data artifacts are created and managed across all contributor types. It extends the Data abstraction with explicit contributor identity, applies Policies to govern contribution permissions and review requirements, and uses the Provider abstraction for cross-instance federation of contributions.
 
 ---
+
+> **Authority Tier Reference:** Contribution approval tiers (`reviewed`, `verified`, `authorized`) are named positions in the [Authority Tier Model](32-authority-tier-model.md) ordered list. Organizations may add custom tiers between existing ones. Changes to the tier registry that affect contribution approval requirements trigger impact detection (ATM-009–ATM-012).
 
 ## 1. Purpose and Principle
 
@@ -78,7 +80,7 @@ This is not a special model for special cases. It is the same GitOps PR workflow
 |-------------|-----------------|
 | Consumer | System or platform domain policies; core layers; resource type specs (unless granted elevated role); provider catalog items for other providers |
 | Service Provider | Policies outside their resource type domain; core layers; other providers' catalog items; tenant-domain policies for specific Tenants |
-| Peer DCM | Artifacts above the federation trust level granted; system-domain policies without committee approval; sovereignty zones for jurisdictions not in their declared scope |
+| Peer DCM | Artifacts above the federation trust level granted; system-domain policies without authorized approval; sovereignty zones for jurisdictions not in their declared scope |
 
 ---
 
@@ -138,9 +140,9 @@ Contributor authors a data artifact
   │
   ▼ Review flow (per profile + artifact type):
   │   auto:          artifact activates immediately
-  │   human_review:  one platform admin or designated reviewer approves
-  │   dual_approval: two independent reviewers approve
-  │   committee:     declared DCMGroup reaches quorum
+  │   reviewed:  one platform admin or designated reviewer approves
+  │   verified: two independent reviewers approve
+  │   authorized:   N members of declared authority group record decisions via Admin API
   │
   ▼ On approval → status: active
   │   For policies: shadow mode results reviewed; full enforcement begins
@@ -157,21 +159,21 @@ Review requirements are profile-governed. The table below shows defaults:
 
 | Artifact Type | Platform Admin | Consumer/Tenant | Service Provider |
 |--------------|---------------|-----------------|-----------------|
-| Tenant-domain policy | auto | human_review (standard+) | human_review |
-| Resource Type Spec (Org tier) | auto | ❌ | human_review |
-| Resource Type Spec (Community tier) | human_review | ❌ | dual_approval |
-| Provider Catalog Item | auto | ❌ | human_review |
-| Service Layer | auto | ❌ | human_review |
-| Governance Matrix Rule (tenant) | auto | dual_approval | ❌ |
-| Governance Matrix Rule (platform) | human_review | ❌ | ❌ |
-| Accreditation | human_review | ❌ | human_review |
+| Tenant-domain policy | auto | reviewed (standard+) | reviewed |
+| Resource Type Spec (Org tier) | auto | ❌ | reviewed |
+| Resource Type Spec (Community tier) | reviewed | ❌ | verified |
+| Provider Catalog Item | auto | ❌ | reviewed |
+| Service Layer | auto | ❌ | reviewed |
+| Governance Matrix Rule (tenant) | auto | verified | ❌ |
+| Governance Matrix Rule (platform) | reviewed | ❌ | ❌ |
+| Accreditation | reviewed | ❌ | reviewed |
 
 **Profile overrides:**
 - `dev`: most contributions auto-approved; shadow mode optional
-- `standard`: consumer policies require human_review; provider specs require human_review
-- `prod`: consumer governance matrix rules require dual_approval; provider specs require dual_approval
-- `fsi`: all contributions require dual_approval; community registry entries require committee
-- `sovereign`: all contributions require committee approval
+- `standard`: consumer policies require reviewed; provider specs require reviewed
+- `prod`: consumer governance matrix rules require verified; provider specs require verified
+- `fsi`: all contributions require verified; community registry entries require authorized
+- `sovereign`: all contributions require authorized approval
 
 ---
 
@@ -224,7 +226,7 @@ Response 202 Accepted:
   "status": "proposed",
   "shadow_mode": true,
   "review_required": true,
-  "review_type": "human_review",
+  "review_type": "reviewed",
   "reviewer_group": "platform-admins",
   "pr_url": "https://git.corp.example.com/dcm-policies/pulls/145",
   "shadow_results_url": "/flow/api/v1/shadow/<policy_uuid>"
@@ -296,7 +298,7 @@ Response 202 Accepted:
   "resource_type_fqn": "Storage.DistributedVolume",
   "status": "proposed",
   "review_required": true,
-  "review_type": "human_review",
+  "review_type": "reviewed",
   "pr_url": "https://git.corp.example.com/dcm-registry/pulls/89"
 }
 ```
@@ -340,9 +342,9 @@ Federation contributions inherit the federation trust posture of the contributin
 
 | Peer trust posture | Contribution review requirement | Artifact types permitted |
 |-------------------|--------------------------------|------------------------|
-| `verified` | human_review (standard+); auto (dev) | Registry entries, policy templates, service layers |
-| `vouched` | human_review always | Registry entries, service layers only |
-| `provisional` | Committee approval | Registry entries only (no policies) |
+| `verified` | reviewed (standard+); auto (dev) | Registry entries, policy templates, service layers |
+| `vouched` | reviewed always | Registry entries, service layers only |
+| `provisional` | `authorized` tier approval | Registry entries only (no policies) |
 
 **Hard rule:** A peer DCM cannot contribute artifacts at a higher domain level than its trust posture permits. A `vouched` peer cannot contribute system-domain policies. This is enforced by the Governance Matrix at the federation contribution boundary.
 
@@ -377,7 +379,13 @@ In a Hub-Spoke federation, the Hub DCM is the authoritative source for platform-
 hub_policy_distribution:
   hub_dcm_uuid: <uuid>
   distribution_type: push          # Hub pushes on policy change
-  auto_approve_from_hub: true      # prod profile: false; dev: true
+  auto_approve_from_hub:           # profile-governed; security-first: prod+ always requires review
+    minimal: true
+    dev: true
+    standard: true
+    prod: false         # reviewed required even from verified Hub
+    fsi: false          # verified required
+    sovereign: false    # authorized approval required
   policy_handles_subscribed:
     - "system/compliance/hipaa/*"
     - "system/governance/drift-remediation"
@@ -490,19 +498,19 @@ Each deployment profile has a default contribution policy that governs auto-appr
 ```yaml
 contribution_policy:
   minimal:
-    consumer_policy_auto_approve: true
+    consumer_policy_auto_approve: true             # ease of use: homelab auto-approves
     provider_spec_auto_approve: true
-    federation_contribution_auto_approve: true    # dev/homelab: trust all
-    shadow_mode_default: false
+    federation_contribution_auto_approve: true    # homelab: federation auto-approved
+    shadow_mode_default: true                     # security: shadow always on even in minimal
 
   dev:
     consumer_policy_auto_approve: true
     provider_spec_auto_approve: true
-    federation_contribution_auto_approve: false   # human_review for federation
+    federation_contribution_auto_approve: false   # reviewed for federation
     shadow_mode_default: true                     # shadow mode on by default
 
   standard:
-    consumer_policy_auto_approve: false           # human_review for all policies
+    consumer_policy_auto_approve: false           # reviewed for all policies
     provider_spec_auto_approve: false
     federation_contribution_auto_approve: false
     shadow_mode_default: true
@@ -510,27 +518,27 @@ contribution_policy:
 
   prod:
     consumer_policy_auto_approve: false
-    consumer_governance_matrix_requires: dual_approval
+    consumer_governance_matrix_requires: verified
     provider_spec_auto_approve: false
-    provider_spec_requires: human_review
-    federation_contribution_requires: human_review
+    provider_spec_requires: reviewed
+    federation_contribution_requires: reviewed
     shadow_mode_default: true
     shadow_review_period: P14D
 
   fsi:
     consumer_policy_auto_approve: false
-    consumer_policy_requires: dual_approval
-    consumer_governance_matrix_requires: dual_approval
-    provider_spec_requires: dual_approval
-    federation_contribution_requires: dual_approval
+    consumer_policy_requires: verified
+    consumer_governance_matrix_requires: verified
+    provider_spec_requires: verified
+    federation_contribution_requires: verified
     shadow_mode_default: true
     shadow_review_period: P30D
     min_shadow_divergence_review: true            # must review all divergence cases
 
   sovereign:
-    consumer_policy_requires: committee
-    provider_spec_requires: committee
-    federation_contribution_requires: committee
+    consumer_policy_requires: authorized
+    provider_spec_requires: authorized
+    federation_contribution_requires: authorized
     shadow_mode_default: true
     shadow_review_period: P30D
     min_shadow_divergence_review: true
@@ -580,7 +588,7 @@ governance_matrix_rule:
 | `FCM-004` | Policies submitted by any contributor enter proposed (shadow) status by default. Shadow mode results must be available before the active profile's shadow_review_period expires. |
 | `FCM-005` | Platform admins may override any contributor's artifact lifecycle at any time. Override actions are audited. |
 | `FCM-006` | Orphaned artifacts (contributor access revoked) do not automatically deactivate. A platform admin assigns a new owner or explicitly retires them. Exception: sovereign profile auto-retires orphaned artifacts. |
-| `FCM-007` | Federation contributions from peer DCMs are scoped by the peer's federation trust posture. Verified peers: human_review (standard+). Vouched peers: human_review always. Provisional peers: committee approval. |
+| `FCM-007` | Federation contributions from peer DCMs are scoped by the peer's federation trust posture. Verified peers: reviewed (standard+). Vouched peers: reviewed always. Provisional peers: authorized approval. |
 | `FCM-008` | Contributor-tier scope limits are absolute. A consumer-authored policy in the tenant domain cannot affect the system or platform domain regardless of the policy's declared match conditions. |
 
 ---

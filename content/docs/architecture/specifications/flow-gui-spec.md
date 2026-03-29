@@ -834,9 +834,11 @@ Response 200:
   "active_profile": "standard",
   "thresholds": {
     "auto_approve_below": 25,
-    "human_review_above": 25,
-    "dual_approval_above": 60,
-    "committee_above": 80
+    "approval_routing": [
+      { "tier": "reviewed", "max_score": 59 },
+      { "tier": "verified", "max_score": 79 },
+      { "tier": "authorized", "max_score": 100 }
+    ]
   },
   "nodes": [
     {
@@ -853,7 +855,7 @@ Response 200:
 
 The Profile and Governance Management view (Section 7) is extended with a **Scoring Thresholds** panel:
 
-- Visual slider showing auto_approve / human_review / dual_approval / committee bands on a 0–100 scale
+- Visual slider showing auto_approve / reviewed / verified / authorized bands on a 0–100 scale
 - Signal weight configuration (pie chart showing proportional contribution of each signal)
 - Policy enforcement override management (which policies are promoted/demoted in this profile)
 - Live preview: "At the current thresholds, X% of last week's requests would have been auto-approved"
@@ -863,7 +865,7 @@ The Profile and Governance Management view (Section 7) is extended with a **Scor
 The Flow Simulation output (Section 5) is extended with a score breakdown panel:
 
 ```
-Simulation result: risk_score=47, routing=human_review
+Simulation result: risk_score=47, routing=reviewed
 
 Score breakdown:
   Operational GateKeepers:  50 × 0.45 = 22.5
@@ -879,7 +881,7 @@ Score breakdown:
     └── (richness score: 85/100 → contribution: 1.5)
   ─────────────────────────────────────────────
   Total:                              37.8 → 47 (normalized)
-  Threshold (human_review):           25
+  Threshold (reviewed):           25
   Routing decision:                   HUMAN_REVIEW ✓
 ```
 
@@ -898,7 +900,7 @@ Request body:
 Response 200:
 {
   "risk_score": 47,
-  "routing_decision": "human_review",
+  "routing_decision": "reviewed",
   "signal_breakdown": { ... },
   "threshold_applied": 25,
   "profile": "standard",

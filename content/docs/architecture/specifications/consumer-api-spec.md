@@ -319,7 +319,7 @@ Response 202 Accepted:
   "status_url": "/api/v1/requests/{request_uuid}/status",
   "dry_run_result": null,             # null if auto-approve; populated if review required
   "risk_score": 47,                   # aggregate request risk score (0–100)
-  "routing_decision": "human_review", # auto_approved | pending_review | pending_dual_approval | pending_committee
+  "routing_decision": "reviewed", # auto_approved | pending_review | pending_verified | pending_authorized
   "score_drivers": [                  # top 3 contributing factors (human-readable)
     "Estimated monthly cost exceeds Tenant ceiling",
     "Request submitted outside business hours",
@@ -1215,7 +1215,7 @@ Response 200:
         "profile": "standard"
       },
       "advisory_warnings": 1,
-      "policy_name": "scoring-threshold: standard/human_review"
+      "policy_name": "scoring-threshold: standard/reviewed"
     }
   ],
   "total": 2
@@ -1224,11 +1224,15 @@ Response 200:
 
 ### 6b.3 Approve or Reject a Request
 
+This endpoint is used by reviewers with the appropriate role. It is designed to be callable by external systems (ServiceNow, Jira workflow integrations, Slack bots) that act on behalf of a reviewer — the `Authorization` header identifies which reviewer is recording the decision. DCM provides the gate and audit trail; the review process is the organization's responsibility. See [Design Priorities — Approval Tier Model](../data-model/00-design-priorities.md).
+
 ```
 POST /api/v1/approvals/{approval_uuid}
 {
   "decision": "approve | reject",
-  "reason": "<required for reject; optional for approve>"
+  "reason": "<required for reject; optional for approve>",
+  "recorded_via": "dcm_ui | servicenow | jira | slack_bot | api_direct | other",
+  "external_reference": "<optional ticket ID for audit trail>"
 }
 
 Response 202 Accepted:
@@ -1600,7 +1604,7 @@ Response 202 Accepted:
   "status": "proposed",
   "shadow_mode": true,
   "review_required": true,
-  "review_type": "human_review",
+  "review_type": "reviewed",
   "pr_url": "https://git.corp.example.com/dcm-policies/pulls/145",
   "shadow_results_url": "/flow/api/v1/shadow/<policy_uuid>"
 }
@@ -1670,6 +1674,77 @@ Response 200:
   "contribution_uuid": "<uuid>",
   "status": "withdrawn",
   "pr_closed": true
+}
+```
+
+
+
+---
+
+## 9b. Credential Management
+
+### 9b.1 List Credentials for a Resource
+
+```
+GET /api/v1/resources/{entity_uuid}/credentials
+
+Response 200:
+{
+  "credentials": [
+    {
+      "credential_uuid": "<uuid>",
+      "credential_type": "ssh_key",
+      "status": "active",
+      "issued_at": "<ISO 8601>",
+      "valid_until": "<ISO 8601>",
+      "scope": { "operations": ["ssh_access"] },
+      "retrieval": {
+        "endpoint": "/api/v1/credentials/<uuid>/value",
+        "auth_required": "step_up_mfa",
+        "retrieval_count": 1,
+        "last_retrieved_at": "<ISO 8601>"
+      },
+      "rotation_schedule": {
+        "next_rotation_at": "<ISO 8601>",
+        "rotation_trigger": "scheduled"
+      }
+    }
+  ]
+}
+```
+
+### 9b.2 Retrieve Credential Value
+
+```
+GET /api/v1/credentials/{credential_uuid}/value
+X-DCM-StepUp-Token: <completed-challenge>  # if auth_required: step_up_mfa
+
+Response 200:
+{
+  "credential_uuid": "<uuid>",
+  "credential_type": "ssh_key",
+  "value": { "private_key": "...", "public_key": "...", "username": "dcm-provisioned" },
+  "valid_until": "<ISO 8601>",
+  "retrieval_uuid": "<uuid>"
+}
+
+Response 410 Gone:  { "error": "credential_revoked_or_expired" }
+```
+
+### 9b.3 Request Credential Rotation
+
+```
+POST /api/v1/credentials/{credential_uuid}/rotate
+{
+  "reason": "Scheduled rotation per security policy"
+}
+
+Response 202 Accepted:
+{
+  "old_credential_uuid": "<uuid>",
+  "new_credential_uuid": "<uuid>",
+  "transition_window_ends": "<ISO 8601>",
+  "new_retrieval_url": "/api/v1/credentials/<new_uuid>/value"
 }
 ```
 

@@ -489,6 +489,8 @@ Same as Consumer API. Additional admin-specific codes:
 
 ## Scoring Model Administration
 
+> Approval routing thresholds use named-tier dynamic format. See [Authority Tier Model](../data-model/32-authority-tier-model.md) for the complete specification.
+
 ### Get Scoring Thresholds for Profile
 
 ```
@@ -499,9 +501,11 @@ Response 200:
   "profile": "standard",
   "scoring_thresholds": {
     "auto_approve_below": 25,
-    "human_review_above": 25,
-    "dual_approval_above": 60,
-    "committee_above": 80
+    "approval_routing": [
+      { "tier": "reviewed", "max_score": 59 },
+      { "tier": "verified", "max_score": 79 },
+      { "tier": "authorized", "max_score": 100 }
+    ]
   },
   "signal_weights": {
     "operational_gatekeeper": 0.45,
@@ -521,9 +525,11 @@ PATCH /admin/api/v1/profiles/{profile_name}/scoring
 {
   "scoring_thresholds": {
     "auto_approve_below": 20,
-    "human_review_above": 20,
-    "dual_approval_above": 55,
-    "committee_above": 75
+    "approval_routing": [
+      { "tier": "reviewed", "max_score": 59 },
+      { "tier": "verified", "max_score": 79 },
+      { "tier": "authorized", "max_score": 100 }
+    ]
   }
 }
 
@@ -584,7 +590,7 @@ GET /admin/api/v1/scoring/audit
 Query parameters:
   from=<ISO 8601>
   to=<ISO 8601>
-  routing_decision=<auto_approved|pending_review|pending_dual_approval|pending_committee>
+  routing_decision=<auto_approved|pending_review|pending_verified|pending_authorized>
   risk_score_above=<int>
   actor_uuid=<uuid>
   resource_type=<fqn>
@@ -596,9 +602,234 @@ Response 200:
       "score_record_uuid": "<uuid>",
       "request_uuid": "<uuid>",
       "risk_score": 47,
-      "routing_decision": "human_review",
+      "routing_decision": "reviewed",
       "signal_breakdown": { ... },
       "evaluated_at": "<ISO 8601>"
+    }
+  ]
+}
+```
+
+
+---
+
+## Approval Management
+
+DCM provides approval gates for requests, policy contributions, provider registrations, and federation contributions. The Admin API is the integration point for recording decisions — it is designed to be called by both human reviewers in the DCM UI and by external systems (ServiceNow, Jira, Slack bots, workflow automation).
+
+### List Pending Approvals
+
+```
+GET /admin/api/v1/approvals/pending
+
+Query parameters:
+  approval_type=<request | policy_contribution | provider_registration | federation_contribution>
+  tier=<reviewed | verified | authorized>
+  reviewer_uuid=<uuid>       # approvals where this actor is an eligible reviewer
+
+Response 200:
+{
+  "pending_approvals": [
+    {
+      "approval_uuid": "<uuid>",
+      "approval_type": "policy_contribution",
+      "tier": "authorized",
+      "subject_uuid": "<policy_uuid>",
+      "subject_handle": "tenant/payments/gatekeeper/cost-ceiling",
+      "required_dcmgroup_uuid": "<uuid>",     # for authorized tier
+      "quorum_required": 3,
+      "votes_recorded": 1,
+      "submitted_at": "<ISO 8601>",
+      "window_expires_at": "<ISO 8601>",
+      "submitted_by": { "uuid": "<uuid>", "display_name": "Bob Smith" }
+    }
+  ]
+}
+```
+
+### Record an Approval Decision
+
+```
+POST /admin/api/v1/approvals/{approval_uuid}/vote
+
+{
+  "decision": "approve | reject",
+  "reason": "<required for reject; optional for approve>",
+  "recorded_via": "dcm_admin_ui | servicenow | jira | slack_bot | api_direct | other",
+  "external_reference": "<ticket or case ID in external system — optional, for audit>"
+}
+
+Response 200:
+{
+  "approval_uuid": "<uuid>",
+  "voter_uuid": "<uuid>",
+  "decision": "approve",
+  "votes_recorded": 2,
+  "quorum_required": 3,
+  "quorum_reached": false,
+  "pipeline_status": "pending_authorized"
+}
+
+# When quorum is reached or reviewed/verified satisfied:
+{
+  "approval_uuid": "<uuid>",
+  "voter_uuid": "<uuid>",
+  "decision": "approve",
+  "votes_recorded": 3,
+  "quorum_required": 3,
+  "quorum_reached": true,
+  "pipeline_status": "activating"
+}
+
+Response 403: actor is not a member of the required authority group (authorized tier) or not in reviewer role
+Response 409: actor has already voted on this approval (verified and authorized tiers enforce distinct voters)
+Response 410: approval window has expired
+```
+
+### Get Approval Detail
+
+```
+GET /admin/api/v1/approvals/{approval_uuid}
+
+Response 200:
+{
+  "approval_uuid": "<uuid>",
+  "approval_type": "authorized",
+  "subject_uuid": "<uuid>",
+  "tier": "authorized",
+  "required_dcmgroup_uuid": "<uuid>",
+  "quorum_required": 3,
+  "window_expires_at": "<ISO 8601>",
+  "votes": [
+    {
+      "voter_uuid": "<uuid>",
+      "voter_display_name": "Alice Chen",
+      "decision": "approve",
+      "recorded_at": "<ISO 8601>",
+      "recorded_via": "servicenow",
+      "external_reference": "CHG0012345"
+    }
+  ],
+  "status": "pending_authorized",
+  "quorum_reached": false
+}
+```
+
+
+---
+
+## Authority Tier Registry Management
+
+> **Implementation note:** The tier registry change impact detection pipeline is specified in [Authority Tier Model](../data-model/32-authority-tier-model.md) Section 7. The endpoints below are the Admin API surface for proposing, reviewing, and activating tier registry changes. The detection mechanism (tier impact diff computation, affected item query, degradation gate) is an implementation responsibility.
+
+### Propose a Tier Registry Change
+
+```
+POST /admin/api/v1/tier-registry/changes
+
+{
+  "proposed_tiers": [
+    { "name": "auto",                 "insert_after": null,       "decision_gravity": "none" },
+    { "name": "reviewed",             "insert_after": "auto",     "decision_gravity": "routine" },
+    { "name": "verified",             "insert_after": "reviewed", "decision_gravity": "elevated" },
+    { "name": "compliance_reviewed",  "insert_after": "verified", "decision_gravity": "elevated" },
+    { "name": "authorized",           "insert_after": "compliance_reviewed", "decision_gravity": "critical" }
+  ],
+  "reason": "Adding compliance_reviewed tier for PCI-DSS regulated actions"
+}
+
+Response 202 Accepted:
+{
+  "registry_change_uuid": "<uuid>",
+  "status": "impact_assessment_pending",
+  "estimated_ready_at": "<ISO 8601>"
+}
+```
+
+### Get Tier Registry Impact Report
+
+```
+GET /admin/api/v1/tier-registry/changes/{change_uuid}/impact
+
+Response 200:
+{
+  "registry_change_uuid": "<uuid>",
+  "status": "impact_assessed | pending_degradation_review | ready_to_activate | blocked",
+  "summary": {
+    "degradations": 0,
+    "upgrades": 3,
+    "new_tiers": 1,
+    "broken_references": 0,
+    "profile_gaps": 2
+  },
+  "degradations": [],
+  "upgrades": [ ... ],
+  "profile_gaps": [
+    {
+      "profile": "standard",
+      "missing_tiers": ["compliance_reviewed"],
+      "gap_effect": "Requests scoring in the compliance_reviewed range will route to verified tier until threshold list is updated"
+    }
+  ],
+  "blocking_items": []
+}
+```
+
+### Accept a Security Degradation
+
+```
+POST /admin/api/v1/tier-registry/changes/{change_uuid}/accept-degradation
+
+{
+  "affected_item_uuid": "<uuid>",
+  "affected_item_type": "provider_registration_requirement",
+  "acceptance_reason": "<required — what compensating controls justify this degradation>",
+  "accepted_by": "<actor_uuid>"
+}
+
+Response 200:
+{
+  "acceptance_uuid": "<uuid>",
+  "degradation_accepted": true,
+  "remaining_degradations": 0,
+  "change_status": "ready_to_activate"
+}
+
+Response 403: actor does not hold verified or authorized tier reviewer role
+Response 409: degradation already accepted
+```
+
+### Activate a Tier Registry Change
+
+```
+POST /admin/api/v1/tier-registry/changes/{change_uuid}/activate
+
+Response 200:
+{
+  "registry_change_uuid": "<uuid>",
+  "activated_at": "<ISO 8601>",
+  "new_registry_version": "1.1.0",
+  "impact_report_uuid": "<uuid>"
+}
+
+Response 409: change has unresolved blocking items (broken_references or unaccepted degradations)
+```
+
+### List Historical Registry Changes
+
+```
+GET /admin/api/v1/tier-registry/changes?status=activated&limit=20
+
+Response 200:
+{
+  "changes": [
+    {
+      "registry_change_uuid": "<uuid>",
+      "status": "activated",
+      "activated_at": "<ISO 8601>",
+      "proposed_by": { "uuid": "<uuid>", "display_name": "Alice Chen" },
+      "summary": { "degradations": 0, "upgrades": 2, "new_tiers": 1 },
+      "impact_report_uuid": "<uuid>"
     }
   ]
 }

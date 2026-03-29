@@ -287,7 +287,7 @@
 | SMX-003 | Actor Risk History Tracking | View own risk history score and contributing events via Consumer API | — | Monitor actor risk history; reset scores for trusted automation accounts; configure decay parameters | AUD-001, IAM-001 |
 | SMX-004 | Quota Pressure Scoring | Receive quota_pressure as a score driver when approaching Tenant quota limits | — | Configure per-resource-type quota limits; manage free_threshold parameter | IAM-007, REQ-004 |
 | SMX-005 | Provider Accreditation Richness Scoring | — | Benefit from lower risk contribution by maintaining rich accreditation portfolio | Configure accreditation richness weights; manage portfolio scoring | ACC-001, PRV-001 |
-| SMX-006 | Profile Scoring Threshold Management | — | — | Configure auto_approve/human_review/dual_approval/committee thresholds per profile; manage signal weights; enforce SMX-008 (max auto_approve_below: 50) | POL-005, REQ-004 |
+| SMX-006 | Profile Scoring Threshold Management | — | — | Configure approval routing thresholds per profile (auto/reviewed/verified/authorized + custom tiers via named-tier list); manage signal weights; enforce SMX-008 (max auto_approve_below: 50) | POL-005, REQ-004 |
 | SMX-007 | Policy Enforcement Class Override | — | Contribute policies with declared enforcement_class; receive notification when profile overrides enforcement class | Declare per-profile enforcement class overrides; manage regulatory_mandate flag to protect compliance-class policies from demotion | POL-004, POL-005 |
 | SMX-008 | Score Audit Trail | Query risk score and routing decision for own requests; view score_drivers and advisory_warnings | — | Query full Score Record detail including signal breakdown and actor risk history; manage score audit retention | AUD-001, REQ-004 |
 
@@ -305,6 +305,36 @@
 | MPX-005 | Transparent Constituent Visibility | Query and manage DCM-visible constituent entities independently (when transparency mode); receive constituent-level drift alerts | Declare composition_visibility mode; register transparent constituents with deterministic UUIDs | Configure visibility mode per compound resource type; manage constituent entity lifecycle policies | MPX-001, DRF-001 |
 | MPX-006 | Compound Execution Status Tracking | Monitor compound execution round progress via request status; see component-level status during long-running compositions | Send intermediate status events to DCM during execution; declare status_reporting.interval | Monitor compound execution health; configure execution timeout alerts | MPX-001, REQ-008 |
 | MPX-007 | Nested Meta Provider Composition | Request high-order compound services composed of other compound services (max depth 3) | Implement as a Meta Provider that calls other Meta Providers as constituents; declare max_nesting_depth | Configure nesting depth limits; manage nested compensation chains | MPX-001, PRV-009 |
+
+---
+
+
+## 23. Credential Provider Model
+
+| ID | Capability | Consumer | Service Provider | Platform/Admin | Depends On |
+|----|-----------|---------|---------|---------------|-----------|
+| CPX-001 | Resource Credential Issuance | Receive credential metadata and retrieval URL with realized resource; retrieve credential value via authenticated endpoint | Declare credential requirements in Resource Type Spec; receive credential issuance confirmation | Register Credential Provider; configure credential types and lifetimes per resource type; manage issuance policies | PRV-005, ZTS-002 |
+| CPX-002 | DCM Interaction Credential Issuance | — | Validate scoped interaction credential on every DCM dispatch; reject interactions without valid scoped credential (CPX-002) | Configure interaction credential lifetime per profile; manage Credential Provider for DCM-internal use | ZTS-002, PRV-001 |
+| CPX-003 | Credential Rotation | Receive rotation notification before old credential expires; retrieve new credential during transition window | Implement rotate endpoint; honor transition window; notify DCM when rotation is complete | Configure rotation schedules and transition windows per credential type; manage pre-expiry rotation warnings | CPX-001, IAM-001 |
+| CPX-004 | Emergency Rotation and Security Event Response | Receive immediate notification on emergency rotation; retrieve new credential via fastest channel | Implement immediate revocation with no transition window on security_event trigger | Configure security event triggers; manage emergency rotation audit trail; notify platform admin | CPX-003, OBS-004 |
+| CPX-005 | Credential Revocation | Receive revocation notification when credentials are revoked (actor deprovisioned, entity decommissioned); confirm transition to new credential | Implement revoke endpoint with declared SLA; invalidate value immediately on emergency revocation | Manage Credential Revocation Registry; configure revocation cache TTL per profile (PT1M standard, PT30S fsi/sovereign); enforce CPX-007 (decommission blocks on credential revocation) | CPX-001, LCM-007 |
+| CPX-006 | Revocation Propagation | — | Refresh revocation cache within profile-governed TTL; validate credential UUID against cache at use time (not only at receipt) | Configure revocation cache TTL; monitor revocation propagation latency; alert on SLA violations | CPX-005, IAM-001 |
+| CPX-007 | Audit Trail for Credential Lifecycle | View own credential record history (issue, rotate, revoke events); every value retrieval audited with retrieval_uuid | — | Query full credential audit trail including retrieval count; manage credential audit retention | CPX-001, AUD-001 |
+
+---
+
+
+## 24. Authority Tier Model
+
+| ID | Capability | Consumer | Service Provider | Platform/Admin | Depends On |
+|----|-----------|---------|---------|---------------|-----------|
+| ATM-001 | Authority Tier Registry | Reference approval decisions by tier name; tier weight resolved dynamically from ordered list | Implement approval workflows that reference tier names (not hardcoded weights) | Manage the ordered authority tier list; control tier positions and gravity values | POL-005 |
+| ATM-002 | Custom Tier Definition | — | — | Contribute custom tiers between existing tiers; declare decision_gravity and dcm_gate semantics; requires verified-tier approval | ATM-001, FCM-001 |
+| ATM-003 | Dynamic Threshold Configuration | View which tier an action routes to | — | Configure profile approval_routing as named-tier threshold list; adjust score ranges when new tiers inserted | ATM-001, SMX-001 |
+| ATM-004 | Tier Registry Change Impact Detection | Receive notification when tier changes affect owned resources or pending approvals | — | Propose tier registry changes; receive tier impact diff report; review SECURITY_DEGRADATION and BROKEN_REFERENCE items; accept degradations via Admin API | ATM-001, AUD-001 |
+| ATM-005 | Degradation Review Gate | — | — | Review and explicitly accept each SECURITY_DEGRADATION item before a registry change activates; provide compensating control rationale; must hold verified or authorized tier reviewer role | ATM-004, IAM-001 |
+| ATM-006 | Profile Gap Detection | — | — | Receive PROFILE_GAP warnings when tier registry changes leave profile threshold lists incomplete; update threshold lists or acknowledge gap within approval window | ATM-003, ATM-004 |
+| ATM-007 | Tier Registry Audit Trail | Query historical tier registry versions and impact reports | — | Access full audit trail of all tier registry changes: proposal, impact assessment, degradation acceptances, activation | ATM-004, AUD-001 |
 
 ---
 
@@ -335,7 +365,9 @@
 | Federated Contribution Model | 7 |
 | Scoring Model | 8 |
 | Meta Provider Composability | 7 |
-| **Total** | **141** |
+| Credential Provider Model | 7 |
+| Authority Tier Model | 7 |
+| **Total** | **155** |
 
 ---
 

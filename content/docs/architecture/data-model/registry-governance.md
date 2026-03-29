@@ -1,5 +1,5 @@
 ---
-title: "DCM Data Model — Registry Governance"
+title: "Registry Governance"
 type: docs
 weight: 20
 ---
@@ -62,7 +62,7 @@ The three-tier registry model applies to all DCM artifact types, not just resour
 |------|--------------|---------|-------------------|
 | **Core** | DCM Project | Built-in policies, base layers, system resource types | DCM project PR process |
 | **Verified Community** | Named community maintainers | Community resource types, shared policy templates, vetted provider specs | Community review + platform admin acceptance |
-| **Organization** | Deploying organization | Tenant policies, provider catalog items, org-specific specs | Per profile (auto → committee) |
+| **Organization** | Deploying organization | Tenant policies, provider catalog items, org-specific specs | Per profile (auto → authorized) |
 
 **Contributor sub-tiers within Organization tier:**
 - `organization/platform` — authored by platform admins; highest trust in org tier

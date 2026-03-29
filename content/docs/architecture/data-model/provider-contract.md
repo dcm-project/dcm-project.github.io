@@ -16,6 +16,8 @@ weight: -9
 
 ---
 
+> > **Design Priority:** Provider types implement all four design priorities simultaneously. Security properties (mTLS, scoped credentials, sovereignty declarations, accreditation) are present in all provider registrations. The capability extension model (Priority 3) enables new provider types without changing the base contract. See [Design Priorities](00-design-priorities.md).
+
 ## 1. The Unified Provider Contract
 
 Every Provider in DCM — regardless of type — implements a single base contract. What varies between provider types is the **capability extension**: the specific operations exposed, the data that flows in each direction, and the typed schemas for that exchange.
@@ -332,25 +334,48 @@ policy_provider_capabilities:
 
 ### 7.6 Credential Provider
 
-**What it does:** Issues, stores, rotates, and revokes credentials and secrets.
+**What it does:** Issues, rotates, and revokes credentials used within the DCM ecosystem — both DCM interaction credentials (short-lived, scoped, used for provider dispatch under the Zero Trust model) and consumer-facing resource credentials (SSH keys, API keys, kubeconfigs, service account tokens, database passwords, x509 certificates).
+
+> **Full specification:** See [Credential Provider Model](31-credential-provider-model.md) for the complete issuance contract, rotation protocol, revocation propagation, consumer delivery, and system policies (CPX-001–CPX-008).
+
+**Credential values are never stored in DCM** — only credential metadata (UUID, type, scope, expiry, status) is stored. Values are held by the Credential Provider and retrieved by authorized consumers via a declared `value_retrieval_endpoint`.
 
 **Additional endpoints:**
 ```
-POST {issue_endpoint}            # request a credential; return scoped credential
-POST {rotate_endpoint}           # rotate an existing credential
-DELETE {revoke_endpoint}         # revoke a credential
+POST   {issue_endpoint}              # issue credential; return metadata + retrieval URL
+POST   {rotate_endpoint}             # rotate; return old/new UUIDs + transition window
+DELETE {revoke_endpoint}/{uuid}      # revoke immediately or at transition window end
+POST   {validate_endpoint}           # use-time validity check (scope, revocation, expiry)
+GET    {list_endpoint}               # list credentials by entity_uuid or issued_to
 ```
 
-**Capability declaration extension:**
+**Capability declaration extension (summary — full schema in doc 31):**
 ```yaml
 credential_provider_capabilities:
-  credential_types: [api_key, x509_certificate, service_account_token]
-  dynamic_secrets: true          # generate on demand; expire after use
+  credential_types:
+    - api_key
+    - x509_certificate
+    - ssh_key
+    - service_account_token
+    - database_password
+    - kubeconfig
+    - hsm_backed_key
+    - dcm_interaction          # required if handling DCM interaction credentials
   hsm_backed: false
-  fips_140_2_level: 1 | 2 | 3
+  fips_140_2_level: 0 | 1 | 2 | 3   # enforced per profile (Section 12)
+  dynamic_secrets: true
+  rotation_support: true
+  revocation_sla: PT5M         # profile-governed; PT30S for sovereign
+  approved_algorithms:         # declare which algorithms the provider supports
+    ssh_key: [Ed25519, ECDSA-P-384, RSA-4096]
+    x509_certificate: [Ed25519, ECDSA-P-384, RSA-4096]
+    service_account_token: [RS256, ES256, HS256]
+    # ... per credential type
+  key_escrow:
+    supported: false           # true only for regulated sovereign deployments
 ```
 
-**Data direction:** DCM requests credential → Provider issues scoped credential → DCM includes in provider dispatch.
+**Data direction:** DCM requests credential → Provider issues scoped credential + returns metadata → DCM stores metadata, includes retrieval URL in realized entity → Consumer retrieves value via authenticated endpoint. Revocation: DCM requests revocation → Provider invalidates → DCM publishes revocation event to Message Bus → all components refresh revocation cache within profile-governed TTL.
 
 ---
 
@@ -485,7 +510,7 @@ The Provider Type Registry is the authoritative list of provider types that a DC
 provider_type_registry_entry:
   provider_type_id: service_provider
   tier: core
-  default_approval_method: human_review   # auto | human_review | dual_approval | committee
+  default_approval_method: reviewed   # auto | reviewed | verified | authorized
   enabled_in_profiles: [minimal, dev, standard, prod, fsi, sovereign]
   capability_extension_schema_ref: <uuid>
 ```
