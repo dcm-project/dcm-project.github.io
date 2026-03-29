@@ -1,8 +1,4 @@
----
-title: "DCM Taxonomy"
-type: docs
-weight: 2
----
+# DCM Taxonomy
 
 The DCM taxonomy defines the precise vocabulary used throughout the architecture. Every term used in the data model, specifications, and implementation should conform to these definitions.
 
@@ -40,8 +36,8 @@ The DCM taxonomy defines the precise vocabulary used throughout the architecture
 
 | Term | Definition |
 |------|-----------|
-| **GateKeeper Policy** | Typed Policy. Output: allow/deny + optional field locks. Fires on request payload. Any active GateKeeper producing deny blocks the request. |
-| **Validation Policy** | Typed Policy. Output: pass/fail + field-level detail. Fires on request payload. Checks correctness of field values. |
+| **GateKeeper Policy** | Typed Policy. Declares `enforcement_class: compliance` (boolean deny — halts request) or `operational` (contributes `risk_score_contribution` to request risk score). Compliance-class is the default and fail-safe. See [Scoring Model](data-model/scoring-model/). |
+| **Validation Policy** | Typed Policy. Declares `output_class: structural` (boolean pass/fail — halts on fail) or `advisory` (contributes completeness score + warning list without blocking). Structural is the default and fail-safe. See [Scoring Model](data-model/scoring-model/). |
 | **Transformation Policy** | Typed Policy. Output: mutations[] — field additions, changes, locks. Fires on request payload. All mutations collected and applied with provenance. |
 | **Recovery Policy** | Typed Policy. Output: action + parameters. Fires on failure/timeout trigger conditions. Governs what DCM does when things go wrong. |
 | **Orchestration Flow Policy** | Typed Policy. Output: ordered step sequence. Fires on pipeline payload type events. Named workflow artifacts — the explicit, visible pipeline skeleton. |
@@ -81,6 +77,26 @@ The DCM taxonomy defines the precise vocabulary used throughout the architecture
 | **Contributor** | An actor type that authored a Data artifact. Recorded in artifact_metadata.contributed_by. Types: platform_admin, consumer, service_provider, peer_dcm. Determines review requirements. |
 | **Two-Level Orchestration** | Level 1: Named Workflow Artifacts (Orchestration Flow Policy, ordered: true) — explicit sequence skeleton. Level 2: Dynamic Policies (GateKeeper, Transformation, Recovery) — fire conditionally on same events without being declared in the workflow. |
 | **Reserve Query** | A parallel capacity query sent to all eligible provider candidates. Providers confirm capacity and hold it for PT5M. The Placement Engine selects the winner and releases other holds. |
+
+
+### Scoring Model Terms
+
+| Term | Definition |
+|------|-----------|
+| **enforcement_class** | Required property of GateKeeper policies. `compliance`: boolean deny gate — always halts on fire. `operational`: contributes `risk_score_contribution` to the request risk score. |
+| **output_class** | Required property of Validation policies. `structural`: boolean pass/fail. `advisory`: contributes completeness score and warnings without blocking. |
+| **request_risk_score** | Aggregate score (0–100) assembled from five weighted signals: operational GateKeeper contributions, completeness, actor risk history, quota pressure, provider accreditation richness. Drives approval routing. |
+| **risk_score_contribution** | The weighted score a fired operational-class GateKeeper contributes to the request risk score. Declared as `scoring_weight` (1–100) in the policy. |
+| **completeness_score** | Aggregate of advisory Validation contributions. Represents how incomplete or unusual the request is — higher = more warnings. Does not block requests. |
+| **actor_risk_history_score** | Decay-weighted (λ=0.1, half-life ≈7 days) history of an actor's previous request outcomes. Contributes to request risk score. Not exposed to other consumers. |
+| **quota_pressure_score** | Continuous score representing how close a Tenant is to quota limits for the requested resource type. Zero below 75% utilization; 100 at full quota. |
+| **accreditation_richness_score** | Weighted sum of a provider's accreditation portfolio normalized to 0–100. Influences placement preference and inversely contributes to provider risk signal. |
+| **scoring_threshold** | Profile-governed boundary on the request risk score that maps to an approval routing tier. Four tiers: auto_approve, human_review, dual_approval, committee. `auto_approve_below` may not exceed 50 (SMX-008). |
+| **Risk Score Aggregator** | Sub-function of the Policy Engine. Assembles five scoring signals into the request risk score after all compliance-class and Governance Matrix evaluations complete. |
+| **regulatory_mandate** | Policy metadata flag. When `true`, the policy's `enforcement_class: compliance` cannot be demoted to operational by any profile (SMX-003). Set by platform admins, audited. |
+| **score_drivers** | Human-readable list of the top contributing factors to a request risk score. Exposed to consumers (top 3 only). Full breakdown in Score Record for platform admins. |
+| **Score Record** | Immutable audit artifact recording the full signal breakdown, weights, routing decision, and threshold applied for a scored request evaluation. Written to Audit Store for every scored request. |
+
 
 ### Federation Topology
 
@@ -148,6 +164,7 @@ Terms to avoid because they introduce ambiguity. Use the precise alternatives in
 | GMX | Unified Governance Matrix |
 | DRC | Drift Reconciliation |
 | FCM | Federated Contribution Model |
+| SMX | Scoring Model |
 
 ---
 

@@ -1,5 +1,5 @@
 ---
-title: "DCM Data Model — Accreditation, Data Authorization Matrix, and Zero Trust"
+title: "Accreditation, Data Authorization Matrix, and Zero Trust"
 type: docs
 weight: 26
 ---
@@ -41,6 +41,22 @@ This document defines three interconnected models that together govern how DCM h
 These three models compose: Zero Trust verifies identity and authorization on every call. Accreditation verifies compliance certification status. The Authorization Matrix declares what is permitted given that certification status. Together they ensure that no interaction in DCM is implicitly trusted — every boundary crossing is verified against all three models.
 
 ---
+
+
+## 1b. Accreditation and the Scoring Model
+
+DCM distinguishes two distinct accreditation functions:
+
+**Required Accreditation (boolean gate):** Whether a provider holds a specific accreditation required for a particular request. PHI data requires an active BAA. This is a Governance Matrix enforcement — always boolean, never scored. A provider without the required accreditation is ineligible for that request regardless of any other score.
+
+**Accreditation Richness (placement score):** The breadth and depth of a provider's accreditation portfolio. A provider with ISO 27001 + SOC2 Type II + FedRAMP Moderate + HIPAA BAA is preferable for placement over one with only self-declaration, all else equal. This is a continuous scoring signal — it does not gate eligibility, it influences preference among eligible providers.
+
+Accreditation richness score contributes to:
+1. Placement tie-breaking (a richer portfolio is preferred)
+2. Request risk score Signal 5 (inversely — higher richness reduces provider risk contribution)
+
+See [Scoring Model](29-scoring-model.md) Section 4.5 for the richness score weights and normalization.
+
 
 ## 2. Data Classification
 

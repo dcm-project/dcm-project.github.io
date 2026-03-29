@@ -1,5 +1,5 @@
 ---
-title: "DCM — Unified Policy Contract"
+title: "Unified Policy Contract"
 type: docs
 weight: -8
 ---

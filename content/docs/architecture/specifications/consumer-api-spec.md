@@ -317,7 +317,21 @@ Response 202 Accepted:
   "intent_state_ref": "<uuid>",
   "estimated_completion": "<ISO 8601>",
   "status_url": "/api/v1/requests/{request_uuid}/status",
-  "dry_run_result": null              # null if auto-approve; populated if review required
+  "dry_run_result": null,             # null if auto-approve; populated if review required
+  "risk_score": 47,                   # aggregate request risk score (0–100)
+  "routing_decision": "human_review", # auto_approved | pending_review | pending_dual_approval | pending_committee
+  "score_drivers": [                  # top 3 contributing factors (human-readable)
+    "Estimated monthly cost exceeds Tenant ceiling",
+    "Request submitted outside business hours",
+    "Actor has 2 recent validation failures"
+  ],
+  "advisory_warnings": [              # from advisory-class Validation policies
+    {
+      "warning_code": "recommended_field_absent",
+      "warning_message": "cost_center not provided — cost attribution will use Tenant default",
+      "field": "fields.cost_center"
+    }
+  ]
 }
 
 Response 200 OK (if policy requires pre-validation report before submission):
@@ -1190,7 +1204,18 @@ Response 200:
       "estimated_cost_per_month": 230.40,
       "submitted_at": "<ISO 8601>",
       "deadline": "<ISO 8601>",
-      "policy_name": "prod-vm-approval-gate"
+      "risk_score": 47,
+      "risk_score_explanation": {
+        "score_drivers": [
+          "Estimated monthly cost exceeds Tenant ceiling (+35)",
+          "Request submitted outside business hours (+15)",
+          "Actor has 2 recent validation failures (+15)"
+        ],
+        "routing_threshold": 25,
+        "profile": "standard"
+      },
+      "advisory_warnings": 1,
+      "policy_name": "scoring-threshold: standard/human_review"
     }
   ],
   "total": 2

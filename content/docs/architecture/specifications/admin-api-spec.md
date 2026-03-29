@@ -483,3 +483,124 @@ Same as Consumer API. Additional admin-specific codes:
 ---
 
 *Document maintained by the DCM Project. For questions or contributions see [GitHub](https://github.com/dcm-project).*
+
+
+---
+
+## Scoring Model Administration
+
+### Get Scoring Thresholds for Profile
+
+```
+GET /admin/api/v1/profiles/{profile_name}/scoring
+
+Response 200:
+{
+  "profile": "standard",
+  "scoring_thresholds": {
+    "auto_approve_below": 25,
+    "human_review_above": 25,
+    "dual_approval_above": 60,
+    "committee_above": 80
+  },
+  "signal_weights": {
+    "operational_gatekeeper": 0.45,
+    "completeness": 0.15,
+    "actor_risk_history": 0.20,
+    "quota_pressure": 0.10,
+    "provider_risk": 0.10
+  },
+  "policy_enforcement_overrides": []
+}
+```
+
+### Update Scoring Thresholds
+
+```
+PATCH /admin/api/v1/profiles/{profile_name}/scoring
+{
+  "scoring_thresholds": {
+    "auto_approve_below": 20,
+    "human_review_above": 20,
+    "dual_approval_above": 55,
+    "committee_above": 75
+  }
+}
+
+Response 200: { "profile": "standard", "updated_at": "<ISO 8601>", "effective_immediately": true }
+Response 422: { "error": "threshold_invalid", "reason": "auto_approve_below exceeds maximum of 50 (SMX-008)" }
+```
+
+### Add Policy Enforcement Override
+
+```
+POST /admin/api/v1/profiles/{profile_name}/scoring/overrides
+{
+  "policy_handle": "platform/gatekeeper/cpu-size-limit",
+  "override_enforcement_class": "compliance",
+  "rationale": "Prod profile: CPU limit is a hard constraint",
+  "applies_to_resource_types": ["Compute.VirtualMachine"]
+}
+
+Response 201 Created:
+{ "override_uuid": "<uuid>", "policy_handle": "...", "effective_immediately": true }
+```
+
+### Actor Risk History
+
+```
+GET /admin/api/v1/actors/{actor_uuid}/risk-history
+
+Response 200:
+{
+  "actor_uuid": "<uuid>",
+  "current_score": 30,
+  "events": [
+    {
+      "event_type": "validation_failure",
+      "occurred_at": "<ISO 8601>",
+      "request_uuid": "<uuid>",
+      "base_contribution": 5,
+      "decayed_contribution": 3.2,
+      "days_ago": 4
+    }
+  ],
+  "decay_lambda": 0.1,
+  "score_half_life_days": 7
+}
+
+POST /admin/api/v1/actors/{actor_uuid}/risk-history/reset
+{
+  "reason": "Actor confirmed as trusted automation account",
+  "audit_note": "Reviewed and approved by platform admin"
+}
+```
+
+### Score Audit Trail
+
+```
+GET /admin/api/v1/scoring/audit
+
+Query parameters:
+  from=<ISO 8601>
+  to=<ISO 8601>
+  routing_decision=<auto_approved|pending_review|pending_dual_approval|pending_committee>
+  risk_score_above=<int>
+  actor_uuid=<uuid>
+  resource_type=<fqn>
+
+Response 200:
+{
+  "score_records": [
+    {
+      "score_record_uuid": "<uuid>",
+      "request_uuid": "<uuid>",
+      "risk_score": 47,
+      "routing_decision": "human_review",
+      "signal_breakdown": { ... },
+      "evaluated_at": "<ISO 8601>"
+    }
+  ]
+}
+```
+

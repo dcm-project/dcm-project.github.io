@@ -278,6 +278,22 @@
 ---
 
 
+## 21. Scoring Model
+
+| ID | Capability | Consumer | Service Provider | Platform/Admin | Depends On |
+|----|-----------|---------|---------|---------------|-----------|
+| SMX-001 | Operational GateKeeper Scoring | Receive risk score and score_drivers with request acknowledgment; understand why score is at its level | Declare `enforcement_class: operational` and `scoring_weight` on contributed GateKeeper policies | Configure operational GateKeeper policies with appropriate weights; manage per-policy enforcement class | POL-001, REQ-004 |
+| SMX-002 | Advisory Validation and Completeness Score | Receive advisory_warnings list with request acknowledgment; understand what optional improvements exist | Declare `output_class: advisory` on advisory Validation policies | Configure advisory Validation policies; manage completeness score thresholds | POL-001, REQ-004 |
+| SMX-003 | Actor Risk History Tracking | View own risk history score and contributing events via Consumer API | — | Monitor actor risk history; reset scores for trusted automation accounts; configure decay parameters | AUD-001, IAM-001 |
+| SMX-004 | Quota Pressure Scoring | Receive quota_pressure as a score driver when approaching Tenant quota limits | — | Configure per-resource-type quota limits; manage free_threshold parameter | IAM-007, REQ-004 |
+| SMX-005 | Provider Accreditation Richness Scoring | — | Benefit from lower risk contribution by maintaining rich accreditation portfolio | Configure accreditation richness weights; manage portfolio scoring | ACC-001, PRV-001 |
+| SMX-006 | Profile Scoring Threshold Management | — | — | Configure auto_approve/human_review/dual_approval/committee thresholds per profile; manage signal weights; enforce SMX-008 (max auto_approve_below: 50) | POL-005, REQ-004 |
+| SMX-007 | Policy Enforcement Class Override | — | Contribute policies with declared enforcement_class; receive notification when profile overrides enforcement class | Declare per-profile enforcement class overrides; manage regulatory_mandate flag to protect compliance-class policies from demotion | POL-004, POL-005 |
+| SMX-008 | Score Audit Trail | Query risk score and routing decision for own requests; view score_drivers and advisory_warnings | — | Query full Score Record detail including signal breakdown and actor risk history; manage score audit retention | AUD-001, REQ-004 |
+
+---
+
+
 ## Capability Count Summary
 
 | Domain | Capabilities |
@@ -302,7 +318,8 @@
 | Unified Governance Matrix | 7 |
 | Drift Reconciliation | 5 |
 | Federated Contribution Model | 7 |
-| **Total** | **126** |
+| Scoring Model | 8 |
+| **Total** | **134** |
 
 ---
 

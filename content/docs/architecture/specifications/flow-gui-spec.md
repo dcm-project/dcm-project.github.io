@@ -809,3 +809,100 @@ All Flow GUI API errors follow the standard DCM error format:
 ---
 
 *Document maintained by the DCM Project. For questions or contributions see [GitHub](https://github.com/dcm-project).*
+
+
+---
+
+## 11. Scoring Model Views
+
+### 11.1 Risk Score Overlay on Execution Graph
+
+The Execution Graph View has a **Score Mode** toggle that overlays risk scoring information:
+
+- Each operational-class GateKeeper node displays its `scoring_weight`
+- Node background color shifts from green (weight 1–20) through amber (21–50) to red (51–100)
+- A running score accumulator shows the current aggregate as the user traces a path through the graph
+- Compliance-class GateKeeper nodes display a lock icon — they are always boolean
+
+### 11.2 API — Get Score Configuration for Graph Overlay
+
+```
+GET /flow/api/v1/graph/scoring-overlay
+
+Response 200:
+{
+  "active_profile": "standard",
+  "thresholds": {
+    "auto_approve_below": 25,
+    "human_review_above": 25,
+    "dual_approval_above": 60,
+    "committee_above": 80
+  },
+  "nodes": [
+    {
+      "node_id": "<policy_uuid>",
+      "enforcement_class": "operational",
+      "scoring_weight": 35,
+      "avg_contribution_24h": 28.5
+    }
+  ]
+}
+```
+
+### 11.3 Threshold Configuration UI (Profile Management)
+
+The Profile and Governance Management view (Section 7) is extended with a **Scoring Thresholds** panel:
+
+- Visual slider showing auto_approve / human_review / dual_approval / committee bands on a 0–100 scale
+- Signal weight configuration (pie chart showing proportional contribution of each signal)
+- Policy enforcement override management (which policies are promoted/demoted in this profile)
+- Live preview: "At the current thresholds, X% of last week's requests would have been auto-approved"
+
+### 11.4 Score Breakdown in Simulation
+
+The Flow Simulation output (Section 5) is extended with a score breakdown panel:
+
+```
+Simulation result: risk_score=47, routing=human_review
+
+Score breakdown:
+  Operational GateKeepers:  50 × 0.45 = 22.5
+    ├── cost-ceiling:        +35 ("Cost $620/month exceeds $500")
+    └── off-hours:           +15 ("Request outside business hours")
+  Completeness:             20 × 0.15 = 3.0
+    └── cost_center_absent:  +10
+  Actor risk history:       30 × 0.20 = 6.0
+    └── (2 recent events)
+  Quota pressure:           48 × 0.10 = 4.8
+    └── (87% utilized)
+  Provider risk:            15 × 0.10 = 1.5
+    └── (richness score: 85/100 → contribution: 1.5)
+  ─────────────────────────────────────────────
+  Total:                              37.8 → 47 (normalized)
+  Threshold (human_review):           25
+  Routing decision:                   HUMAN_REVIEW ✓
+```
+
+### 11.5 API — Get Score Simulation
+
+```
+POST /flow/api/v1/simulate/score
+
+Request body:
+{
+  "synthetic_fields": { ... },
+  "synthetic_actor": { "roles": ["developer"], "risk_history_score_override": 30 },
+  "profile_override": "prod"   # optional — simulate with different profile thresholds
+}
+
+Response 200:
+{
+  "risk_score": 47,
+  "routing_decision": "human_review",
+  "signal_breakdown": { ... },
+  "threshold_applied": 25,
+  "profile": "standard",
+  "advisory_warnings": [...]
+}
+```
+

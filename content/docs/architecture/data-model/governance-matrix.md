@@ -1,5 +1,5 @@
 ---
-title: "DCM Data Model — Unified Governance Matrix"
+title: "Unified Governance Matrix"
 type: docs
 weight: 27
 ---
@@ -51,6 +51,18 @@ Previous DCM documents established several overlapping control mechanisms: the D
 - **Audited always** — every evaluation produces an audit record regardless of outcome.
 
 ---
+
+
+## 1b. Governance Matrix and the Scoring Model
+
+The Governance Matrix is **always boolean**. This is not a design limitation — it is an explicit architectural decision.
+
+Governance Matrix decisions (ALLOW, DENY, ALLOW_WITH_CONDITIONS, STRIP_FIELD, REDACT, AUDIT_ONLY) govern whether data may cross a boundary. These are regulatory and legal facts — PHI either crosses a compliant boundary or it doesn't. "Mostly compliant" is not a legal defense. No Governance Matrix Rule may declare `scoring_weight` or `enforcement_class`.
+
+**The Governance Matrix fires before the Scoring Model evaluates.** If a Governance Matrix Rule produces DENY, the request is halted and no risk score is calculated. The score pipeline only runs for requests that have already passed all Governance Matrix checks.
+
+This ensures that scoring cannot be used to route around data sovereignty or regulatory boundaries. See [Scoring Model](29-scoring-model.md) Section 8 for the full pipeline sequence and SMX-004.
+
 
 ## 2. The Four Matrix Axes
 

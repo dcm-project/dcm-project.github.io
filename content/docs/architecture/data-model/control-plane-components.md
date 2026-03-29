@@ -1,5 +1,5 @@
 ---
-title: "DCM Data Model — Control Plane Components"
+title: "Control Plane Components"
 type: docs
 weight: 25
 ---

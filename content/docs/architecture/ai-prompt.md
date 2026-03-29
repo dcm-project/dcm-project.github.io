@@ -4193,7 +4193,77 @@ content/
 
 ---
 
-## SECTION 61 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 61 — SCORING MODEL (doc 29)
+
+### Governing Principle
+Questions of fact use boolean gates. Questions of degree use scoring. Secondary test: "Can a regulator accept 'the score was below threshold' as a complete explanation?" If not — boolean.
+
+### GateKeeper enforcement_class (required field)
+- `compliance` — boolean deny gate. Default and fail-safe if omitted. Used for: regulatory requirements (PHI→BAA, sovereign data), security hard requirements, anything where score-around creates legal liability.
+- `operational` — contributes `risk_score_contribution` (weight 1–100) to request risk score. Used for: cost ceilings, size limits, quota pressure, off-hours context, business rule preferences.
+
+### Validation output_class (required field)
+- `structural` — boolean pass/fail. Default and fail-safe. Missing required fields, type errors, broken references.
+- `advisory` — completeness score contribution + warning list. Never blocks. Recommended fields absent, unusual values, low confidence.
+
+### The Five Scoring Signals (aggregate → request_risk_score 0–100)
+1. **Operational GateKeeper score** (weight: 0.45 standard) — sum of risk_score_contribution from all fired operational GateKeepers, capped at 100
+2. **Completeness score** (weight: 0.15) — sum of advisory Validation contributions
+3. **Actor risk history score** (weight: 0.20) — decay-weighted (λ=0.1, half-life 7 days) history of actor's previous request outcomes; events: validation_failure(5), gatekeeper_deny(10), compliance_deny(20), policy_override(8), drift_caused(15), forced_decommission(12)
+4. **Quota pressure score** (weight: 0.10) — zero below 75% utilization; max(0, (util - 0.75) / 0.25) × 100 above
+5. **Provider accreditation richness** (weight: 0.10, inverse) — weighted portfolio sum; higher richness = lower provider risk contribution
+
+### Profile-Governed Thresholds → Approval Routing
+auto_approve (<threshold) | human_review | dual_approval | committee (>threshold)
+Default per profile: minimal(<60), dev(<50), standard(<25), prod(<15), fsi(<10), sovereign(<5)
+**SMX-008: auto_approve_below may never exceed 50 in any profile.**
+Signal weights must sum to 1.00 (validated at profile activation).
+
+### Profile Enforcement Class Overrides
+Profiles can promote operational→compliance or demote compliance→operational (non-regulatory only).
+SMX-003: policies with `regulatory_mandate: true` cannot be demoted. Set by platform admins. Audited.
+Threshold and override changes take effect immediately. Score Records are immutable — no retroactive changes.
+
+### Pipeline Sequence (doc 29, Section 8)
+1. Evaluate all policies
+2. Compliance GateKeeper fires → HALT (boolean deny, no score)
+3. Structural Validation fails → HALT (boolean fail, no score)
+4. Governance Matrix DENY → HALT (always boolean, never scored — SMX-004)
+5. Collect operational GateKeeper contributions → Signal 1
+6. Collect advisory Validation contributions → Signal 2
+7. Fetch actor risk history → Signal 3
+8. Calculate quota pressure → Signal 4
+9. Calculate provider accreditation richness → Signal 5
+10. Aggregate with profile weights → request_risk_score
+11. Apply profile thresholds → routing_decision
+12. Write Score Record to Audit Store (SMX-010: required for every scored request)
+13. Route: auto_approve | queue_for_review | queue_dual | queue_committee
+
+### What Is NEVER Scored
+Governance Matrix (SMX-004) · authentication · authorization · five-check boundary enforcement · lifecycle state transitions · unsanctioned change flag · TTL expiry · request status states
+
+### Score Exposure
+Consumer: risk_score, routing_decision, score_drivers (top 3, human-readable), advisory_warnings
+Platform admin: full Score Record — all signal breakdowns, weights, actor risk history detail
+Actor risk history never exposed to other consumers (privacy — SMX-007)
+
+### Score Record (immutable, Audit Store)
+score_record_uuid, request_uuid, entity_uuid, request_risk_score, routing_decision, routing_threshold_applied, profile_uuid, signal_breakdown (per signal: score, weight, weighted_contribution, fired_policies)
+
+### New API Endpoints
+Consumer: risk_score + advisory_warnings on POST /api/v1/requests response and GET status
+Admin: GET/PATCH /admin/api/v1/profiles/{name}/scoring · POST overrides · GET/POST /actors/{uuid}/risk-history · GET /scoring/audit
+Flow GUI: GET /flow/api/v1/graph/scoring-overlay · POST /flow/api/v1/simulate/score · Threshold slider in Profile Management view · Score breakdown panel in Simulation
+
+### SMX-001–010 System Policies
+SMX-001: GateKeeper must declare enforcement_class (compliance default). SMX-002: Validation must declare output_class (structural default). SMX-003: regulatory_mandate:true = no profile demotion. SMX-004: Governance Matrix always boolean. SMX-005: signal weights must sum to 1.00. SMX-006: Score Records immutable. SMX-007: actor risk history not exposed to other consumers. SMX-008: auto_approve_below ≤ 50. SMX-009: scoring_weight 1–100; aggregate capped at 100 before weighting. SMX-010: Score Record required for every scored request.
+
+### Capabilities
+SMX-001 through SMX-008 in Capabilities Matrix Domain 21. Total: 134 capabilities, 21 domains.
+
+---
+
+## SECTION 62 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, follow these instructions:
 
@@ -4267,6 +4337,11 @@ When working on this project, follow these instructions:
 172. **DCM defaults to federated data creation** — platform admins are not the only contributors; consumers author tenant-domain policies; providers publish resource type specs and service layers; peer DCMs contribute registry entries; all via GitOps PR with profile-governed review
 173. **Contributor domain scope is hard DENY at submission** — consumers cannot contribute system/platform policies regardless of declared domain; providers cannot contribute specs for types they don't offer; enforced by Governance Matrix at contribution time (FCM-002)
 174. **All contributed policies enter shadow mode by default** — proposed status with shadow evaluation before activation; shadow_review_period is profile-governed (P7D standard → P30D fsi/sovereign); platform admin reviews divergence cases before promoting
+176. **GateKeeper enforcement_class is required and fail-safe** — if omitted, treated as compliance (boolean deny). Operational-class GateKeepers never halt the request; they contribute a weighted risk_score_contribution to the aggregate. The aggregate risk score determines approval routing, not individual policy outcomes.
+177. **Validation output_class is required and fail-safe** — if omitted, treated as structural (boolean halt). Advisory-class Validations never halt requests; they accumulate completeness score and warning list surfaced to the consumer.
+178. **Governance Matrix is always boolean — never scored** — SMX-004 is absolute. Scoring cannot be used to route around data sovereignty or regulatory boundaries. The Governance Matrix evaluates before the scoring pipeline runs.
+179. **Profile thresholds determine routing, not individual policies** — the approval routing decision (auto/review/dual/committee) emerges from the aggregate risk score crossing profile-configured thresholds, not from individual policy flags. Changing governance sensitivity = adjusting thresholds in the profile.
+180. **SMX-008 is a hard system constraint** — auto_approve_below may never exceed 50 in any profile. Platform admins cannot override this. Profiles submitted with auto_approve_below > 50 fail validation.
 175. **Orphaned artifacts do not auto-deactivate** — when contributor's access is revoked, their active artifacts remain active until platform admin assigns new owner or explicitly retires; exception: sovereign profile auto-retires orphaned artifacts (FCM-006)
 93. **Process Resource max_execution_time is mandatory** — it is not optional metadata; enforced by the Lifecycle Constraint Enforcer; profile governs the default on_max_exceeded action (notify/escalate/terminate)
 94. **Dependency graphs are embedded, not separate entities** — declared graph in Resource Type Specification; resolved graph in placement.yaml (Requested State); realized graph in Realized State events; no separate dependency graph artifact needed

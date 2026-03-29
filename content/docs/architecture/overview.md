@@ -136,13 +136,33 @@ Policies are the orchestration in DCM. Seven typed output schemas, one base cont
 
 | Policy Type | Output | Fires on |
 |-------------|--------|---------|
-| **GateKeeper** | allow / deny | Request payload |
-| **Validation** | pass / fail + field detail | Request payload |
+| **GateKeeper** | allow/deny (compliance) or risk score contribution (operational) | Request payload |
+| **Validation** | pass/fail (structural) or completeness score + warnings (advisory) | Request payload |
 | **Transformation** | field mutations | Request payload |
 | **Recovery** | action + parameters | Failure/timeout trigger |
 | **Orchestration Flow** | step sequence | Pipeline events (named workflows) |
-| **Governance Matrix Rule** | ALLOW / DENY / STRIP_FIELD / REDACT | Any cross-boundary interaction |
+| **Governance Matrix Rule** | ALLOW / DENY / STRIP_FIELD / REDACT | Any cross-boundary interaction — always boolean |
 | **Lifecycle Policy** | action on related entity | Relationship events |
+
+### Hybrid Scoring Model
+
+DCM uses a **hybrid model**: questions of fact use boolean gates; questions of degree use scoring.
+
+**GateKeeper policies declare `enforcement_class`:**
+- `compliance` — boolean deny gate. Used for regulatory requirements (PHI→BAA, sovereign data boundaries). Cannot be scored around.
+- `operational` — contributes a weighted `risk_score_contribution` to the aggregate request risk score. Used for operational policies (cost ceilings, size limits, quota pressure).
+
+**Validation policies declare `output_class`:**
+- `structural` — boolean pass/fail. Missing required fields, type errors.
+- `advisory` — completeness score contribution + warning list. Recommended fields absent, unusual values.
+
+**Five scoring signals** aggregate into a request risk score (0–100): operational GateKeeper contributions (45%), actor risk history (20%), completeness warnings (15%), quota pressure (10%), provider accreditation richness (10%).
+
+**Profile-governed thresholds** map the score to approval routing: auto-approve / human_review / dual_approval / committee. Thresholds are tunable per profile without touching individual policies. Profiles can also override enforcement class per policy — escalating operational policies to compliance-class, or demoting non-regulatory compliance policies to operational.
+
+The Governance Matrix is **always boolean** — scoring never applies to cross-boundary data decisions.
+
+See [Scoring Model](data-model/scoring-model/) for the complete specification.
 
 **Two-level orchestration:**
 - **Level 1 — Named Workflow Artifacts:** Orchestration Flow Policy with `ordered: true` — explicit, visible, auditable step sequence. This is the named pipeline skeleton.
@@ -257,7 +277,7 @@ Consumer submits request (API, Web UI, or Git PR)
 
 ## Capabilities Summary
 
-126 capabilities across 20 domains. Full detail in the [Capabilities Matrix](../capabilities-matrix/).
+134 capabilities across 21 domains. Full detail in the [Capabilities Matrix](../capabilities-matrix/).
 
 **Minimum viable end-to-end set (21 capabilities):**
 IAM-001 → IAM-002 → IAM-003 → IAM-007 → CAT-001 → REQ-001 → REQ-002 → REQ-003 → REQ-004 → REQ-005 → REQ-006 → REQ-007 → PRV-001 → PRV-002 → PRV-003 → PRV-004 → PRV-005 → LCM-001 → DRF-001 → DRF-002 → AUD-001
@@ -284,4 +304,4 @@ IAM-001 → IAM-002 → IAM-003 → IAM-007 → CAT-001 → REQ-001 → REQ-002 
 - **[Federated Contribution Model](data-model/federated-contribution-model/)** — who contributes what and how
 - **[Data Model](data-model/)** — complete 28-document data model reference
 - **[Specifications](specifications/)** — Consumer API, Admin API, Operator Interface, OPA Integration, Flow GUI, Registration, Examples, Kubernetes compatibility, SDK, CNCF strategy
-- **[Capabilities Matrix](../capabilities-matrix/)** — 126 capabilities across 20 domains
+- **[Capabilities Matrix](../capabilities-matrix/)** — 134 capabilities across 21 domains

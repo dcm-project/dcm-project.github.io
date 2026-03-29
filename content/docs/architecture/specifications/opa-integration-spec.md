@@ -506,3 +506,74 @@ OPA evaluates each package independently and returns results. The Policy Engine 
 ---
 
 *Document maintained by the DCM Project. For questions or contributions see [GitHub](https://github.com/dcm-project).*
+
+
+---
+
+## Scoring Model — OPA/Rego Patterns
+
+### Operational GateKeeper Output Schema
+
+```rego
+package dcm.gatekeeper.operational.cost_ceiling
+
+# Operational-class GateKeeper produces risk_score_contribution, not deny
+# enforcement_class: operational is declared in policy YAML metadata
+
+risk_score_contribution[result] {
+    input.payload.cost_estimate.per_month > 500
+    result := {
+        "contribution": 35,
+        "label": "cost_ceiling_exceeded",
+        "reason": sprintf(
+            "Estimated monthly cost $%v exceeds Tenant ceiling $500",
+            [input.payload.cost_estimate.per_month]
+        )
+    }
+}
+
+# Operational GateKeepers can also produce hard deny for extreme values
+deny contains reason {
+    input.payload.cost_estimate.per_month > 10000
+    reason := "Cost exceeds absolute maximum — manual review required before submission"
+}
+```
+
+### Advisory Validation Output Schema
+
+```rego
+package dcm.validation.advisory.cost_center
+
+# Advisory-class Validation produces completeness_contribution + warning
+# output_class: advisory is declared in policy YAML metadata
+
+completeness_warnings[warning] {
+    not input.payload.fields.cost_center
+    warning := {
+        "contribution": 10,
+        "warning_code": "recommended_field_absent",
+        "warning_message": "cost_center not provided — cost attribution will use Tenant default",
+        "field": "fields.cost_center"
+    }
+}
+```
+
+### Validation — Structural vs Advisory in Same Package
+
+```rego
+package dcm.validation.vm_fields
+
+# Structural validation (output_class: structural)
+fail contains reason {
+    not input.payload.fields.cpu_count
+    reason := {
+        "field": "fields.cpu_count",
+        "code": "required_field_absent",
+        "message": "cpu_count is required"
+    }
+}
+
+# Advisory validation (output_class: advisory — separate policy)
+# Never mix structural and advisory in the same policy artifact
+```
+

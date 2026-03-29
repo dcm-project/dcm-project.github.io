@@ -51,8 +51,8 @@ Consumer API · Admin API · Operator Interface · OPA Integration · Flow GUI �
 | Policy types | 7 (unified base contract + typed output schemas) |
 | Control plane components | 9 |
 | Four lifecycle states | Intent · Requested · Realized · Discovered |
-| Capabilities | 126 across 20 domains |
-| Data model documents | 33 (28 numbered + 3 foundation + 2 examples) |
+| Capabilities | 134 across 21 domains |
+| Data model documents | 34 (29 numbered + 3 foundation + 2 examples) |
 | Specifications | 10 |
 | Unresolved questions | 0 |
 
@@ -74,7 +74,7 @@ Consumer API · Admin API · Operator Interface · OPA Integration · Flow GUI �
 
 ## Capabilities Matrix
 
-[DCM-Capabilities-Matrix.md](DCM-Capabilities-Matrix.md) — 126 capabilities across 20 domains including: Identity and Access, Service Catalog, Request Lifecycle, Provider Contract, Resource Lifecycle, Drift Detection, Policy Management, Data Layer, Information Integration, Ingestion, Audit, Observability, Storage, Federation, Platform Governance, Accreditation, Zero Trust, Governance Matrix, Drift Reconciliation, and Federated Contribution.
+[DCM-Capabilities-Matrix.md](DCM-Capabilities-Matrix.md) — 126 capabilities across 20 domains including: Identity and Access, Service Catalog, Request Lifecycle, Provider Contract, Resource Lifecycle, Drift Detection, Policy Management, Data Layer, Information Integration, Ingestion, Audit, Observability, Storage, Federation, Platform Governance, Accreditation, Zero Trust, Governance Matrix, Drift Reconciliation, Federated Contribution, and Scoring Model (enforcement_class / approval routing thresholds).
 
 **Minimum viable end-to-end set:** 21 capabilities (IAM-001 → AUD-001 critical path).
 
