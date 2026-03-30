@@ -1,8 +1,4 @@
----
-title: "DCM Event Catalog"
-type: docs
-weight: 33
----
+# DCM Data Model — Event Catalog
 
 **Document Status:** ✅ Complete
 **Document Type:** Architecture Reference — Authoritative Event Catalog

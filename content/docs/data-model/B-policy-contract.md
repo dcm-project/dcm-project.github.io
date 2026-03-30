@@ -1,8 +1,4 @@
----
-title: "Unified Policy Contract"
-type: docs
-weight: -8
----
+# DCM — Unified Policy Contract
 
 > **⚠️ Active Development Notice**
 >

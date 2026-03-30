@@ -1,8 +1,4 @@
----
-title: "DCM Foundational Abstractions"
-type: docs
-weight: 0
----
+# DCM — Foundational Abstractions
 
 > **⚠️ Active Development Notice**
 >

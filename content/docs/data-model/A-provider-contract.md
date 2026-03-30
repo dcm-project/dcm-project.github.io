@@ -1,8 +1,4 @@
----
-title: "Unified Provider Contract"
-type: docs
-weight: -9
----
+# DCM — Unified Provider Contract
 
 > **⚠️ Active Development Notice**
 >

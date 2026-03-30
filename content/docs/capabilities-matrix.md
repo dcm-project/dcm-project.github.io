@@ -23,6 +23,20 @@
 | IAM-005 | Multi-Factor Authentication | Satisfy per-session and step-up MFA challenges | — | Configure MFA methods; declare step-up operations | IAM-001 |
 | IAM-006 | SCIM Automated Provisioning | Actor created/updated/deprovisioned from IdP automatically | — | Configure SCIM endpoint and attribute mappings | IAM-001 |
 | IAM-007 | Tenant Scope Enforcement | Access restricted to authorized Tenants | — | Declare Tenant membership; configure cross-tenant policies | IAM-003, IAM-004 |
+| AUTH-002 | Multi-Auth-Provider Routing | — | — | Register multiple Auth Providers simultaneously; ingress routes by authentication signal | IAM-001 |
+| AUTH-003 | Auth Provider Trust Level Enforcement | Requests evaluated per provider trust level (authoritative / verified / advisory) | — | Configure trust level per registered Auth Provider | IAM-001 |
+| AUTH-004 | Auth Provider Artifact Versioning | — | — | Manage role/tenant mapping versioning through standard DCM artifact lifecycle; activate/deprecate mappings | IAM-003 |
+| AUTH-005 | Auth Provider Failover | Existing sessions remain valid on provider failure; new auth routes to failover chain | — | Configure failover chain; monitor provider health; manage session cache TTL | IAM-001 |
+| AUTH-006 | Auth Context in Audit Trail | — | — | Auth Provider identity and ingress context automatically recorded in all audit records | IAM-001 |
+| AUTH-007 | Auth Provider Credential Security | — | — | Enforce Auth Provider config credentials reference Credential Provider; no plaintext credentials | IAM-001 |
+| AUTH-008 | No Anonymous Access | — | — | Enforce authenticated access at all ingress surfaces across all profiles | IAM-001 |
+| AUTH-009 | Webhook and Message Bus Authentication | Authenticate webhook registrations | — | Enforce authentication on all inbound surfaces regardless of profile | IAM-001 |
+| AUTH-010 | Per-Actor Rate Limiting | Receive 429 responses when rate limit exceeded | — | Configure rate limits per actor; manage burst allowances | IAM-001 |
+| AUTH-011 | Git PR Identity Resolution | Git PR submissions resolve to same actor identity as API/UI login | — | Configure Auth Provider to trust Git server's identity assertion | IAM-001 |
+| AUTH-012 | SCIM Automated Provisioning | Actor created/updated/deprovisioned from IdP automatically via SCIM | — | Configure SCIM 2.0 endpoint; manage suspension-on-deprovision policy | IAM-001 |
+| AUTH-013 | In-Flight Request Continuity on Auth Failure | In-flight requests before auth failure are not interrupted | — | Configure session cache TTL; manage graceful degradation | IAM-001 |
+| AUTH-014 | Two-Tier MFA Enforcement | Satisfy per-session MFA at login and step-up MFA for high-risk operations | — | Configure per-session and step-up MFA; declare step-up trigger operations | IAM-005 |
+| AUTH-015 | Built-In Auth Provider Storage Backend | — | — | Configure built-in Auth Provider storage backend (SQLite for minimal/dev; PostgreSQL/MySQL for standard+) | IAM-001 |
 
 ---
 
@@ -290,6 +304,8 @@
 | SMX-006 | Profile Scoring Threshold Management | — | — | Configure approval routing thresholds per profile (auto/reviewed/verified/authorized + custom tiers via named-tier list); manage signal weights; enforce SMX-008 (max auto_approve_below: 50) | POL-005, REQ-004 |
 | SMX-007 | Policy Enforcement Class Override | — | Contribute policies with declared enforcement_class; receive notification when profile overrides enforcement class | Declare per-profile enforcement class overrides; manage regulatory_mandate flag to protect compliance-class policies from demotion | POL-004, POL-005 |
 | SMX-008 | Score Audit Trail | Query risk score and routing decision for own requests; view score_drivers and advisory_warnings | — | Query full Score Record detail including signal breakdown and actor risk history; manage score audit retention | AUD-001, REQ-004 |
+| SMX-009 | Scoring Weight Range Enforcement | — | Declare operational GateKeeper scoring_weight between 1 and 100 | Enforce weight range at policy activation; reject out-of-range weights | SMX-001 |
+| SMX-010 | Score Breakdown Audit Inclusion | View score breakdown in request audit record | — | Configure score breakdown storage in Audit Store for all scored requests | SMX-001, AUD-001 |
 
 ---
 
@@ -305,6 +321,7 @@
 | MPX-005 | Transparent Constituent Visibility | Query and manage DCM-visible constituent entities independently (when transparency mode); receive constituent-level drift alerts | Declare composition_visibility mode; register transparent constituents with deterministic UUIDs | Configure visibility mode per compound resource type; manage constituent entity lifecycle policies | MPX-001, DRF-001 |
 | MPX-006 | Compound Execution Status Tracking | Monitor compound execution round progress via request status; see component-level status during long-running compositions | Send intermediate status events to DCM during execution; declare status_reporting.interval | Monitor compound execution health; configure execution timeout alerts | MPX-001, REQ-008 |
 | MPX-007 | Nested Meta Provider Composition | Request high-order compound services composed of other compound services (max depth 3) | Implement as a Meta Provider that calls other Meta Providers as constituents; declare max_nesting_depth | Configure nesting depth limits; manage nested compensation chains | MPX-001, PRV-009 |
+| MPX-008 | Meta Provider Nesting Depth Enforcement | — | Declare nesting depth in Meta Provider registration | Enforce maximum nesting depth of 3 at placement time; reject deeper compositions | MPX-001 |
 
 ---
 
@@ -320,6 +337,11 @@
 | CPX-005 | Credential Revocation | Receive revocation notification when credentials are revoked (actor deprovisioned, entity decommissioned); confirm transition to new credential | Implement revoke endpoint with declared SLA; invalidate value immediately on emergency revocation | Manage Credential Revocation Registry; configure revocation cache TTL per profile (PT1M standard, PT30S fsi/sovereign); enforce CPX-007 (decommission blocks on credential revocation) | CPX-001, LCM-007 |
 | CPX-006 | Revocation Propagation | — | Refresh revocation cache within profile-governed TTL; validate credential UUID against cache at use time (not only at receipt) | Configure revocation cache TTL; monitor revocation propagation latency; alert on SLA violations | CPX-005, IAM-001 |
 | CPX-007 | Audit Trail for Credential Lifecycle | View own credential record history (issue, rotate, revoke events); every value retrieval audited with retrieval_uuid | — | Query full credential audit trail including retrieval count; manage credential audit retention | CPX-001, AUD-001 |
+| CPX-008 | IP-Bound Credentials for fsi/sovereign | — | — | Enforce IP binding (bound_to_ip) on all credentials issued for fsi and sovereign profiles | CPX-001, ZTS-002 |
+| CPX-009 | Algorithm and Key Usage Declaration | — | Declare algorithm and key_usage on credential records at issuance | Enforce declaration at issuance; reject credentials without declared algorithm | CPX-001 |
+| CPX-010 | Idle Credential Detection | Receive notification when credential reaches idle threshold | — | Configure idle_detection_threshold per profile; enforce alert-only action | CPX-001 |
+| CPX-011 | Compliance Domain Additive Credential Requirements | — | — | Enforce additive credential requirements when compliance domains are active on a profile | CPX-001, POL-005 |
+| CPX-012 | Credential Value Store Isolation (All Profiles) | — | — | Enforce credential values never stored in DCM stores in ALL profiles including minimal | CPX-001 |
 
 ---
 
@@ -335,6 +357,11 @@
 | ATM-005 | Degradation Review Gate | — | — | Review and explicitly accept each SECURITY_DEGRADATION item before a registry change activates; provide compensating control rationale; must hold verified or authorized tier reviewer role | ATM-004, IAM-001 |
 | ATM-006 | Profile Gap Detection | — | — | Receive PROFILE_GAP warnings when tier registry changes leave profile threshold lists incomplete; update threshold lists or acknowledge gap within approval window | ATM-003, ATM-004 |
 | ATM-007 | Tier Registry Audit Trail | Query historical tier registry versions and impact reports | — | Access full audit trail of all tier registry changes: proposal, impact assessment, degradation acceptances, activation | ATM-004, AUD-001 |
+| ATM-008 | Approval Record Tier Weight Snapshot | — | — | Store tier name and resolved weight at approval record creation; historical records retain weight for audit comparison across regime changes | ATM-001 |
+| ATM-009 | Tier Registry Degradation Gate | Receive notification when tier change produces degradation affecting owned resources | — | Block tier registry activation on SECURITY_DEGRADATION items; require verified-tier acceptance per item | ATM-001 |
+| ATM-010 | Broken Reference Gate | — | — | Block tier registry activation when BROKEN_REFERENCE items exist (removed tier still referenced in active config) | ATM-001 |
+| ATM-011 | Tier Change Impact Report | — | — | Generate and store tier impact report in Audit Store at proposal and activation time | ATM-001, AUD-001 |
+| ATM-012 | Profile Gap Warning on Tier Insertion | — | — | Detect PROFILE_GAP when new tier inserted but profile threshold list not updated; emit non-blocking warning | ATM-001, POL-005 |
 
 ---
 
@@ -363,6 +390,9 @@
 | VER-003 | Deprecation Headers | Receive `Deprecation`, `Sunset`, and `Link` headers on all responses from deprecated API versions (RFC 8594/RFC 9745); use these to drive migration priority | — | Configure header injection for deprecated versions; ensure headers are accurate | VER-002 |
 | VER-004 | Migration Guide | Access machine-readable migration guide at `GET /api/v{N}/migration-guide`; understand all breaking changes from previous version with migration instructions | Access OIS migration guide at `GET /provider/api/v{N}/migration-guide` | Maintain migration guides for all new major versions (required by VER-008) | VER-002 |
 | VER-005 | Preview Endpoints | Access preview endpoints at `/api/v{N}/preview/`; understand stability commitment is none; provide feedback before graduation | — | Mark endpoints as preview; graduate to stable in new major version | VER-001 |
+| VER-006 | Latest Alias Production Warning | — | — | Support `latest` version alias; emit response header discouraging production use | VER-001 |
+| VER-007 | Preview Endpoint Instability Declaration | — | — | Mark preview endpoints explicitly; may change or be removed without major version bump | VER-001 |
+| VER-009 | Provider Dispatch Compatibility | — | Maintain backward compatibility with DCM dispatch payloads from supported prior versions | Manage provider dispatch versioning; maintain supported version matrix | VER-001 |
 
 ---
 
@@ -376,6 +406,12 @@
 | SES-003 | Emergency Session Revocation | Receive critical notification on security-event session revocation | — | Trigger emergency revocation (security_event); revocation propagates within profile SLA (PT5S sovereign to PT30S standard) | SES-001, EVT-001 |
 | SES-004 | Token Introspection | — | Call POST /api/v1/auth/introspect to validate bearer tokens without maintaining own revocation cache | Configure introspection endpoint access; manage introspection scope grants | SES-001, IAM-001 |
 | SES-005 | Concurrent Session Enforcement | Oldest session auto-revoked when new session exceeds concurrent limit; receive notification via Notification Provider | — | Configure concurrent_sessions limit per profile; monitor session counts | SES-001 |
+| AUTH-017 | Session Revocation Propagation SLA | — | — | Propagate revocation to Session Revocation Registry within profile SLA (PT5S sovereign → PT30S standard) | SES-001 |
+| AUTH-018 | Per-Request Revocation Registry Check | — | Check Session Revocation Registry on each request bearing a bearer token | Configure revocation registry query path; manage registry availability | SES-001 |
+| AUTH-019 | Emergency Revocation No-Grace Period | Receive critical notification on emergency revocation | — | Emergency session revocation fires immediately with no grace period | SES-003 |
+| AUTH-020 | Introspection Endpoint Authentication | — | Authenticate introspection calls using provider interaction credential | Configure introspection scope grants; manage endpoint access | SES-004 |
+| AUTH-021 | Oldest Session Revocation on Limit | Receive notification when oldest session is auto-revoked | — | Configure concurrent_sessions limit; enforce oldest-first revocation order | SES-005 |
+| AUTH-022 | Refresh Token Invalidation on Session Revoke | — | — | Invalidate refresh token when parent session is revoked; return REVOKED_SESSION error on use | SES-001 |
 
 ---
 
@@ -388,6 +424,9 @@
 | ICOM-003 | Internal Call Authorization | — | — | Declare allowed_sources per internal endpoint; declare allowed_targets per component; unauthorized source calls rejected with ICOM_UNAUTHORIZED_SOURCE audit record (urgency: high) | ICOM-001, AUD-001 |
 | ICOM-004 | Internal Interaction Credentials | — | — | Every internal call presents a scoped ZTS-002 interaction credential in addition to mTLS; credential scoped to specific operation and target component | ICOM-001, CPX-002, ZTS-002 |
 | ICOM-005 | Component Certificate Revocation | — | — | Compromised component certificates added to Internal CA CRL immediately; CRL cache refresh within profile SLA (PT15S sovereign to PT1M standard); ICOM_CERT_COMPROMISED audit record (urgency: critical) | ICOM-001, AUD-001 |
+| ICOM-006 | Component Certificate Maximum Validity | — | — | Issue internal component certificates with maximum validity P90D; enforce expiry and rotation | ICOM-001 |
+| ICOM-008 | Compromised Certificate Immediate CRL | — | — | Add compromised internal component certificates to Internal CA CRL immediately; propagate within PT60S | ICOM-001 |
+| ICOM-009 | Trust Anchor Registration | — | — | Register root or intermediate CA as trust anchor for internal mTLS; reject certificates not chaining to registered trust anchor | ICOM-001 |
 
 ---
 
@@ -400,6 +439,8 @@
 | SCH-002 | Maintenance Windows | Reference maintenance windows in scheduled requests; view available windows at GET /api/v1/maintenance-windows | — | Create/manage/suspend maintenance windows; approve window schedules; configure platform-wide windows | SCH-001, GOV-001 |
 | SCH-003 | Dual Policy Evaluation | — | — | Understand that scheduled requests run GateKeeper at declaration AND at dispatch; dispatch-time failure → FAILED with schedule_policy_rejection (SCH-003) | SCH-001, POL-001 |
 | SCH-004 | Deadline Enforcement | Set not_after on scheduled requests; receive request.failed(schedule_deadline_missed) if deadline passes without dispatch | — | Monitor deadline miss rates; configure alerting on deadline misses | SCH-001, EVT-001 |
+| SCH-005 | Not-After Expiry Failure | Receive FAILED status when scheduled request expires before dispatch | — | Configure not_after enforcement; manage SCHEDULE_EXPIRED recovery policy | SCH-001 |
+| SCH-006 | Maintenance Window Platform Authorization | — | — | Require platform_admin or tenant_admin authority to create/modify Maintenance Windows | SCH-004 |
 
 ---
 
@@ -411,6 +452,8 @@
 | RDG-002 | Field Injection | Declare inject_fields to pass realized output fields (e.g. IP address) from dependency into dependent request fields automatically at dispatch time | — | — | RDG-001, REQ-001 |
 | RDG-003 | PENDING_DEPENDENCY Status | Track dependent requests in PENDING_DEPENDENCY status; cancel pending requests individually or cancel whole group; receive request.pending_dependency and request.dependency_met events | — | Monitor PENDING_DEPENDENCY queue depth; detect stalled groups | RDG-001, EVT-001 |
 | RDG-004 | Group Failure Handling | Configure on_failure: cancel_remaining or continue; group-level timeout; group status via GET /api/v1/request-groups/{uuid} | — | Monitor group failure rates | RDG-001 |
+| RDG-005 | Group-Level Timeout Enforcement | Receive TIMEOUT failure when group-level timeout elapses | — | Configure group_timeout independent of individual request timeouts | RDG-001 |
+| RDG-006 | Single Group Membership Enforcement | — | — | Reject attempts to add a request to more than one dependency group | RDG-001 |
 
 ---
 
@@ -422,6 +465,75 @@
 | HLT-002 | Readiness Probe | — | — | GET /readyz: checks Session Store, Audit Store, Policy Engine, Message Bus, Auth Provider connectivity; Kubernetes removes from LB on failure; startup sequence observable via readyz | — |
 | HLT-003 | Component Health Detail | — | — | GET /api/v1/admin/health: per-component status (pass/warn/fail), metrics, queue depths, provider/auth summary; admin auth required | IAM-001 |
 | HLT-004 | Prometheus Metrics | — | — | GET /metrics: Prometheus scrape endpoint; request pipeline, policy, session, drift, provider, internal CA metrics | OBS-001 |
+| HLT-005 | Prometheus Metrics Endpoint | — | — | Expose Prometheus-compatible metrics at GET /metrics including request throughput, store latency, policy eval time, provider health counters | HLT-001 |
+| HLT-006 | Startup Readiness via /readyz | — | — | Report PASSING on /readyz only after all required stores available and bootstrap complete | HLT-001 |
+
+---
+
+
+## 32. Operational Reference
+
+| ID | Capability | Consumer | Service Provider | Platform/Admin | Depends On |
+|----|-----------|---------|---------|---------------|-----------|
+| OPS-001 | GitOps Store Partitioning | — | — | Declare partitioning strategy in deployment manifest; execute tenant-shard, per-tenant, or time-based archiving migration; configure shard routing and mirror lag monitoring | STO-001 |
+| OPS-002 | Store Migration | — | — | Execute dual-write migration between store implementations; maintain audit chain continuity across cutover; enforce profile-governed burn-in before source decommission | STO-001, AUD-001 |
+| OPS-003 | Disaster Recovery | — | — | Execute scenario-specific recovery procedures (component/store/full-CP/repave); meet profile-governed RTOs (PT1M–PT15M component, PT5M–PT2H store, PT5M–PT30M full-CP); complete post-recovery validation checklist | HLT-001, AUD-001 |
+| OPS-004 | Backup Management | — | — | Configure store-appropriate backup schedules (Git push for GitOps stores, PITR for Realized Store, Kafka snapshots for Audit Store); enforce P365D minimum Audit Store retention | STO-001 |
+
+---
+
+
+## 33. Web Interfaces
+
+| ID | Capability | Consumer | Service Provider | Platform/Admin | Depends On |
+|----|-----------|---------|---------|---------------|-----------|
+| GUI-001 | Consumer Portal — Catalog, Requests, Resources | Browse catalog; live cost estimate; submit requests with scheduling and dependency groups; live SSE status with constituent tracking; cross-resource drift report; consumer-scoped audit trail with correlation ID trace | — | — | CAT-001, REQ-001, SCH-001, RDG-001, EVT-002 |
+| GUI-002 | Consumer Portal — Live Request Status | Real-time status via SSE stream (status_change, progress_updated, approval events, heartbeat); constituent status for compound requests; approval flow inline; fallback to polling | — | — | REQ-001, EVT-002 |
+| GUI-003 | Consumer Portal — Resource Management | View/filter owned resources by state and type; lifecycle state badges; drift indicator; resource detail with Overview/Drift/Audit/Cost/Credentials/Relationships/Groups tabs; state-sensitive action buttons; bulk operations | — | — | LCM-001, DRF-001, AUD-001 |
+| GUI-004 | Consumer Portal — Session and Security | View active sessions; revoke individual or all other sessions; step-up MFA prompt for gated operations; tenant context selector; role-gated navigation (hide not disable) | — | — | SES-001, IAM-001 |
+| GUI-005 | Admin Panel — Platform Dashboard | Control plane component health grid; provider health summary; pending approvals count; open drift records by severity; request throughput; all driven by GET /api/v1/admin/health | — | Platform Admins, SREs configure dashboard widgets; role-gated sections | HLT-003 |
+| GUI-006 | Admin Panel — Governance and Approvals | Approval queue (all tenants); approval detail with risk score breakdown; authority tier registry editor (drag-and-drop reordering, impact report visualization, degradation acceptance flow); scoring threshold editor (auto_approve_below ≤ 50 hard-stop) | — | Policy Owners and Platform Admins | ATM-004, SMX-001 |
+| GUI-007 | Admin Panel — Audit and Compliance | Platform-wide cross-tenant audit trail; pre-built compliance reports (SOC 2, FedRAMP, HIPAA); audit chain integrity status; correlation ID trace; session and security event feed | — | Auditors, Security team, Platform Admins | AUD-001, SES-003 |
+| GUI-008 | Provider Management — Common Shell | Overview, configuration, health history, audit trail, and notification tabs for all 11 provider types; provider owner role gates access; Platform Admins see all providers | — | Provider owners manage own providers; Platform Admins manage all | PRV-001, IAM-001 |
+| GUI-009 | Provider Management — Type Extensions | Service Provider: capacity, managed entities, naturalization mapping, realization history; Credential Provider: inventory, rotation, revocation, external CA config, algorithm compliance; Auth Provider: session stats, SCIM sync, connection status; Policy Provider: trust level, contribution pipeline | — | Provider owners access type-specific tabs for their provider type | GUI-008, PRV-001 |
+| GUI-011 | RHDH Plugin Suite | Use DCM capabilities within Red Hat Developer Hub (RHDH) or Backstage via Dynamic Plugins (@dcm/backstage-plugin-*); no RHDH rebuild required for updates | — | Configure RHDH app-config.yaml with DCM connection; configure Dynamic Plugin loading |
+| GUI-012 | Scaffolder Template Auto-Generation | DCM catalog items automatically generate Backstage Software Templates; new resource types appear as templates without UI code; field schema → JSON Schema → Scaffolder form | — | Configure @dcm/backstage-plugin-catalog-backend; template generation is automatic |
+| GUI-013 | DCM Entity Provider | DCMService (catalog items) and DCMResource (realized entities) appear in RHDH Software Catalog; entities sync every PT5M; search-indexed; tenancy enforced via namespace | — | Service account credential configuration; sync interval configuration |
+| GUI-014 | ITSM Integration Bridge | View ITSM references (ServiceNow, Jira) on resource entity Overview tab; link change records to DCM requests; see ITSM-sourced approval votes in request status; CMDB reference on entity pages | ITSM systems receive DCM lifecycle events via Notification Provider and call Admin API to record approval votes; CMDB sync via webhook subscription | Configure ITSM Notification Provider; map DCM event → ITSM action; configure CMDB field mapping | EVT-001, GUI-002 |
+| GUI-010 | Unified Shell | Single DCM web application with role-gated surfaces: Consumer Portal (all actors), Admin Panel (platform roles), Provider Management (provider_owner role), Flow GUI link (policy_owner/sre); one login, one session; no separate applications | — | Platform Admins configure which surfaces are available | IAM-001, SES-001 |
+
+---
+
+
+## 34. ITSM Integration
+
+| ID | Capability | Consumer | Service Provider | Platform/Admin | Depends On |
+|----|-----------|---------|---------|---------------|-----------|
+| ITSM-001 | ITSM Provider Registration | — | Register as ITSM Provider with declared capabilities (supported_actions, itsm_system, field_mapping_ref, cmdb_ci_type_map); implement standard OIS health check | Register ITSM Providers; review and approve ITSM Provider registrations; configure inbound webhook authentication | PRV-001, CPX-001 |
+| ITSM-002 | Outbound ITSM Record Creation | View ITSM references on resource entities (change request, incident, CMDB CI links with deep links to ITSM system) | Receive action requests from DCM; create/update records in ITSM system; return record ID for storage on entity | Configure ITSM Policies (create_change_request, create_incident, update_cmdb_ci); configure block_until_created for compliance gates | ITSM-001, POL-001 |
+| ITSM-003 | Inbound ITSM Approval Routing | — | Verify HMAC signature on inbound webhook; forward ITSM approval decisions to DCM Admin API approval vote endpoint | Configure inbound webhook secret (Credential Provider); monitor approval routing from ITSM systems (ServiceNow CAB, Jira workflow) | ITSM-001, CPX-001, ATM-001 |
+| ITSM-004 | ITSM Policy Authoring | — | — | Author ITSM Action policies with template expressions; configure shadow validation; configure on_failure behavior; use block_until_created for pipeline gates (with mandatory timeout per ITSM-005) | ITSM-001, POL-001 |
+| ITSM-005 | CMDB Synchronization | View CMDB CI reference on resource entities; CI auto-created on realization, auto-retired on decommission | Receive create_cmdb_ci and retire_cmdb_ci actions; maintain dcm_entity_uuid correlation on CMDB CI records | Configure CMDB CI type mapping per resource type; monitor CMDB sync failures | ITSM-001, ITSM-002 |
+| ITSM-006 | ITSM Field Mapping Declaration | — | — | Declare field mappings between DCM entity fields and ITSM CI types in ITSM Provider config; validate against Resource Type Specs | ITSM-001 |
+| ITSM-007 | ITSM Policy Template Expression Validation | — | — | Validate template expressions in ITSM Policy action_payload at policy activation; reject unresolvable expressions | ITSM-001, POL-003 |
+
+---
+
+
+## 35. Provider Callback Authentication
+
+| ID | Capability | Consumer | Service Provider | Platform/Admin | Depends On |
+|----|-----------|---------|---------|---------------|-----------|
+| PCA-001 | Two-Layer Provider Callback Authentication | — | Present valid mTLS certificate (Layer 1) and provider callback credential (Layer 2) on every call to DCM callback endpoints | Configure DCM CA trust anchor; issue provider callback credentials at activation; enforce both layers | PRV-001, ZTS-001 |
+| PCA-002 | Provider Callback Credential Scope Enforcement | — | Use callback credential scoped to own provider_uuid only; cannot act on other providers | Enforce credential scope at validation; reject cross-provider credential use | PRV-001 |
+| PCA-003 | Entity-Level Callback Authorization | — | Receive 403 ENTITY_NOT_OWNED_BY_PROVIDER when pushing state for entities not dispatched to this provider | Enforce per-call entity ownership check independent of credential validity | PRV-001, REQ-007 |
+| PCA-004 | Scope Violation Auto-Suspension | Receive critical notification when owned provider is suspended due to scope violations | — | Auto-suspend provider and notify platform admin after 5 consecutive scope violations within PT1H | PRV-001, ZTS-001 |
+| PCA-005 | Callback Credential Issued by Credential Provider | — | Retrieve callback credential via Credential Provider at activation; not directly from API Gateway | Issue callback credentials exclusively through Credential Provider; reject direct credential issuance requests | PRV-001, CPX-001 |
+| PCA-006 | Registration Token Single-Use Enforcement | — | Use registration token for initial registration only; obtain callback credential after activation | Invalidate registration token after first successful use regardless of expiry timestamp | PRV-001 |
+| PCA-007 | Sovereignty Change Re-Registration | — | Submit new registration with new registration token when sovereignty declaration changes | Require new registration token and approval pipeline for sovereignty declaration changes | PRV-001, GMX-004 |
+| PCA-008 | Callback Credential Pre-Expiry Rotation | — | Implement credential refresh; receive new credential before old expires during transition window | Initiate rotation before expiry; maintain transition window (50% of credential lifetime) | PRV-001, CPX-001 |
+| PCA-009 | IP-Bound Callback Credentials for fsi/sovereign | — | Present callback calls from declared bound_to_ip address for fsi/sovereign profiles | Enforce IP binding on callback credentials for fsi and sovereign profiles | PCA-001, CPX-008 |
+| PCA-010 | All Inbound Provider Calls Produce Audit Records | — | — | Write audit record for every inbound provider call including rejected calls; no silent failures | PCA-001, AUD-001 |
 
 ---
 
@@ -461,7 +573,42 @@
 | Scheduled Requests | 4 |
 | Request Dependency Graph | 4 |
 | DCM Self-Health | 4 |
-| **Total** | **189** |
+| Identity and Access Management | 21 |
+| Service Catalog | 7 |
+| Request Lifecycle Management | 10 |
+| Provider Contract and Realization | 9 |
+| Resource Lifecycle Management | 7 |
+| Drift Detection and Remediation | 5 |
+| Policy Management | 7 |
+| Data Layer Management | 5 |
+| Information and Data Integration | 6 |
+| Ingestion and Brownfield Management | 4 |
+| Audit and Compliance | 5 |
+| Observability and Operations | 5 |
+| Storage and State Management | 6 |
+| DCM Federation and Multi-Instance | 5 |
+| Platform Governance and Administration | 7 |
+| Accreditation Management | 6 |
+| Zero Trust and Security Posture | 6 |
+| Unified Governance Matrix | 7 |
+| Drift Reconciliation | 5 |
+| Federated Contribution Model | 7 |
+| Scoring Model | 10 |
+| Meta Provider Composability | 8 |
+| Credential Provider Model | 12 |
+| Authority Tier Model | 12 |
+| Event Catalog | 7 |
+| API Versioning | 8 |
+| Session Revocation | 11 |
+| Internal Component Authentication | 8 |
+| Scheduled and Deferred Requests | 6 |
+| Request Dependency Graph | 6 |
+| DCM Self-Health | 6 |
+| Operational Reference | 4 |
+| Web Interfaces | 14 |
+| ITSM Integration | 7 |
+| Provider Callback Authentication | 10 |
+| **Total** | **269** |
 
 ---
 

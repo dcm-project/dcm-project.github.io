@@ -1,8 +1,4 @@
----
-title: "DCM Consumer API Specification"
-type: docs
-weight: 0
----
+# DCM Consumer API Specification
 
 > **📋 Draft**
 >

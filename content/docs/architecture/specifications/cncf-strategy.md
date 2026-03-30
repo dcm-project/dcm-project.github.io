@@ -1,8 +1,4 @@
----
-title: "CNCF Strategy"
-type: docs
-weight: 7
----
+# DCM — CNCF Strategy and Community Engagement Plan
 
 > **⚠️ Active Development Notice**
 > 
@@ -246,3 +242,16 @@ The following artifacts must be ready before a CNCF Sandbox submission is credib
 **Q5:** Level 2 conformance requires: full dispatch/cancel/discover cycle, full realized state reporting, governance matrix enforcement at the provider boundary, and health check compliance. These requirements are now formally defined in the Operator Interface Specification. The project team estimates timeline based on available engineering resources against this defined scope.
 
 *Document maintained by the DCM Project. For questions or contributions see [GitHub](https://github.com/dcm-project).*
+
+## Red Hat Developer Hub / Backstage Integration
+
+DCM implements a Backstage plugin suite (`@dcm/backstage-plugin-*`) for deployment as RHDH Dynamic Plugins. This is the primary consumer-facing deployment model. See [RHDH Integration Specification](dcm-rhdh-integration-spec.md) for the complete architecture.
+
+**CNCF alignment:** Backstage is a CNCF incubating project. DCM's RHDH integration follows CNCF best practices for developer portals and internal developer platforms (IDPs).
+
+| Component | CNCF Status | DCM Use |
+|-----------|------------|---------|
+| Backstage | Incubating | Primary consumer GUI platform |
+| Backstage Software Templates | Backstage feature | Auto-generated from DCM catalog items |
+| Backstage Catalog | Backstage feature | DCMService and DCMResource entity kinds |
+| Backstage Permission Framework | Backstage feature | DCM role → Backstage permission bridge |

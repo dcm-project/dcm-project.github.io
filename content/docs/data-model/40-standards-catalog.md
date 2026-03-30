@@ -1,8 +1,4 @@
----
-title: "Standards and Compliance Catalog"
-type: docs
-weight: 40
----
+# DCM Data Model — Standards and Compliance Catalog
 
 **Document Status:** 🔄 In Progress
 **Document Type:** Architecture Reference — Normative Standards

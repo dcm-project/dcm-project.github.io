@@ -4727,7 +4727,204 @@ AUTH → RFC 6749/7519/7662/OIDC/SCIM · CPX → FIPS 140/RFC 5280/8555/7030/889
 
 ---
 
-## SECTION 73 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 73 — OPERATIONAL REFERENCE (doc 41 — 41-operational-reference.md)
+
+> **Full specification:** [41-operational-reference.md](data-model/41-operational-reference.md) — GitOps store partitioning, store migration playbook, disaster recovery scenarios, OPS-001–007.
+
+### GitOps Store Partitioning (Section 1)
+Three strategies: tenant-shard (hash(tenant_uuid) % N shards — recommended), per-tenant (one repo per tenant — MSP/strict isolation), time-based archiving (active vs cold archive repos). Triggers: >50k entities, clone time >PT30S, >500 tenants, repo >10GB. Layer Store partitioned by resource domain (Compute.*, Network.*, etc.). Shallow clones for read-only consumers; read mirrors for audit/drift.
+
+### Store Migration Playbook (Section 2)
+5-phase pattern: Prepare → Backfill → Validate → Cutover → Decommission (after burn-in). Dual-write mode during migration. Audit chain must be unbroken across cutover (OPS-002). Source stays read-only for burn-in period — DO NOT decommission early (OPS-003). Profile-governed burn-in: P7D(minimal) → P90D(fsi/sovereign). Rollback available during burn-in by re-pointing to source. Common paths: SQLite→PostgreSQL (evaluation→standard), PostgreSQL→CockroachDB (HA requirement), GitOps repo restructuring (monorepo→shards via git filter-repo).
+
+### Disaster Recovery Scenarios (Section 3)
+5 scenarios with RTO/RPO per profile:
+- S1 Component failure: pod restart; RTO PT1M(sovereign)–PT15M(minimal); RPO 0 (stateless)
+- S2 Store failure: failover/restore; RTO PT5M(fsi)–PT2H(minimal); RPO 0(GitOps)–PT15M(Audit)
+- S3 Full control plane loss: redeploy + store reconnect; RTO PT5M(fsi)–PT30M(minimal); RPO 0
+- S4 Partial region loss: federation reroutes; sovereignty-scoped may block until region recovers
+- S5 Repave (complete loss, Git intact): bootstrap from Git, restore operational stores from backup, rehydrate managed resources; RTO PT2H(fsi)–PT24H(minimal)
+
+Post-recovery validation checklist (Section 3.6): /livez pass, /readyz pass, audit chain verify, store validate, drift scan, cert status, write post-incident audit record. OPS-005.
+
+### OPS-001–007 System Policies
+OPS-001: partitioning declared in deployment manifest. OPS-002: audit chain continuity across migration. OPS-003: source read-only during burn-in; do not decommission early. OPS-004: RTO must be met per profile. OPS-005: post-recovery checklist written to audit store. OPS-006: Audit Store minimum P365D retention all profiles. OPS-007: Git remotes must have push access from 2+ geographically separated locations.
+
+---
+
+## SECTION 74 — WEB INTERFACE SPECIFICATIONS (3 specs)
+
+> **Consumer GUI:** [dcm-consumer-gui-spec.md](specifications/dcm-consumer-gui-spec.md) — Consumer Portal wrapping all 16 Consumer API sections, bounded by tenancy
+> **Admin GUI:** [dcm-admin-gui-spec.md](specifications/dcm-admin-gui-spec.md) — Admin Panel wrapping all Admin API sections, role-gated
+> **Provider GUI:** [dcm-provider-gui-spec.md](specifications/dcm-provider-gui-spec.md) — Provider management shell + 11 type-specific extension sets
+
+### Unified Shell Architecture (GUI-010)
+ONE application, THREE role-gated surfaces: Consumer Portal (all actors) + Admin Panel (platform_admin/sre/auditor/security/policy_owner/finops) + Provider Management (provider_owner role). One login, one session token — navigation adapts to highest privilege level. Flow GUI (policy authoring) is linked/embeddable within Admin Panel.
+
+### Consumer Portal (dcm-consumer-gui-spec.md — 20 sections)
+Tenancy: X-DCM-Tenant header; ContextSelector in masthead (hidden for single-tenant actors).
+Navigation (PatternFly grouped left nav): Service Catalog | MY WORK (Requests, Resources, Dependency Groups) | Approvals [badge] | GOVERNANCE (Cost & Quota, Audit Trail, Contributions) | SETTINGS (Notifications, Sessions). **Hide, not disable** — unavailable items hidden entirely.
+Key capability — Live Status (GUI-002): SSE stream (GET /api/v1/requests/{uuid}/stream); events: status_change, progress_updated, approval_required, approval_recorded, heartbeat; constituent_status array for compound/Meta Provider requests; fallback to polling.
+Key capability — Request form: rendered from catalog item schema; live cost estimate; scheduling section (at/window/recurring); dependency group linking with field injection declaration.
+Key capability — ITSM Bridge (GUI-014, section 8): ITSM references (ServiceNow/Jira change records, CMDB CIs) displayed on entity Overview tab; ITSM Notification Provider translates DCM events → ITSM records; ITSM systems call Admin API to record approval votes (DCM records decision, ITSM runs CAB process); CMDB sync is one-way DCM→CMDB via Notification Provider subscription.
+Key capability — Consumer Audit Trail (section 11): own resource audit trail with Correlation ID trace through full pipeline; filterable by operation/type/date; export CSV.
+Key capability — Drift Report (section 6.3): cross-resource drift view with severity sorting; Revert All Critical bulk action; export drift report.
+Security: MFA step-up inline (no page leave); strict CSP (connect-src self + DCM API origin only; no inline scripts).
+
+### Admin Panel (dcm-admin-gui-spec.md)
+Platform health dashboard: component health grid, provider health summary, pending approvals count — all from GET /api/v1/admin/health.
+Tier registry editor: drag-and-drop reorder; impact report shows SECURITY_DEGRADATION(red)/BROKEN_REFERENCE(orange)/PROFILE_GAP(yellow)/SECURITY_UPGRADE(green); activate blocked until all blocking items resolved.
+Scoring editor: visual slider with hard-stop — auto_approve_below slider maximum is 50 (SMX-008/ATM-002); signal weights must sum to 100%.
+Flow GUI accessible via link or embedded iframe for policy_owner/sre roles.
+
+### Provider Management (dcm-provider-gui-spec.md)
+Common shell for ALL 11 provider types: overview, config, health history, audit trail, notifications.
+Provider ownership: declared at registration (owner_team_uuid); provider_owner role scoped per provider UUID.
+Service Provider extensions: capacity management (manual override for emergencies), managed entities with drift indicators, naturalization mapping viewer, test naturalization tool, interim status config.
+Credential Provider extensions: inventory (metadata only — NEVER values), rotation management, revocation registry search, external CA config (protocol, chain, CRL/OCSP status), algorithm compliance view (forbidden algorithms must be zero).
+Auth Provider extensions: connection status with failover chain, SCIM sync status, session statistics by auth method.
+
+### Security Model (all GUI surfaces)
+Navigation: hide not disable. Roles from session token; re-checked on token refresh. Tenancy: X-DCM-Tenant enforced UI + API (defense in depth). Step-up MFA: inline prompt without page navigation; cached PT10M. CSP: connect-src self + DCM API; no inline scripts; no eval().
+
+### RHDH Integration (dcm-rhdh-integration-spec.md)
+PRIMARY deployment model. 6 plugin packages as Dynamic Plugins (no RHDH rebuild): @dcm/backstage-plugin (frontend) · @dcm/backstage-plugin-backend (proxy + SSE relay + auth) · @dcm/backstage-plugin-catalog-backend (entity provider: DCMService + DCMResource) · @dcm/backstage-plugin-scaffolder-backend (dcm:request:submit, dcm:request:wait with live log, dcm:request:group, dcm:catalog:refresh) · @dcm/backstage-permission-policy (DCM roles → Backstage permissions) · @dcm/backstage-plugin-auth-backend (RHDH as DCM OIDC provider).
+Auth: RHDH/Keycloak → OIDC token exchange → DCM session token (cached in RHDH backend by backstage user ref). Tenancy: RHDH Group context → X-DCM-Tenant header (via dcm-tenant-{uuid} group naming convention).
+Entity model: DCMService kind (catalog items, namespace=dcm-catalog) auto-generated from DCM API every PT5M. DCMResource kind (realized resources, namespace=dcm-tenant-uuid) auto-synced from Realized State. Both search-indexed in RHDH.
+Scaffolder = request form: each DCM catalog item generates one Backstage Software Template from its JSON Schema. Template wizard → dcm:request:submit → dcm:request:wait (live log: step N/M, constituent status) → dcm:catalog:refresh → entity appears in catalog. NO separate request form UI needed.
+PatternFly nav: NavGroup(MY WORK > Requests/Resources/Groups) · NavItem with NotificationBadge (Approvals [count]) · NavGroup(GOVERNANCE > Cost&Quota/Contributions) · NavGroup(SETTINGS > Notifications/Sessions). Tenant via RHDH ContextSelector in masthead.
+Pre-built RHDH value: RHSSO/Keycloak auth (no auth code) · RBAC plugin (no-code role management) · TechDocs (DCM docs in-portal) · ArgoCD plugin (layer store visibility) · AAP plugin (Ansible provider job status) · OCM plugin (cluster management alongside DCM).
+Migration: Standalone SPA → RHDH via Dynamic Plugin loading only; no data migration, no API changes; 5-phase migration ending in standalone SPA decommission.
+
+---
+
+## SECTION 75 — ITSM INTEGRATION (doc 42 — 42-itsm-integration.md)
+
+> **Full specification:** [42-itsm-integration.md](data-model/42-itsm-integration.md) — 12th provider type, 8th policy type, 6 example policies, ITSM-001–007, ITSM-POL-001–004.
+
+### Design Principle
+DCM replaces the infrastructure ticket as the provisioning mechanism. ITSM integration is ADDITIVE — never required for DCM to function. Non-blocking by default. Organizations opt into blocking gates explicitly.
+
+### ITSM Provider (12th provider type)
+Bidirectional: outbound (DCM events → ITSM records) + inbound (ITSM approvals → DCM votes). Implements full base Provider contract (PRV-001). Supported systems: ServiceNow, Jira Service Management, BMC Remedy/Helix, Freshservice, PagerDuty, Opsgenie, ManageEngine, Cherwell, TOPdesk, generic_rest.
+Key capabilities: create/update/close change_request, create/update/close incident, create/update/retire cmdb_ci, create service_request, inbound_approval, inbound_request_initiation.
+Credentials: auth via Credential Provider (ITSM-001). Inbound webhooks: HMAC-SHA256 verified (ITSM-003).
+
+### ITSM Action Policy (8th policy type)
+Side-effect policy — fires on DCM events, triggers ITSM action, does NOT block pipeline by default.
+Output schema: itsm_provider_uuid, action, action_payload (template expressions: {{ field }}), store_reference_on_entity, block_until_created, block_timeout, on_failure.
+ITSM-005: block_until_created REQUIRES block_timeout — pipeline never permanently stalled.
+ITSM-POL-002: NOT a GateKeeper substitute except via explicit block_until_created mechanism.
+ITSM-POL-004: Multiple ITSM Policies on same event fire INDEPENDENTLY.
+
+### 6 Policy Examples
+1. create_change_request on request.dispatched (ServiceNow) — log and continue
+2. block_until_created for PCI-scope tenants (compliance gate with PT30M timeout)
+3. create_cmdb_ci on entity.realized — with IP address from realized_fields
+4. create_incident on drift.detected (significant/critical severity, Jira)
+5. retire_cmdb_ci on entity.decommissioned
+6. close_change_request on request.realized
+
+### ITSM Entity References
+itsm_references[] on entity business data: system, record_type, record_id, record_url, status, last_synced_at. Preserved through entity lifecycle. In audit records.
+
+### recorded_via Field
+Already on approval vote API: dcm_admin_ui | servicenow | jira | slack_bot | api_direct | other. ITSM Provider populates this on inbound approvals.
+
+### Event Catalog Additions
+itsm.record_created, itsm.record_updated, itsm.record_failed — new itsm.* domain (21st domain; 85 total events).
+
+### ITSM-001–007 + ITSM-POL-001–004
+ITSM-001: base Provider contract applies. ITSM-002: non-blocking by default. ITSM-003: inbound webhook HMAC auth. ITSM-004: references persist through lifecycle. ITSM-005: block_until_created mandatory timeout. ITSM-006: unmapped resource types silently skipped for CMDB sync. ITSM-007: missing template fields → warning + empty string (no block).
+
+---
+
+## SECTION 76 — PROVIDER CALLBACK AUTHENTICATION (doc 43 — 43-provider-callback-auth.md)
+
+**Purpose:** Specifies how Service Providers authenticate inbound calls to the DCM control plane (the Provider Callback API). Resolves the gap between the outbound credential model (DCM → Provider) and the inbound model (Provider → DCM).
+
+**Two-layer model:**
+- **Layer 1 — mTLS:** Provider presents its registered certificate on every TLS connection. DCM validates the chain against the registered CA and the stored certificate fingerprint for that provider_uuid. Proves transport-level identity.
+- **Layer 2 — Provider Callback Credential:** A `dcm_interaction` credential issued by the Credential Provider at provider activation time. Scoped to `provider_uuid` + `allowed_operations`. Short-lived (PT15M fsi/sovereign; PT1H standard). Presented as `Authorization: Bearer` on every callback call. Proves operation-level authorization.
+- Both layers are required. mTLS alone does not prove authorization. The credential alone cannot establish the connection.
+
+**Entity-level authorization (per call, independent of credential):**
+- `realized_state_push`: DCM verifies `credential.provider_uuid` matches the `provider_uuid` in the Requested State record for that `resource_id`. Prevents a provider from pushing state for entities it was not dispatched to.
+- `update_notification`: DCM verifies the calling provider is the current Realized State provider for the entity AND the `notification_type` was declared in the provider's registration.
+- `lifecycle_event`: DCM verifies the calling provider is the provider on record for the resource.
+
+**Credential lifecycle:**
+- Issued at provider activation; delivered via the activation response (retrieved via Credential Provider)
+- Rotated automatically by DCM before expiry (DCM initiates rotation; provider must implement refresh)
+- Transition window (50% of credential lifetime) during which both old and new credentials are accepted
+- Revoked immediately on: provider deregistration, 5+ scope violations in PT1H, admin explicit revocation, certificate expiry without rotation
+
+**Registration special case:**
+- Initial registration (`POST /api/v1/providers`) uses a registration token (single-use, admin-issued) not the callback credential — no callback credential exists until activation
+- Re-registration (same name, updating version/capabilities) uses the active callback credential
+- Re-registration that changes sovereignty declaration requires a new registration token and triggers a new approval pipeline
+
+**System policies:** PCA-001 through PCA-010. Key: PCA-003 (entity-level ownership check is independent of credential), PCA-004 (5 scope violations → auto-suspend), PCA-010 (all inbound calls produce audit records including rejected ones — no silent failures).
+
+
+## SECTION 77 — AEP API ALIGNMENT
+
+DCM's four OpenAPI specifications follow AEP (API Enhancement Proposals — aep.dev) conventions in three specific areas:
+
+**1. Custom methods (AEP-136):** Actions on resources use colon syntax. `POST /resources/{id}:suspend` not `POST /resources/{id}/suspend`. Applies to all state-transition and action operations in Consumer and Admin APIs (30 path conversions total: :suspend, :resume, :rehydrate, :rotate, :extend-ttl, :transfer, :bulk-decommission, :acknowledge, :revert, :approve, :reject, :reinstate, :trigger, :rebuild, :activate, :vote, :revoke-sessions, :accept-degradation, :rotate-credential, :read-all, and others).
+
+**2. Long-Running Operations (AEP-151):** Async operations that produce a trackable result return an `Operation` resource (not `202 Accepted` with no body). The `Operation` has: `name` (stable poll URL), `done` (boolean), `metadata` (stage/progress/resource_uuid), `response` (present when done=true, success), `error` (present when done=true, failure). 14 consumer-facing operations return Operation: submitRequest, createRequestGroup, updateResource, decommissionResource, suspendResource, resumeResource, rehydrateResource, initiateOwnershipTransfer, bulkDecommission, revertDrift, rotateCredential, contributePolicy, contributeResourceGroup (consumer API) + decommissionTenant (admin API). Fire-and-forget operations (capacity reports, interim status, lifecycle events, discovery triggers) retain `202 Accepted` — no Operation body.
+
+**3. Pagination (AEP-158):** `page_size` and `page_token` query parameters (not `limit`/`cursor`). Responses include `next_page_token`.
+
+**Deliberately NOT aligned:** Resource names (DCM retains bare UUIDs — immutability across ownership transfers is more important than AEP naming), timestamp field names (`created_at` not `create_time` — would require data model change with no functional benefit).
+
+**Operator API note:** The operator-facing Services API (dcm-operator-api.yaml) uses the callback pattern — operators are NOT consumer-facing LRO callers. `updateResource` in the operator spec uses `202 Accepted` (async with callback) + `200 OK` (sync with RealizedStatePayload), not an Operation resource.
+
+## SECTION 78 — KESSEL INTEGRATION EVALUATION (doc 44 — 44-kessel-integration-evaluation.md)
+
+**Status:** Pre-implementation evaluation. Discussion with Kessel team required before any implementation. No DCM architecture changes should be made based on this document until alignment is confirmed.
+
+**What Kessel is:**
+- **Kessel Relations:** Authorization service built on SpiceDB (Google Zanzibar / ReBAC). `CheckPermission(subject, permission, resource)` traverses relationship graph. Zookie consistency tokens for "read your own writes" guarantee.
+- **Kessel Asset Inventory:** Hybrid cloud resource state tracking (current-state snapshot store, gRPC streaming API). Integrates with Kessel Relations for auth-filtered inventory queries.
+
+**Integration Option A — Kessel Relations as DCM Auth Provider:**
+- Handles checks 1 and 2 of DCM's five-check boundary model (identity + authorization). Checks 3-5 (accreditation, data matrix, sovereignty) remain in DCM's Policy Engine — cannot be delegated.
+- DCM's entity relationship graph (operational: requires/constituent/shareable) must NOT go in Kessel Relations — only access-control relationships.
+- Approval gate quorum stays in DCM (Kessel answers "is actor authorized to vote?"; DCM tracks "how many have voted").
+- Integration path: new `auth_mode: kessel_rebac` Auth Provider registration.
+- Zookie tokens must be threaded through DCM request context for consistency.
+
+**Integration Option B — Kessel Inventory as Discovered State Storage Provider:**
+- Discovered State only (most ephemeral store, current-state snapshot). Intent, Requested, Realized stores remain in DCM — not replaceable by Kessel Inventory.
+- Drift detection logic stays in DCM's DRC component regardless — Kessel Inventory is a data source, not a drift engine.
+- Field-level provenance, lifecycle state machine, audit chain — all stay in DCM.
+- Integration path: Storage Provider with `storage_sub_type: snapshot_store` backed by Kessel Inventory. No data model changes.
+
+**Pros (Relations):** SpiceDB production-grade, Zanzibar consistency, scalable graph traversal, shared source of truth across Red Hat products, single CheckPermission call replaces multi-step group-lookup + policy-evaluation.
+
+**Pros (Inventory):** Feeds same discovered state to ACM/Insights/HCC, reduces DCM's operational burden for ephemeral store, gRPC streaming fits provider push pattern.
+
+**Cons (Relations):** Hard runtime dependency (unavailability = safe-deny mode), schema coupling requires coordinated evolution, quorum model doesn't fit, entity relationship graph stays in DCM anyway.
+
+**Cons (Inventory):** Four-state model mismatch (Kessel is upsert/current-state only), no field-level provenance, no drift detection, schema extensibility for DCM-specific types unconfirmed, project maturity risk.
+
+**18 questions for Kessel team documented in Section 6. 10 blocking items in Section 10.**
+
+**KESSEL-001 through KESSEL-007** are the proposed system policies — not active until Kessel alignment is complete.
+## SECTION 79 — CONSISTENCY REVIEW (doc 45 — 45-consistency-review.md)
+
+Full consistency review completed 2026-03. Key findings and fixes:
+
+**Fixed:** AEP colon paths applied to admin-api-spec.md (13 paths) and consumer-api-spec.md (4 remaining); stale entity_type values corrected (`allocated_resource`→`infrastructure_resource`, `resource_entity`→`infrastructure_resource`); stale scoring threshold keys replaced with named-tier format comments; `provider_id`→`provider_uuid` in DCM API endpoint paths; Operation (LRO) polling section added to consumer spec.
+
+**Canonical rules:** entity_type has exactly three values (infrastructure_resource, composite_resource, process_resource). Custom method paths use colon syntax in ALL docs. `provider_uuid` in DCM APIs; `resource_id` (operator-assigned) in callback APIs — these are intentionally distinct. Lifecycle state UPPERCASE in YAML, lowercase in prose — by design.
+
+**Three implementation decisions still needed:** (1) resource_type field: accept FQN string or require UUID at dispatch? (2) Operation polling: same endpoint as request status or separate? (3) API Gateway must map resource_id → entity_uuid at callback boundary.
+
+
+## SECTION 80 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, apply these instructions in addition to the numbered guidance in SECTION 60 (Documentation Structure):
 
@@ -4769,6 +4966,11 @@ When working on this project, apply these instructions in addition to the number
 210. **Live updates: SSE stream + OIS interim status** — GET /api/v1/requests/{uuid}/stream (text/event-stream, closes on terminal status) for browser/CLI without polling; events: status_change, progress_updated, approval_required, approval_recorded, heartbeat(30s); OIS providers POST /api/v1/provider/entities/{uuid}/status for interim progress with step_current/step_total/constituent_status; request.progress_updated event added to doc 33; rate-limited: max 1 interim status per 10s per entity
 211. **Profile coverage added to docs 36-39** — doc36 cert lifetime table(P180D minimal→P14D sovereign), algorithm min table; doc37 max scheduling horizon(P365D minimal→P7D sovereign), concurrent scheduled limit, maintenance window approval tier; doc38 max group size(100 minimal→5 sovereign), group timeout max, field injection validation strictness, nesting depth; doc39 metrics scraping restrictions(sovereign internal only), /api/v1/admin/health MFA requirements(fsi/sovereign)
 212. **40-standards-catalog.md is the authoritative standards reference** — 19 RFCs, 3 cryptographic standards tables (permitted algorithms, forbidden algorithms, FIPS levels), 6 compliance frameworks, 7 CNCF ecosystem projects, W3C SSE, OpenAPI 3.1, SPIFFE (informative), HashiCorp Vault PKI / Venafi / EJBCA as External CA Credential Provider backends (NOT Auth Providers); Section 9 maps all 17 policy families to their standards basis; usage map tracks which standards appear in which documents
+213. **41-operational-reference.md covers the three operational gaps** — GitOps partitioning (3 strategies; tenant-shard recommended; trigger thresholds table), store migration (5-phase dual-write playbook; never decommission source before burn-in; audit chain continuity required OPS-002), DR (5 scenarios; post-recovery validation checklist mandatory OPS-005; Audit Store minimum P365D retention all profiles OPS-006); RTO: PT1M sovereign component → PT24H minimal repave
+214. **Three GUI specs define the unified DCM web application** — one application with role-gated surfaces: Consumer Portal (all actors — catalog, SSE live status with constituent tracking, resources, approvals, cost, sessions), Admin Panel (platform roles — health dashboard, tier registry drag-drop editor with hard-stops, scoring slider max 50), Provider Management (provider_owner role — 11 provider types with common shell + type-specific tabs; Credential Provider shows metadata never values; algorithm compliance must show zero forbidden algorithm violations)
+215. **Doc 42 adds 12th provider type (ITSM Provider) and 8th policy type (ITSM Action Policy)** — ITSM is ADDITIVE (DCM never requires it); ITSM Action Policy is side-effect only (non-blocking default); block_until_created requires block_timeout (never permanently stalls pipeline, ITSM-005); recorded_via field already existed on approval vote — ITSM inbound approvals use it; 6 policy examples covering ServiceNow + Jira for provisioning, CMDB sync, incident on drift, decommission; itsm.* event domain adds 3 events (85 total, 21 domains)
+215. **Consumer GUI ITSM bridge (GUI-011, section 8 of dcm-consumer-gui-spec.md)** — ITSM is a CONSUMER of DCM events, not a source of truth; DCM is the system of record; CMDB sync is one-way DCM→CMDB via Notification Provider subscription to entity.* events; ITSM approval votes call POST /api/v1/admin/approvals/{uuid}/vote — the CAB process happens in ITSM, DCM just records the outcome; ITSM references stored as business data fields on entities; Audit Trail (section 11) is consumer-scoped own-resource view; cross-tenant audit is Admin Panel only
+215. **RHDH/Backstage is the PRIMARY consumer GUI deployment model** — 6 Dynamic Plugin packages (no RHDH rebuild); Scaffolder IS the request form (auto-generated templates from catalog item JSON Schema); DCMService + DCMResource entity kinds sync to RHDH catalog every PT5M; tenancy via RHDH Group context → X-DCM-Tenant; OIDC token exchange for auth delegation; PatternFly NavGroup/NavItem/NotificationBadge for sidebar; Approvals shows live pending count badge; all compliance enforced by DCM control plane — RHDH is a client
 195. **33-event-catalog.md is the SINGLE authoritative source for all DCM event types** — 82 events across 26 domains; all events share the base envelope (event_uuid, event_type, event_schema_version, timestamp from Commit Log, urgency, payload, links); consumers implement idempotency using event_uuid; critical urgency events are non-suppressable; non-standard events use reverse-DNS prefix; event_schema_version only increments on breaking changes
 194. **Tier registry changes are gated by impact detection** — any change that creates a SECURITY_DEGRADATION (tier gravity or position decreased) blocks activation until each degradation is explicitly accepted by a verified-tier or above reviewer via Admin API; BROKEN_REFERENCE also blocks; PROFILE_GAP is a warning that does not block; all changes produce an impact report in the Audit Store (ATM-009–012)
 193. **Authority tiers are named positions in an ordered list — not fixed enum values** — tier weight derived from list position at evaluation time; organizations insert custom tiers between existing ones without breaking existing name references; 'authorized' tier always means 'highest current gravity' regardless of what's been inserted before it; ATM-001: never hardcode tier weights
