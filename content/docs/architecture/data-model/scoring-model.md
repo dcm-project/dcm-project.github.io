@@ -10,7 +10,7 @@ weight: 29
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress
+**Document Status:** ✅ Complete
 **Document Type:** Architecture Reference — Scoring Model Specification
 **Related Documents:** [Foundational Abstractions](00-foundations.md) | [Provider Contract](A-provider-contract.md) | [Policy Contract](B-policy-contract.md) | [Policy Profiles](14-policy-profiles.md) | [Control Plane Components](25-control-plane-components.md) | [Governance Matrix](27-governance-matrix.md) | [Federated Contribution Model](28-federated-contribution-model.md)
 

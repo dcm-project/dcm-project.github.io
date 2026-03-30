@@ -10,7 +10,7 @@ weight: 20
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress  
+**Document Status:** ✅ Complete  
 **Related Documents:** [Resource Type Hierarchy](05-resource-type-hierarchy.md) | [Policy Organization](14-policy-profiles.md) | [Deployment and Redundancy](17-deployment-redundancy.md) | [Auth Providers](19-auth-providers.md)
 
 > **Foundation Document Reference**

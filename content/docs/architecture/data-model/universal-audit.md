@@ -10,7 +10,7 @@ weight: 16
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress  
+**Document Status:** ✅ Complete  
 **Related Documents:** [Context and Purpose](00-context-and-purpose.md) | [Audit, Provenance, and Observability](12-audit-provenance-observability.md) | [Storage Providers](11-storage-providers.md) | [Universal Groups](15-universal-groups.md)
 
 > **Foundation Document Reference**

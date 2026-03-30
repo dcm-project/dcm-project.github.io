@@ -12,7 +12,7 @@ weight: 14
 
 > **Universal Group Model:** Policy Groups (`group_class: policy_collection`) and Policy Profiles (`group_class: policy_profile`) are expressions of the [Universal Group Model](15-universal-groups.md). The structures defined in this document remain authoritative for policy-specific behavior; the universal model adds composability, cross-type membership, and the ability to include policy groups within composite groups.
 
-**Document Status:** 🔄 In Progress  
+**Document Status:** ✅ Complete  
 **Related Documents:** [Scoring Model](29-scoring-model.md) | [Context and Purpose](00-context-and-purpose.md) | [Data Layers and Assembly](03-layering-and-versioning.md) | [Entity Relationships](09-entity-relationships.md) | [Storage Providers](11-storage-providers.md)
 
 > **Foundation Document Reference**

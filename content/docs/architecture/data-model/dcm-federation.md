@@ -10,7 +10,7 @@ weight: 22
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress  
+**Document Status:** ✅ Complete  
 **Related Documents:** [Federated Contribution Model](28-federated-contribution-model.md) | [Universal Group Model](15-universal-groups.md) | [Storage Providers](11-storage-providers.md) | [Auth Providers](19-auth-providers.md) | [Information Providers Advanced](21-information-providers-advanced.md)
 
 > **Foundation Document Reference**

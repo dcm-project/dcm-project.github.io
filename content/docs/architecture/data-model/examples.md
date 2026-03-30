@@ -10,7 +10,7 @@ weight: 4
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress
+**Document Status:** ✅ Complete
 **Document Type:** Reference Examples
 
 > **Foundation Document Reference**

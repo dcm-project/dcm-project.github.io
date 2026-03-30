@@ -10,7 +10,7 @@ weight: 31
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress
+**Document Status:** ✅ Complete
 **Document Type:** Architecture Reference — Credential Provider Specification
 **Related Documents:** [Foundational Abstractions](00-foundations.md) | [Provider Contract](A-provider-contract.md) | [Auth Providers](19-auth-providers.md) | [Accreditation and Zero Trust](26-accreditation-and-authorization-matrix.md) | [Scoring Model](29-scoring-model.md) | [Federated Contribution Model](28-federated-contribution-model.md)
 
@@ -916,3 +916,71 @@ When an idle alert fires:
 ---
 
 *Document maintained by the DCM Project. For questions or contributions see [GitHub](https://github.com/dcm-project).*
+
+## External CA Integration
+
+DCM's Credential Provider model natively supports external Certificate Authorities as backends for the `x509_certificate` credential type. This is the correct place for enterprise PKI integration — not the Auth Provider.
+
+### Supported Protocols
+
+| Protocol | RFC | Common Implementations | Use case |
+|----------|-----|------------------------|----------|
+| ACME | RFC 8555 | Let's Encrypt, cert-manager, Venafi, DigiCert | Public and enterprise CAs with ACME support |
+| EST | RFC 7030 | Cisco CA, Microsoft NDES, Venafi | Enterprise PKI, IoT, internal use |
+| SCEP | RFC 8894 | Microsoft NDES, Cisco iOS CA | Legacy enterprise PKI, network equipment |
+| CMP | RFC 4210 | EJBCA, OpenXPKI | High-assurance enterprise PKI |
+| Native API | — | HashiCorp Vault PKI, AWS ACM PCA, Azure Key Vault | Cloud-native PKI |
+
+### External CA Registration
+
+```yaml
+credential_provider_registration:
+  provider_type: credential_provider
+  credential_types: [x509_certificate]
+  
+  external_ca_config:
+    ca_protocol: acme | est | scep | cmp | vault_pki | aws_acm_pca | azure_key_vault
+    ca_endpoint: <url>
+    
+    # Protocol-specific
+    acme_config:
+      directory_url: <acme-directory-url>
+      account_key_credential_uuid: <uuid>
+      preferred_challenge: dns-01 | http-01 | tls-alpn-01
+      
+    vault_pki_config:
+      vault_addr: <url>
+      mount_path: pki
+      role_name: dcm-internal
+      vault_token_credential_uuid: <uuid>
+      
+    # Common to all
+    ca_chain_pem: <base64-encoded CA chain>  # for trust store installation
+    issued_cert_lifetime: P90D              # profile-governed; may be overridden by CA
+    subject_template: "CN={{component_type}}-{{component_uuid}},O=dcm-internal"
+```
+
+### How DCM Uses External CA Credential Providers
+
+When an external CA Credential Provider is registered and configured as the trust anchor for internal component auth (doc 36), DCM's component certificate requests flow through the Credential Provider interface instead of the built-in Internal CA:
+
+```
+Component needs certificate
+  │
+  ▼ Request to Credential Provider Proxy
+  │   credential_type: x509_certificate
+  │   subject: CN=<component_type>-<component_uuid>,O=dcm-internal
+  │   san: [component_uuid, component_name, dns_name]
+  │
+  ▼ Credential Provider Proxy → External CA Credential Provider
+  │   Issues certificate request via configured protocol (ACME/EST/Vault/etc.)
+  │
+  ▼ CA issues certificate (signed by enterprise root)
+  │
+  ▼ Certificate returned to component
+  │   Component uses for mTLS — same as built-in CA path
+  │   Certificate in enterprise PKI chain → auditable in enterprise tooling
+```
+
+This design means DCM's internal mTLS is fully auditable through existing enterprise PKI infrastructure when using an external CA — a key requirement for fsi and sovereign profiles.
+

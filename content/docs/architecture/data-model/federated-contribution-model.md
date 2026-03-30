@@ -10,7 +10,7 @@ weight: 28
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress
+**Document Status:** ✅ Complete
 **Document Type:** Architecture Reference — Read This First for Multi-User Data Governance
 **Related Documents:** [Foundational Abstractions](00-foundations.md) | [Layering and Versioning](03-layering-and-versioning.md) | [Policy Profiles](14-policy-profiles.md) | [Registry Governance](20-registry-governance.md) | [DCM Federation](22-dcm-federation.md) | [Governance Matrix](27-governance-matrix.md) | [Consumer API](../specifications/consumer-api-spec.md)
 

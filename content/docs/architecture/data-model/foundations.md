@@ -10,7 +10,7 @@ weight: 0
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress
+**Document Status:** ✅ Complete
 **Document Type:** Architecture Foundation — Read This First
 **Related Documents:** [Data Model Context](00-context-and-purpose.md) | [Provider Contract](A-provider-contract.md) | [Policy Contract](B-policy-contract.md)
 

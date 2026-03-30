@@ -115,6 +115,62 @@ The DCM taxonomy defines the precise vocabulary used throughout the architecture
 
 
 
+
+
+
+### External CA and Live Update Terms
+
+| Term | Definition |
+|------|-----------|
+| **External CA Credential Provider** | A Credential Provider backend that issues x509 certificates using standard protocols (ACME/RFC 8555, EST/RFC 7030, SCEP, CMP, or native API like HashiCorp Vault PKI). Recommended for fsi and sovereign profiles to maintain enterprise PKI chain. Registered trust anchor root cert must be installed in all component trust stores. |
+| **Trust Anchor** | The root or intermediate CA certificate installed in all DCM component trust stores. May be the built-in Internal CA or an external CA registered as a Credential Provider. ICOM-009: components only accept certificates from registered trust anchors. |
+| **Server-Sent Events (SSE)** | W3C standard HTTP/1.1 unidirectional event stream. DCM exposes `GET /api/v1/requests/{uuid}/stream` as an SSE endpoint for live request status updates without polling. Stream closes on terminal status. |
+| **Interim Status** | Provider-sent progress update during a long-running operation, via `POST /api/v1/provider/entities/{uuid}/status`. Includes step_current/step_total, step_label, and constituent_status array for compound operations. Triggers `request.progress_updated` event. |
+| **constituent_status** | Array of named component statuses in a compound/Meta Provider request (e.g. `[{ref: "vm", status: "REALIZED"}, {ref: "dns", status: "PROVISIONING"}]`). Surfaced in SSE stream and polling response so consumers can track multi-part operations. |
+
+
+### Scheduling and Dependency Terms
+
+| Term | Definition |
+|------|-----------|
+| **Scheduled Request** | A DCM request with an explicit dispatch schedule (at a specific time, during a maintenance window, or recurring). Goes through the same pipeline as immediate requests; policy evaluates at declaration AND at dispatch time. |
+| **PENDING_DEPENDENCY** | Intent State status for a request in a dependency group waiting for its declared dependency to reach the required wait_for state before dispatch. |
+| **Request Dependency Group** | A consumer-declared set of requests with ordering constraints (depends_on) between them. Distinct from type-level dependencies (doc 07) and Meta Provider composition (doc 30). |
+| **Field Injection** | Mechanism for passing realized output fields from a dependency automatically into a dependent request's fields at dispatch time. Subject to Transformation policies. |
+| **Maintenance Window** | A reusable, named recurrence artifact declaring approved change windows. Consumers reference window_uuid in scheduled requests to slot into the next matching window. |
+| **SCH-001–SCH-006** | Scheduled requests system policies. Key: SCH-001 (dual policy evaluation: declaration + dispatch), SCH-003 (dispatch-time policy rejection → FAILED), SCH-005 (not_after deadline miss → FAILED, no retry). |
+| **RDG-001–RDG-006** | Request dependency graph policies. Key: RDG-001 (circular deps rejected at submission), RDG-002 (max 50 requests per group), RDG-004 (PENDING_DEPENDENCY requests count against quota), RDG-006 (request may belong to one group only). |
+
+### Self-Health Terms
+
+| Term | Definition |
+|------|-----------|
+| **Liveness (/livez)** | Fast DCM health check (PT5S max, no external calls). Failure → Kubernetes restarts the pod. Unauthenticated. |
+| **Readiness (/readyz)** | DCM readiness check — validates Session Store, Audit Store, Policy Engine, Message Bus, Auth Provider. Failure → removed from load balancer. Used for startup probes. |
+| **HLT-001–HLT-006** | Self-health system policies. Key: HLT-001 (livez and readyz required, unauthenticated), HLT-002 (livez PT5S max, no external calls), HLT-003 (readyz fails if core dependencies unreachable), HLT-005 (Prometheus metrics required). |
+
+
+### Session Revocation Terms
+
+| Term | Definition |
+|------|-----------|
+| **Session Record** | DCM Data artifact tracking an active actor session: session_uuid, actor_uuid, auth_provider_uuid, created_at, expires_at, status (active/refreshing/revoked/expired), revocation metadata. |
+| **Session Revocation Registry** | Fast-queryable store of revoked-but-not-yet-expired session UUIDs. All components that accept bearer tokens must check this on every request. Cache age is profile-governed (PT5M minimal → no cache sovereign). |
+| **Session Store** | Operational store for active sessions (not GitOps-backed). Separate from Realized State Store. Backed by Redis or Postgres (standard+) or in-memory (minimal/dev). |
+| **Token Introspection** | RFC 7662 endpoint (`POST /api/v1/auth/introspect`) for validating bearer tokens. Returns active/inactive plus session metadata. Requires `introspection` scope. |
+| **AUTH-016–AUTH-022** | Session revocation system policies. Key: AUTH-016 (deprovisioning fires session + credential revocation in parallel), AUTH-017 (revocation SLA), AUTH-018 (all components check revocation registry), AUTH-019 (emergency revocation: critical urgency, non-suppressable). |
+
+### Internal Component Auth Terms
+
+| Term | Definition |
+|------|-----------|
+| **Internal CA** | The Certificate Authority operated by each DCM deployment for issuing mTLS certificates to internal components. Not exposed externally. Root cert installed in all component trust stores at deployment time. |
+| **Component Identity** | Each DCM control plane component has a stable UUID, an mTLS certificate from the Internal CA, and a service account with declared allowed_sources and allowed_targets. |
+| **Bootstrap Token** | A one-time-use credential (max PT1H lifetime) that enables a new component to acquire its first mTLS certificate from the Internal CA. Invalidated immediately after use. |
+| **Component Communication Graph** | The declared graph of which components may call which others. Components may only call `allowed_targets`; endpoints only accept calls from `allowed_sources`. Violations are rejected and audited (ICOM-003, ICOM-004). |
+| **ICOM-001–ICOM-009** | Internal Component Auth system policies. Key: ICOM-001 (mTLS required for all internal calls), ICOM-002 (interaction credential required in addition to mTLS), ICOM-007 (bootstrap tokens one-time-use, PT1H max), ICOM-008 (compromised certs → CRL immediately). |
+
+
 ### API Versioning Terms
 
 | Term | Definition |
@@ -266,6 +322,11 @@ Terms to avoid because they introduce ambiguity. Use the precise alternatives in
 | ATM | Authority Tier Model |
 | EVT | Event Catalog |
 | VER | API Versioning |
+| SES | Session Revocation |
+| ICOM | Internal Component Auth |
+| SCH | Scheduled Requests |
+| RDG | Request Dependency Graph |
+| HLT | DCM Self-Health |
 
 ---
 

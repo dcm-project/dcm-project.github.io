@@ -238,6 +238,78 @@ X-DCM-StepUp-Token: <completed-challenge-token>
 
 ---
 
+### 2.5 Session Management
+
+DCM issues a session token on successful authentication. Sessions can be managed and revoked by the authenticated actor.
+
+```http
+# Log out current session
+DELETE /api/v1/auth/session
+Authorization: Bearer <token>
+
+Response 204 No Content
+```
+
+```http
+# Log out all sessions for this actor
+DELETE /api/v1/auth/sessions
+Authorization: Bearer <token>
+
+Response 204 No Content
+```
+
+```http
+# List active sessions for this actor
+GET /api/v1/auth/sessions
+Authorization: Bearer <token>
+
+Response 200:
+{
+  "items": [
+    {
+      "session_uuid": "<uuid>",
+      "created_at": "<ISO 8601>",
+      "expires_at": "<ISO 8601>",
+      "auth_method": "oidc",
+      "mfa_verified": true,
+      "last_active_at": "<ISO 8601>",
+      "is_current": true
+    }
+  ],
+  "total": 2
+}
+```
+
+```http
+# Revoke a specific session
+DELETE /api/v1/auth/sessions/{session_uuid}
+Authorization: Bearer <token>
+
+Response 204 No Content
+```
+
+```http
+# Token introspection (RFC 7662) — for internal components and trusted integrations
+POST /api/v1/auth/introspect
+Authorization: Bearer <service-token>
+
+{ "token": "<token-to-inspect>" }
+
+Response 200:
+{
+  "active": true,
+  "session_uuid": "<uuid>",
+  "actor_uuid": "<uuid>",
+  "tenant_uuid": "<uuid>",
+  "expires_at": "<ISO 8601>",
+  "mfa_verified": true,
+  "auth_method": "oidc"
+}
+```
+
+> **Session revocation model:** See [Session Token Revocation](../data-model/35-session-revocation.md) for the complete session lifecycle, revocation triggers, revocation registry, profile-governed TTLs, and AUTH-016–AUTH-022 system policies.
+
+
 ## 3. Service Catalog
 
 ### 3.1 List Catalog Items
@@ -488,7 +560,58 @@ Response 200:
 }
 ```
 
-### 4.3 Consumer Request Status Lifecycle
+### 4.3 Live Request Status Stream (Server-Sent Events)
+
+For consumers that want live status updates without polling, DCM exposes a Server-Sent Events (SSE) stream per request:
+
+```
+GET /api/v1/requests/{request_uuid}/stream
+Accept: text/event-stream
+Authorization: Bearer <token>
+
+# Response: HTTP 200, Content-Type: text/event-stream
+# Connection stays open; events pushed as state changes
+
+event: status_change
+data: {"status":"PROVISIONING","at":"2026-04-01T02:00:05Z","current_step":"Configuring network interfaces"}
+
+event: progress_updated
+data: {"step_current":3,"step_total":7,"step_label":"Configuring network interfaces","constituent_status":[{"ref":"vm","status":"REALIZED"},{"ref":"dns","status":"PROVISIONING"}]}
+
+event: status_change
+data: {"status":"COMPLETED","at":"2026-04-01T02:03:12Z"}
+
+# Stream closes on terminal status (COMPLETED, FAILED, CANCELLED)
+```
+
+**SSE events on this stream:**
+
+| Event name | When | Data fields |
+|------------|------|-------------|
+| `status_change` | Request status changes | status, at, current_step |
+| `progress_updated` | Provider sends interim progress | step_current, step_total, step_label, constituent_status |
+| `approval_required` | Request routed to approval tier | approval_uuid, required_tier, window_expires_at |
+| `approval_recorded` | A reviewer votes | votes_recorded, quorum_required, quorum_reached |
+| `heartbeat` | Every 30s (keep-alive) | ts |
+
+**Constituent status** (for compound/Meta Provider requests):
+```json
+{
+  "constituent_status": [
+    { "ref": "vm",      "status": "REALIZED",     "entity_uuid": "<uuid>" },
+    { "ref": "ip",      "status": "REALIZED",     "entity_uuid": "<uuid>" },
+    { "ref": "dns",     "status": "PROVISIONING", "entity_uuid": null },
+    { "ref": "storage", "status": "PENDING",      "entity_uuid": null }
+  ]
+}
+```
+
+**Fallback:** Consumers that cannot use SSE (e.g. some proxy configurations) should use polling via `GET /api/v1/requests/{uuid}/status` with an appropriate interval.
+
+**Connection limits:** One SSE stream per request_uuid per actor. Opening a second stream closes the first.
+
+
+### 4.4 Consumer Request Status Lifecycle
 
 ```
 ACKNOWLEDGED            → request received; intent created
@@ -509,7 +632,7 @@ COMPENSATION_FAILED     → rollback failed; platform admin notified; orphan det
 PENDING_REVIEW          → conflict detected requiring human resolution
 ```
 
-### 4.4 Cancel Request
+### 4.5 Cancel Request
 
 Cancellation is only available before the PROVISIONING state. Once a provider is executing, cancellation moves to CANCELLING and depends on provider support.
 
@@ -532,6 +655,53 @@ Response 409 Conflict (if cancellation not possible):
 ```
 
 ---
+
+### 4.5 Request Groups (Dependency Graph)
+
+Consumers can declare an ordered dependency graph across independent requests using request groups. DCM dispatches constituent requests in dependency order.
+
+```http
+# Create a request group
+POST /api/v1/request-groups
+Authorization: Bearer <token>
+
+{
+  "label": "provision-web-stack",
+  "requests": [
+    { "request_uuid": "<db-request-uuid>", "depends_on": [] },
+    { "request_uuid": "<app-request-uuid>", "depends_on": ["<db-request-uuid>"] },
+    { "request_uuid": "<lb-request-uuid>", "depends_on": ["<app-request-uuid>"] }
+  ]
+}
+
+Response 201:
+{
+  "request_group_uuid": "<uuid>",
+  "label": "provision-web-stack",
+  "status": "pending",
+  "requests": [...]
+}
+```
+
+```http
+# Get request group status
+GET /api/v1/request-groups/{group_uuid}
+Authorization: Bearer <token>
+
+Response 200:
+{
+  "request_group_uuid": "<uuid>",
+  "status": "in_progress",
+  "requests": [
+    { "request_uuid": "<uuid>", "status": "realized", "dispatched_at": "..." },
+    { "request_uuid": "<uuid>", "status": "dispatched", "dispatched_at": "..." },
+    { "request_uuid": "<uuid>", "status": "pending_dependency", "blocked_by": ["<uuid>"] }
+  ]
+}
+```
+
+> **Request dependency graph model:** See [Request Dependency Graph](../data-model/38-request-dependency-graph.md) for cycle detection, partial failure handling, and RDG-001–RDG-006 system policies.
+
 
 ## 5. Resource Management
 

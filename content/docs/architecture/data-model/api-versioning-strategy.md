@@ -4,7 +4,7 @@ type: docs
 weight: 34
 ---
 
-**Document Status:** 🔄 In Progress
+**Document Status:** ✅ Complete
 **Document Type:** Architecture Reference — API Versioning and Lifecycle
 **Related Documents:** [Consumer API Specification](../specifications/consumer-api-spec.md) | [Admin API Specification](../specifications/dcm-admin-api-spec.md) | [Operator Interface Specification](../specifications/dcm-operator-interface-spec.md) | [Event Catalog](33-event-catalog.md) | [Registry Governance](20-registry-governance.md) | [Design Priorities](00-design-priorities.md)
 

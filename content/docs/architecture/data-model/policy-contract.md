@@ -10,7 +10,7 @@ weight: -8
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress
+**Document Status:** ✅ Complete
 **Document Type:** Architecture Foundation
 **Related Documents:** [Foundational Abstractions](00-foundations.md) | [Provider Contract](A-provider-contract.md) | [Policy Profiles](14-policy-profiles.md) | [Governance Matrix](27-governance-matrix.md) | [OPA Integration](../specifications/dcm-opa-integration-spec.md)
 

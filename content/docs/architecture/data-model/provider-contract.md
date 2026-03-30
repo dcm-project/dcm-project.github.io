@@ -10,7 +10,7 @@ weight: -9
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress
+**Document Status:** ✅ Complete
 **Document Type:** Architecture Foundation
 **Related Documents:** [Foundational Abstractions](00-foundations.md) | [Policy Contract](B-policy-contract.md) | [Registration Specification](../specifications/dcm-registration-spec.md) | [Governance Matrix](27-governance-matrix.md) | [Accreditation](26-accreditation-and-authorization-matrix.md)
 

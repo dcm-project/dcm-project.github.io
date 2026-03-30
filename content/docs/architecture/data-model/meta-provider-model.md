@@ -10,7 +10,7 @@ weight: 30
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress
+**Document Status:** ✅ Complete
 **Document Type:** Architecture Reference — Meta Provider Specification
 **Related Documents:** [Foundational Abstractions](00-foundations.md) | [Provider Contract](A-provider-contract.md) | [Policy Contract](B-policy-contract.md) | [Service Dependencies](07-service-dependencies.md) | [Four States](02-four-states.md) | [Operational Models](24-operational-models.md) | [Scoring Model](29-scoring-model.md) | [Control Plane Components](25-control-plane-components.md)
 

@@ -10,7 +10,7 @@ weight: 26
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress
+**Document Status:** ✅ Complete
 **Document Type:** Architecture Reference
 
 > **Foundation Document Reference**
@@ -388,6 +388,8 @@ Outbound interaction assembled (DCM → Provider OR DCM → DCM)
 ```
 
 ---
+
+> **Internal component authentication:** See [Internal Component Authentication](36-internal-component-auth.md) for the complete internal auth model including component identity, Internal CA, bootstrap tokens, and ICOM-001–ICOM-009 policies.
 
 ## 5. Zero Trust Interaction Model
 

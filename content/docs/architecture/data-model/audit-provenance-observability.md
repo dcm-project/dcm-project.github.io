@@ -11,7 +11,7 @@ weight: 12
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
 
-**Document Status:** 🔄 In Progress  
+**Document Status:** ✅ Complete  
 **Related Documents:** [Four States](02-four-states.md) | [Storage Providers](11-storage-providers.md) | [Context and Purpose](00-context-and-purpose.md)
 
 > **Foundation Document Reference**

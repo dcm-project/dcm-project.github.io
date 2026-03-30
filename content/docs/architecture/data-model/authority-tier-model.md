@@ -4,7 +4,7 @@ type: docs
 weight: 32
 ---
 
-**Document Status:** 🔄 In Progress
+**Document Status:** ✅ Complete
 **Document Type:** Architecture Reference — Authority Tier Specification
 **Related Documents:** [Design Priorities](00-design-priorities.md) | [Scoring Model](29-scoring-model.md) | [Federated Contribution Model](28-federated-contribution-model.md) | [Policy Profiles](14-policy-profiles.md) | [Registry Governance](20-registry-governance.md)
 

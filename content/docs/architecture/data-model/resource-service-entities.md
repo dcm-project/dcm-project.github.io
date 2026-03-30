@@ -11,7 +11,7 @@ weight: 6
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
 
-**Document Status:** 🔄 In Progress  
+**Document Status:** ✅ Complete  
 **Related Documents:** [Context and Purpose](00-context-and-purpose.md) | [Operational Models](24-operational-models.md) | [Entity Types](01-entity-types.md) | [Ownership, Sharing, and Allocation](04b-ownership-sharing-allocation.md) | [Layering and Versioning](03-layering-and-versioning.md) | [Resource Type Hierarchy](05-resource-type-hierarchy.md) | [Service Dependencies](07-service-dependencies.md) | [Resource Grouping](08-resource-grouping.md)
 
 > **Foundation Document Reference**

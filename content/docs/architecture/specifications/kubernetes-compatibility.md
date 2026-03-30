@@ -25,7 +25,7 @@ weight: 6
 
 
 
-**Document Status:** 🔄 In Progress  
+**Document Status:** ✅ Complete  
 **Document Type:** Architecture Reference  
 **Related Documents:** [Foundational Abstractions](../data-model/00-foundations.md) | [Entity Relationships](../data-model/09-entity-relationships.md) | [Resource Type Hierarchy](../data-model/05-resource-type-hierarchy.md) | [Resource/Service Entities](../data-model/06-resource-service-entities.md) | [DCM Operator Interface Specification](dcm-operator-interface-spec.md)
 

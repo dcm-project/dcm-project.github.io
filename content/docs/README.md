@@ -1,8 +1,4 @@
----
-title: "DCM Documentation Index"
-type: docs
-weight: 0
----
+# DCM Documentation
 
 Data Center Management (DCM) is an open-source governing framework for enterprise on-premises and sovereign cloud infrastructure. It provides a hyperscaler-like cloud experience on infrastructure that organizations own and control.
 
@@ -52,8 +48,8 @@ Consumer API · Admin API · Operator Interface · OPA Integration · Flow GUI �
 | Policy types | 7 (unified base contract + typed output schemas) |
 | Control plane components | 9 |
 | Four lifecycle states | Intent · Requested · Realized · Discovered |
-| Capabilities | 155 across 24 domains |
-| Data model documents | 38 (32 numbered + 3 foundation + 2 examples + 1 design priorities) |
+| Capabilities | 189 across 31 domains |
+| Data model documents | 45 (39 numbered + 3 foundation + 2 examples + 1 design priorities) |
 | Specifications | 10 |
 | Unresolved questions | 0 |
 

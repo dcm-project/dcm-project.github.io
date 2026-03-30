@@ -11,7 +11,7 @@ weight: 9
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
 
-**Document Status:** 🔄 In Progress  
+**Document Status:** ✅ Complete  
 **Related Documents:** [Context and Purpose](00-context-and-purpose.md) | [Resource Type Hierarchy](05-resource-type-hierarchy.md) | [Resource/Service Entities](06-resource-service-entities.md) | [Service Dependencies](07-service-dependencies.md) | [Resource Grouping](08-resource-grouping.md) | [Information Providers](10-information-providers.md)
 
 > **Foundation Document Reference**

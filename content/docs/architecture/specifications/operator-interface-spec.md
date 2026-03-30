@@ -645,6 +645,49 @@ If the provider returns `status: too_late`, it must still send the completed rea
 ```
 
 
+### 6.4 Interim Status Reporting
+
+For long-running operations (provisioning complex resources, compound service constituents), providers may send interim progress updates to DCM without waiting for terminal status. This gives DCM — and therefore consumers — live visibility into multi-step operations.
+
+**DCM endpoint for interim status:**
+
+```
+POST /api/v1/provider/entities/{entity_uuid}/status
+
+Authorization: Bearer <provider-interaction-credential>
+Content-Type: application/json
+
+{
+  "request_id": "<dcm-request-uuid>",
+  "lifecycle_state": "PROVISIONING",   // current state — not yet terminal
+  "progress": {
+    "step_current": 3,
+    "step_total": 7,
+    "step_label": "Configuring network interfaces",
+    "step_started_at": "<ISO 8601>",
+    "estimated_completion": "<ISO 8601>"
+  },
+  "constituent_status": [              // for compound/Meta Provider operations
+    { "ref": "vm",      "status": "REALIZED",     "completed_at": "<ISO 8601>" },
+    { "ref": "ip",      "status": "REALIZED",     "completed_at": "<ISO 8601>" },
+    { "ref": "dns",     "status": "PROVISIONING", "started_at": "<ISO 8601>" },
+    { "ref": "storage", "status": "PENDING",      "started_at": null }
+  ],
+  "notes": "<optional human-readable detail>"
+}
+
+Response 202 Accepted
+```
+
+DCM uses interim status to:
+1. Update `current_step` and progress fields in the request status response
+2. Publish `request.progress_updated` event (info urgency) to the Message Bus
+3. Deliver live status updates to consumers via SSE stream (see Consumer API Section 4.3)
+
+**Frequency:** Providers should not send interim status more frequently than once per 10 seconds. DCM rate-limits interim status calls per entity_uuid.
+
+**Terminal status** is still reported via the existing create/update response callback — interim status supplements, not replaces it.
+
 ## 7. Field Mapping Specification
 
 *Required for Level 2 conformance.*

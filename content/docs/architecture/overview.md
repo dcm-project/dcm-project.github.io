@@ -39,6 +39,14 @@ Every design decision in DCM is evaluated against this hierarchy. When prioritie
 **The `minimal` profile is "security with minimal operational overhead" — not "minimal security."** All security properties are architecturally present in every profile. What varies is automation level, enforcement thresholds, and acceptable manual intervention.
 
 ---
+## Session Token Revocation and Internal Component Authentication
+
+**Session token revocation** defines the complete lifecycle for actor sessions — how tokens are created, refreshed, and revoked. Revocation is profile-governed: `minimal` allows PT5M propagation SLA; `sovereign` requires PT5S. The Session Revocation Registry is checked on every authenticated request — no component may skip this check (AUTH-018). Emergency revocation (security event) fires a `critical` urgency event that is non-suppressable. See [Session Token Revocation](data-model/session-revocation/).
+
+**Internal component authentication** closes the zero trust model at the internal boundary. Every call between DCM control plane components — API Gateway to Request Orchestrator, Policy Engine to Storage Provider, etc. — requires both a mTLS certificate from the Internal CA and a scoped interaction credential (ZTS-002). Components may only call targets declared in their `allowed_targets` list (ICOM-004). Bootstrap tokens are one-time-use and expire within PT1H (ICOM-007). See [Internal Component Authentication](data-model/internal-component-auth/).
+
+---
+
 ## Authority Tier Model
 
 DCM governs decisions through an extensible **authority tier model** — a named, ordered list where each tier expresses a required level of organizational decision gravity. The default tiers are `auto → reviewed → verified → authorized`, but organizations can insert custom tiers between existing ones. Tier weight is derived from list position at evaluation time; existing tier name references always resolve correctly.

@@ -11,7 +11,7 @@ weight: 11
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
 
-**Document Status:** 🔄 In Progress  
+**Document Status:** ✅ Complete  
 **Related Documents:** [Four States](02-four-states.md) | [Audit, Provenance, and Observability](12-audit-provenance-observability.md) | [Information Providers](10-information-providers.md)
 
 > **Foundation Document Reference**

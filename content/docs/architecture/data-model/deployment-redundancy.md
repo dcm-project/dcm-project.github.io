@@ -10,7 +10,7 @@ weight: 17
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress  
+**Document Status:** ✅ Complete  
 **Related Documents:** [Context and Purpose](00-context-and-purpose.md) | [Storage Providers](11-storage-providers.md) | [Universal Audit Model](16-universal-audit.md) | [Policy Organization](14-policy-profiles.md)
 
 > **Foundation Document Reference**
@@ -454,6 +454,8 @@ Read from any surviving Commit Log replica
 ---
 
 ## 8. Network Architecture
+
+> **Full internal auth specification:** See [Internal Component Authentication](36-internal-component-auth.md) for component identity model, Internal CA, bootstrap protocol, and ICOM-001–ICOM-009 system policies.
 
 ### 8.1 Service Mesh
 

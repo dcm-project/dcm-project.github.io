@@ -10,7 +10,7 @@ weight: 18
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress
+**Document Status:** ✅ Complete
 **Related Documents (updated):** [Notification Model](23-notification-model.md) | [Entity Relationships](09-entity-relationships.md)  
 
 > **Foundation Document Reference**

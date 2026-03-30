@@ -11,7 +11,7 @@ weight: 10
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
 
-**Document Status:** 🔄 In Progress  
+**Document Status:** ✅ Complete  
 **Related Documents:** [Resource Type Hierarchy](05-resource-type-hierarchy.md) | [Resource/Service Entities](06-resource-service-entities.md) | [Entity Relationships](09-entity-relationships.md)
 
 > **Foundation Document Reference**

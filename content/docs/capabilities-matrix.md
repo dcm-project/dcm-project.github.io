@@ -367,6 +367,65 @@
 ---
 
 
+## 27. Session Revocation
+
+| ID | Capability | Consumer | Service Provider | Platform/Admin | Depends On |
+|----|-----------|---------|---------|---------------|-----------|
+| SES-001 | Session Lifecycle Management | View own active sessions; logout single session (DELETE /api/v1/auth/session); logout all sessions; revoke specific session by UUID | — | Force revoke sessions for any actor; view session store health | IAM-001, AUTH-001 |
+| SES-002 | Actor Deprovisioning Session Revocation | — | — | Parallel session + credential revocation on actor deprovisioning; deprovisioning not acknowledged until both complete (AUTH-016) | SES-001, CPX-005 |
+| SES-003 | Emergency Session Revocation | Receive critical notification on security-event session revocation | — | Trigger emergency revocation (security_event); revocation propagates within profile SLA (PT5S sovereign to PT30S standard) | SES-001, EVT-001 |
+| SES-004 | Token Introspection | — | Call POST /api/v1/auth/introspect to validate bearer tokens without maintaining own revocation cache | Configure introspection endpoint access; manage introspection scope grants | SES-001, IAM-001 |
+| SES-005 | Concurrent Session Enforcement | Oldest session auto-revoked when new session exceeds concurrent limit; receive notification via Notification Provider | — | Configure concurrent_sessions limit per profile; monitor session counts | SES-001 |
+
+---
+
+## 28. Internal Component Authentication
+
+| ID | Capability | Consumer | Service Provider | Platform/Admin | Depends On |
+|----|-----------|---------|---------|---------------|-----------|
+| ICOM-001 | Component Identity and mTLS | — | — | Manage Internal CA; issue and rotate component certificates; all inter-component calls use mTLS (ICOM-001) | ZTS-001, CPX-001 |
+| ICOM-002 | Component Bootstrap | — | — | Generate one-time bootstrap tokens (PT1H max lifetime); components acquire first certificate via bootstrap token; token invalidated after single use (ICOM-007) | ICOM-001 |
+| ICOM-003 | Internal Call Authorization | — | — | Declare allowed_sources per internal endpoint; declare allowed_targets per component; unauthorized source calls rejected with ICOM_UNAUTHORIZED_SOURCE audit record (urgency: high) | ICOM-001, AUD-001 |
+| ICOM-004 | Internal Interaction Credentials | — | — | Every internal call presents a scoped ZTS-002 interaction credential in addition to mTLS; credential scoped to specific operation and target component | ICOM-001, CPX-002, ZTS-002 |
+| ICOM-005 | Component Certificate Revocation | — | — | Compromised component certificates added to Internal CA CRL immediately; CRL cache refresh within profile SLA (PT15S sovereign to PT1M standard); ICOM_CERT_COMPROMISED audit record (urgency: critical) | ICOM-001, AUD-001 |
+
+---
+
+
+## 29. Scheduled and Deferred Requests
+
+| ID | Capability | Consumer | Service Provider | Platform/Admin | Depends On |
+|----|-----------|---------|---------|---------------|-----------|
+| SCH-001 | Request Scheduling | Submit requests with schedule.dispatch: at/window/recurring; SCHEDULED requests visible in GET /api/v1/requests; cancellable before dispatch; receive request.scheduled event | — | Manage Maintenance Windows; configure Request Scheduler; monitor scheduled queue depth | REQ-001 |
+| SCH-002 | Maintenance Windows | Reference maintenance windows in scheduled requests; view available windows at GET /api/v1/maintenance-windows | — | Create/manage/suspend maintenance windows; approve window schedules; configure platform-wide windows | SCH-001, GOV-001 |
+| SCH-003 | Dual Policy Evaluation | — | — | Understand that scheduled requests run GateKeeper at declaration AND at dispatch; dispatch-time failure → FAILED with schedule_policy_rejection (SCH-003) | SCH-001, POL-001 |
+| SCH-004 | Deadline Enforcement | Set not_after on scheduled requests; receive request.failed(schedule_deadline_missed) if deadline passes without dispatch | — | Monitor deadline miss rates; configure alerting on deadline misses | SCH-001, EVT-001 |
+
+---
+
+## 30. Request Dependency Graph
+
+| ID | Capability | Consumer | Service Provider | Platform/Admin | Depends On |
+|----|-----------|---------|---------|---------------|-----------|
+| RDG-001 | Dependency Group Submission | Submit POST /api/v1/request-groups with requests and depends_on declarations; local refs within submission; receive group_uuid and per-request entity_uuids | — | Monitor group queue depth; configure max group size | REQ-001 |
+| RDG-002 | Field Injection | Declare inject_fields to pass realized output fields (e.g. IP address) from dependency into dependent request fields automatically at dispatch time | — | — | RDG-001, REQ-001 |
+| RDG-003 | PENDING_DEPENDENCY Status | Track dependent requests in PENDING_DEPENDENCY status; cancel pending requests individually or cancel whole group; receive request.pending_dependency and request.dependency_met events | — | Monitor PENDING_DEPENDENCY queue depth; detect stalled groups | RDG-001, EVT-001 |
+| RDG-004 | Group Failure Handling | Configure on_failure: cancel_remaining or continue; group-level timeout; group status via GET /api/v1/request-groups/{uuid} | — | Monitor group failure rates | RDG-001 |
+
+---
+
+## 31. DCM Self-Health
+
+| ID | Capability | Consumer | Service Provider | Platform/Admin | Depends On |
+|----|-----------|---------|---------|---------------|-----------|
+| HLT-001 | Liveness Probe | — | — | GET /livez: fast liveness check (PT5S max, no external calls); Kubernetes restarts pod on failure; unauthenticated | — |
+| HLT-002 | Readiness Probe | — | — | GET /readyz: checks Session Store, Audit Store, Policy Engine, Message Bus, Auth Provider connectivity; Kubernetes removes from LB on failure; startup sequence observable via readyz | — |
+| HLT-003 | Component Health Detail | — | — | GET /api/v1/admin/health: per-component status (pass/warn/fail), metrics, queue depths, provider/auth summary; admin auth required | IAM-001 |
+| HLT-004 | Prometheus Metrics | — | — | GET /metrics: Prometheus scrape endpoint; request pipeline, policy, session, drift, provider, internal CA metrics | OBS-001 |
+
+---
+
+
 ## Capability Count Summary
 
 | Domain | Capabilities |
@@ -397,7 +456,12 @@
 | Authority Tier Model | 7 |
 | Event Catalog | 7 |
 | API Versioning | 5 |
-| **Total** | **167** |
+| Session Revocation | 5 |
+| Internal Component Auth | 5 |
+| Scheduled Requests | 4 |
+| Request Dependency Graph | 4 |
+| DCM Self-Health | 4 |
+| **Total** | **189** |
 
 ---
 

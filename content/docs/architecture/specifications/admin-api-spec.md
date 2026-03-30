@@ -491,6 +491,113 @@ Response 200:
 
 ---
 
+## 13. DCM Self-Health Endpoints
+
+DCM exposes three health endpoints, each with a distinct purpose:
+
+```http
+# Liveness — is the process alive? (Kubernetes liveness probe)
+GET /livez
+# No auth required. Max response time: PT5S.
+# Returns 200 OK with {"status":"ok"} if alive.
+# Returns 503 if process is deadlocked or unresponsive.
+
+# Readiness — is DCM ready to serve traffic? (Kubernetes readiness probe)
+GET /readyz
+# No auth required. Max response time: PT10S.
+# Returns 200 OK with {"status":"ready"} if all required stores are reachable.
+# Returns 503 with {"status":"not_ready","reasons":["store_unreachable"]} otherwise.
+
+# Operational health — rich health for operators and monitoring systems
+GET /api/v1/admin/health
+Authorization: Bearer <admin-token>
+
+Response 200:
+{
+  "dcm_version": "<semver>",
+  "profile": "prod",
+  "status": "healthy",           // healthy | degraded | critical
+  "components": {
+    "request_orchestrator": { "status": "healthy" },
+    "policy_engine":        { "status": "healthy" },
+    "placement_engine":     { "status": "healthy" },
+    "credential_provider":  { "status": "degraded", "reason": "rotation_pending" }
+  },
+  "stores": {
+    "intent_store":    { "status": "healthy", "latency_p99_ms": 12 },
+    "requested_store": { "status": "healthy", "latency_p99_ms": 8 },
+    "realized_store":  { "status": "healthy", "latency_p99_ms": 9 }
+  },
+  "providers": {
+    "total": 4,
+    "healthy": 3,
+    "degraded": 1,
+    "unhealthy": 0
+  }
+}
+
+# Prometheus metrics
+GET /metrics
+# Unauthenticated (secured by network policy in production).
+# Returns Prometheus text format metrics.
+```
+
+> **Full model:** See [DCM Self-Health](../data-model/39-dcm-self-health.md) — HLT-001–HLT-006.
+
+
+## 12. Session Management (Admin)
+
+Platform admins can force-revoke sessions for any actor — used on actor compromise, policy violation, or deprovisioning.
+
+```http
+# Force-revoke all sessions for an actor
+POST /api/v1/admin/actors/{actor_uuid}/revoke-sessions
+Authorization: Bearer <admin-token>
+
+{
+  "reason": "security_event",        // REQUIRED
+  "notify_actor": true               // send notification event
+}
+
+Response 202 Accepted:
+{
+  "sessions_revoked": 3,
+  "actor_uuid": "<uuid>",
+  "revocation_propagated_at": "<ISO 8601>"
+}
+```
+
+```http
+# List active sessions for any actor (admin view)
+GET /api/v1/admin/actors/{actor_uuid}/sessions
+Authorization: Bearer <admin-token>
+
+Response 200:
+{
+  "items": [
+    {
+      "session_uuid": "<uuid>",
+      "created_at": "<ISO 8601>",
+      "expires_at": "<ISO 8601>",
+      "auth_method": "ldap",
+      "mfa_verified": true,
+      "status": "active"
+    }
+  ],
+  "total": 1
+}
+```
+
+**Error codes specific to session management:**
+
+| Error Code | HTTP | When |
+|-----------|------|------|
+| `actor_not_found` | 404 | Actor UUID not found |
+| `no_active_sessions` | 404 | Actor has no active sessions |
+
+> **Full model:** See [Session Token Revocation](../data-model/35-session-revocation.md) — AUTH-016–AUTH-022.
+
+
 ## 11. Error Model
 
 All Admin API errors use the same envelope as the Consumer API:

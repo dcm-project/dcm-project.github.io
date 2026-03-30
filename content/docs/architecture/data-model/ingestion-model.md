@@ -10,7 +10,7 @@ weight: 13
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress  
+**Document Status:** ✅ Complete  
 **Related Documents:** [Context and Purpose](00-context-and-purpose.md) | [Four States](02-four-states.md) | [Resource/Service Entities](06-resource-service-entities.md) | [Entity Relationships](09-entity-relationships.md) | [Resource Grouping](08-resource-grouping.md)
 
 > **Foundation Document Reference**

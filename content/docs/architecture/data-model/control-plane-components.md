@@ -10,7 +10,7 @@ weight: 25
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress
+**Document Status:** ✅ Complete
 **Document Type:** Architecture Reference
 
 > **Foundation Document Reference**
@@ -26,7 +26,7 @@ weight: 25
 > Runtime implementations of the three abstractions — not a fourth abstraction
 
 
-**Related Documents:** [Context and Purpose](00-context-and-purpose.md) | [Four States](02-four-states.md) | [Resource/Service Entities](06-resource-service-entities.md) | [Operational Models](24-operational-models.md) | [Policy Profiles](14-policy-profiles.md)
+**Related Documents:** [Internal Component Authentication](36-internal-component-auth.md) | [Context and Purpose](00-context-and-purpose.md) | [Four States](02-four-states.md) | [Resource/Service Entities](06-resource-service-entities.md) | [Operational Models](24-operational-models.md) | [Policy Profiles](14-policy-profiles.md)
 
 ---
 
@@ -34,6 +34,9 @@ weight: 25
 The DCM Control Plane consists of **nine components** that implement the three foundational abstractions at runtime.
 
 ## 1. Purpose
+
+> **Internal component authentication:** See [Internal Component Authentication](36-internal-component-auth.md) for the mTLS and interaction credential model governing all component-to-component calls within the DCM control plane.
+
 
 This document formally defines the DCM control plane components that are referenced throughout the data model documents but not previously specified in detail. Two components are defined here:
 

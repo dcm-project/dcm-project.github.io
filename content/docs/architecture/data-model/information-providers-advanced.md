@@ -10,7 +10,7 @@ weight: 21
 >
 > Contributions, feedback, and discussion are welcome via [GitHub](https://github.com/dcm-project).
 
-**Document Status:** 🔄 In Progress  
+**Document Status:** ✅ Complete  
 **Related Documents:** [Information Providers](10-information-providers.md) | [Policy Organization](14-policy-profiles.md) | [Universal Audit Model](16-universal-audit.md) | [DCM Federation](22-dcm-federation.md)
 
 > **Foundation Document Reference**

@@ -4,7 +4,7 @@ type: docs
 weight: 33
 ---
 
-**Document Status:** 🔄 In Progress
+**Document Status:** ✅ Complete
 **Document Type:** Architecture Reference — Authoritative Event Catalog
 **Related Documents:** [Notification Model](23-notification-model.md) | [Webhooks and Messaging](18-webhooks-messaging.md) | [Universal Audit](16-universal-audit.md) | [Credential Provider Model](31-credential-provider-model.md) | [Authority Tier Model](32-authority-tier-model.md) | [Control Plane Components](25-control-plane-components.md)
 
@@ -107,6 +107,7 @@ links:
 | `request.failed` | high | Request failed at any stage |
 | `request.gatekeeper_rejected` | high | GateKeeper policy denied the request |
 | `request.cancelled` | low | Consumer cancelled; pipeline terminated |
+| `request.progress_updated` | info | Provider sent interim progress update; constituent_status updated |
 
 ### 3.1 Payload Schemas
 

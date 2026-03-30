@@ -4538,7 +4538,196 @@ VER-001: URL path versioning only. VER-002: breaking change definition. VER-003:
 
 ---
 
-## SECTION 67 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 67 — SESSION TOKEN REVOCATION (doc 35 — 35-session-revocation.md)
+
+> **Full specification:** [35-session-revocation.md](data-model/35-session-revocation.md) — session lifecycle, revocation triggers, revocation registry, token introspection, AUTH-016–AUTH-022.
+
+### Session Record
+session_uuid · actor_uuid · auth_provider_uuid · auth_method · mfa_verified · created_at · expires_at · status (active/refreshing/revoked/expired) · revocation_reason · revoked_at · revoked_by
+
+### Session Store
+Fast-queryable operational store (not GitOps-backed). Redis/Postgres (standard+) or in-memory (minimal/dev). Profile-governed TTLs: minimal PT8H → sovereign PT15M. Concurrent session limits: unlimited(minimal) → 1(sovereign).
+
+### Revocation Triggers
+actor_logout (single session, self) · actor_logout_all (all sessions, self) · actor_deprovisioned (all sessions — parallel with CPX-006) · actor_suspended · security_event (emergency, no grace period) · concurrent_limit_exceeded (oldest session evicted) · auth_provider_deregistered · credential_compromised · admin_forced_logout
+
+### Session Revocation Registry
+Fast-queryable store of revoked-but-not-yet-expired session UUIDs. ALL components that accept bearer tokens MUST check this on every request. Cache age: PT5M(minimal) → no cache(sovereign). AUTH-018.
+
+### Actor Deprovisioning (AUTH-016)
+Session revocation and credential revocation (CPX-006) are PARALLEL operations. Deprovisioning not acknowledged until BOTH complete. Neither blocks the other.
+
+### Emergency Revocation (AUTH-019)
+security_event trigger: immediate, no grace period. auth.security_session_revoked event: urgency critical, non-suppressable. SLA: PT30S(standard) → PT5S(sovereign).
+
+### Token Introspection
+POST /api/v1/auth/introspect (RFC 7662). Returns {active: true/false, session_uuid, actor_uuid, expires_at, mfa_verified, roles}. Requires introspection scope. AUTH-020.
+
+### Consumer API Session Endpoints
+DELETE /api/v1/auth/session (logout single) · DELETE /api/v1/auth/sessions (logout all) · GET /api/v1/auth/sessions (list active) · DELETE /api/v1/auth/sessions/{uuid} (revoke specific)
+Admin: POST /api/v1/admin/actors/{uuid}/revoke-sessions (force revoke, requires reason)
+
+### AUTH-016–AUTH-022 System Policies
+AUTH-016: deprovisioning fires session + credential revocation in parallel. AUTH-017: revocation SLA PT5M(minimal) → PT5S(sovereign). AUTH-018: all components check revocation registry. AUTH-019: emergency revocation = critical urgency, non-suppressable. AUTH-020: introspection endpoint requires introspection scope. AUTH-021: oldest session evicted at concurrent limit. AUTH-022: refresh tokens invalidated when parent session revoked.
+
+---
+
+## SECTION 68 — INTERNAL COMPONENT AUTHENTICATION (doc 36 — 36-internal-component-auth.md)
+
+> **Full specification:** [36-internal-component-auth.md](data-model/36-internal-component-auth.md) — component identity, Internal CA, bootstrap tokens, communication graph, ICOM-001–ICOM-009.
+
+### Two-Layer Enforcement
+Mesh layer (Istio/mTLS): prevents impersonation at transport. Application layer (DCM): enforces what each component is permitted to do. BOTH required. Network position grants zero trust — internal calls receive same boundary checks as external.
+
+### Component Identity
+Each component has: component_uuid · component_type · mTLS certificate (from Internal CA) · service_account_uuid · allowed_operations · allowed_targets list.
+
+### Component Types
+api_gateway · policy_engine · placement_engine · request_orchestrator · scoring_engine · drift_reconciler · lifecycle_enforcer · notification_router · audit_store · session_store · message_bus · credential_provider_proxy
+
+### Communication Graph (enforced, not advisory)
+Consumer/Admin → API Gateway → Request Orchestrator → Policy Engine / Placement Engine / Scoring Engine
+All components → Session Store (revocation check) + Credential Provider Proxy (interaction creds)
+ICOM-004: components may ONLY call declared allowed_targets. Unauthorized source → 403 + ICOM_UNAUTHORIZED_SOURCE audit (urgency: high). ICOM-003.
+
+### Every Internal Call Requires
+1. mTLS certificate from Internal CA (transport identity)
+2. ZTS-002 scoped interaction credential (operation authorization) — scoped to specific operation + target component, valid PT5M max
+3. Correlation ID
+
+### Internal CA
+Per-deployment CA. Certificates: ECDSA-P-384, P90D lifetime, auto-renew P14D before expiry. CRL + OCSP endpoints. Internal CA root cert installed in ALL component trust stores at deploy time. ICOM-006, ICOM-009.
+
+### Bootstrap Protocol (ICOM-007)
+New component has no cert yet. Platform admin generates one-time bootstrap token (PT1H max). Component uses bootstrap token → gets first cert from Internal CA → token invalidated immediately. Kubernetes: token injected as Secret, deleted by component after cert acquisition. Unused tokens auto-expire at PT1H.
+
+### Certificate Compromise (ICOM-008)
+Compromised cert → added to Internal CA CRL immediately → all components refresh CRL within profile SLA (PT15S sovereign, PT1M standard) → ICOM_CERT_COMPROMISED audit (urgency: critical) → platform admin notified → new cert issued.
+
+### ICOM-001–ICOM-009 System Policies
+ICOM-001: mTLS required ALL internal calls, no exceptions. ICOM-002: interaction credential required IN ADDITION to mTLS. ICOM-003: unauthorized source → 403 + high-urgency audit. ICOM-004: components only call declared allowed_targets. ICOM-005: all internal calls audited. ICOM-006: component certs max P90D, Internal CA only. ICOM-007: bootstrap tokens one-time-use PT1H max. ICOM-008: compromised certs → CRL immediately. ICOM-009: Internal CA root in all trust stores; no external CA certs for internal comms.
+
+---
+
+## SECTION 69 — SCHEDULED AND DEFERRED REQUESTS (doc 37 — 37-scheduled-requests.md)
+
+> **Full specification:** [37-scheduled-requests.md](data-model/37-scheduled-requests.md) — scheduling model, dual policy evaluation, maintenance windows, Request Scheduler component, SCH-001–SCH-006.
+
+### Scheduling Model
+schedule.dispatch: immediate (default) | at (specific time with not_before/not_after) | window (maintenance window reference) | recurring (cron expression). Added as optional field on POST /api/v1/requests — no new submission endpoint.
+
+### SCHEDULED Status
+Request enters SCHEDULED status in Intent State after passing declaration-time GateKeeper. Visible in GET /api/v1/requests?status=SCHEDULED. Cancellable via DELETE /api/v1/requests/{uuid} before dispatch. request.scheduled event (info urgency).
+
+### Dual Policy Evaluation (SCH-001)
+GateKeeper runs at declaration time (fail fast) AND at dispatch time (validate against current state). Dispatch-time rejection → FAILED with schedule_policy_rejection (SCH-003). Data, quotas, policies may all change between declaration and dispatch.
+
+### Deadline Enforcement (SCH-005)
+not_after: if passed without dispatch → FAILED with schedule_deadline_missed. No retry. request.failed event (medium urgency).
+
+### Maintenance Windows
+Reusable named recurrence artifacts. Platform admin creates; consumers reference by window_uuid in schedule. Admin: POST /api/v1/admin/maintenance-windows. Consumer: GET /api/v1/maintenance-windows.
+
+### New Events (added to doc 33)
+request.scheduled · request.schedule_cancelled · request.schedule_deadline_missed (17 total in request.* domain)
+
+---
+
+## SECTION 70 — REQUEST DEPENDENCY GRAPH (doc 38 — 38-request-dependency-graph.md)
+
+> **Full specification:** [38-request-dependency-graph.md](data-model/38-request-dependency-graph.md) — consumer-declared cross-request ordering, field injection, PENDING_DEPENDENCY status, RDG-001–RDG-006.
+
+### What This Is
+Consumer-declared ordering of INDEPENDENT requests. Distinct from: type-level deps (doc 07, resolved automatically) and Meta Provider composition (doc 30, platform team defines). Use when no Meta Provider exists for the compound deployment.
+
+### Request Dependency Group
+POST /api/v1/request-groups — submit multiple requests with depends_on declarations using local refs. Response includes group_uuid and per-request entity_uuids. GET /api/v1/request-groups/{uuid} for group status. DELETE to cancel.
+
+### PENDING_DEPENDENCY Status
+Dependent request waits in PENDING_DEPENDENCY until dependency reaches wait_for: acknowledged|approved|dispatched|realized (default: realized). Quota counted at group submission, not at dispatch. RDG-004.
+
+### Field Injection
+inject_fields: pass realized output fields from dependency (e.g. IP address) into dependent request's fields automatically at dispatch time. Subject to Transformation policies. RDG-003.
+
+### Failure Handling
+on_failure: cancel_remaining (dependents → CANCELLED with dependency_failed) | continue (only directly-dependent requests fail). Group timeout: all non-terminal → FAILED with group_timeout. RDG-005.
+
+### Constraints (RDG-001, RDG-002, RDG-006)
+Circular deps rejected at submission (422) — must be a DAG. Max 50 requests per group. Request may belong to at most ONE group (409 on second add).
+
+### New Events (added to doc 33)
+request.pending_dependency · request.dependency_met · request.group_completed · request.group_failed
+
+---
+
+## SECTION 71 — DCM SELF-HEALTH ENDPOINTS (doc 39 — 39-dcm-self-health.md)
+
+> **Full specification:** [39-dcm-self-health.md](data-model/39-dcm-self-health.md) — liveness, readiness, component health, Prometheus metrics, HLT-001–HLT-006.
+
+### Three Endpoints
+GET /livez (liveness — PT5S max, no external calls, unauthenticated, Kubernetes restarts on fail) ·
+GET /readyz (readiness — checks Session Store + Audit Store + Policy Engine + Message Bus + Auth Provider, unauthenticated, Kubernetes removes from LB on fail) ·
+GET /api/v1/admin/health (per-component detail, admin auth required)
+
+### Liveness (/livez)
+{status: pass|fail}. Fail if: deadlocked, Internal CA unreachable. Responds within PT5S. No DB reads, no external calls. HLT-002.
+
+### Readiness (/readyz)
+{status: pass|warn|fail, checks: {session_store, audit_store, policy_engine, message_bus, auth_provider}}. Fail if ANY core dependency unreachable. Warn if optional component degraded. Used for startup probe (failureThreshold 30 × 10s = 300s startup allowance). HLT-003, HLT-006.
+
+### Component Health (/api/v1/admin/health)
+Full per-component status: api_gateway, request_orchestrator, policy_engine, placement_engine, scoring_engine, request_scheduler, drift_reconciler, lifecycle_enforcer, discovery_scheduler, notification_router, session_store, audit_store, message_bus, internal_ca. Plus providers{registered/healthy/degraded/unhealthy} and auth_providers summary.
+
+### Prometheus Metrics (/metrics)
+dcm_requests_total · dcm_request_duration_seconds · dcm_requests_pending_dependency_total · dcm_policy_evaluations_total · dcm_sessions_active_total · dcm_session_revocations_total · dcm_drift_open_records_total · dcm_providers_healthy_total · dcm_internal_ca_certificates_active. HLT-005.
+
+### Kubernetes Manifest
+livenessProbe: /livez PT5S timeout, 10s period, 3 failures.
+readinessProbe: /readyz PT10S timeout, 5s period, 6 failures.
+startupProbe: /readyz PT10S timeout, 10s period, 30 failures (allows 300s startup).
+
+---
+
+## SECTION 72 — STANDARDS AND COMPLIANCE CATALOG (doc 40 — 40-standards-catalog.md)
+
+> **Full specification:** [40-standards-catalog.md](data-model/40-standards-catalog.md) — authoritative source for all RFCs, protocols, cryptographic standards, CNCF projects, and compliance frameworks used in DCM.
+
+### Internet Standards (IETF RFCs) — Normative
+Auth/AuthZ: RFC 7519 (JWT) · RFC 7517 (JWK) · RFC 7662 (Token Introspection) · RFC 6749 (OAuth 2.0) · RFC 4511 (LDAP) · RFC 7643/7644 (SCIM 2.0)
+Transport: RFC 8446 (TLS 1.3, preferred) · RFC 5246 (TLS 1.2, minimum) · RFC 5280 (X.509/CRL) · RFC 6960 (OCSP)
+Certificate enrollment: RFC 7030 (EST, preferred) · RFC 8555 (ACME) · RFC 8894 (SCEP, optional) · RFC 4210 (CMP, optional)
+API lifecycle: RFC 8594 (Sunset header, VER-003) · RFC 9745 (Deprecation header, VER-003)
+Health/discovery: RFC 8615 (Well-Known URIs, /livez /readyz /.well-known/dcm-api-versions)
+Data: ISO 8601 (all timestamps and durations) · RFC 8259 (JSON, all API bodies)
+
+### Cryptographic Standards
+Permitted algorithms: ECDSA P-384 (Internal CA, all profiles), AES-256-GCM, SHA-256 minimum, SHA-384/512 for fsi+
+RSA permitted only ≥ 2048 bits
+TLS: 1.3 preferred, 1.2 minimum — TLS 1.0/1.1 strictly prohibited in ALL profiles
+FIPS 140-2 Level 1+ (standard/prod), Level 2+ (fsi/fedramp), Level 3 (sovereign/dod_il4)
+FORBIDDEN (all profiles, no exceptions): MD5, SHA-1, DES, 3DES, RC4, RSA < 2048
+
+### Authentication Assurance Levels (NIST SP 800-63B)
+minimal/dev: AAL1 (single factor OK) · standard/prod: AAL2 (MFA required) · fsi: AAL2+ (phishing-resistant) · sovereign: AAL3 (hardware authenticator)
+
+### Compliance Frameworks and DCM Profile/Overlay Mapping
+HIPAA → fsi profile + hipaa overlay · PCI DSS → pci_dss overlay (P90D max rotation, 12-month audit) · FedRAMP Moderate/High → fedramp_moderate/fedramp_high overlays (NIST 800-53) · DoD IL4 → dod_il4 overlay (FIPS 140-2 Level 2, hardware attestation) · GDPR → sovereignty constraints + data classification · ISO 27001 → all profiles (risk-based approach) · SOC 2 → standard+ (Type II audit trail) · NIST SP 800-53 → FedRAMP profiles
+
+### CNCF Ecosystem (Graduated Projects)
+Kubernetes (deployment, CRD operator, resource model) · OPA/Open Policy Agent (policy engine backend, Rego) · Prometheus (metrics, /metrics endpoint) · OpenTelemetry (tracing, correlation IDs) · Istio (internal mTLS service mesh) · Argo CD / Flux (GitOps delivery) · SPIFFE (workload identity concept — inspiration for ICOM component identity model)
+
+### Operational Standards (Normative)
+W3C SSE / Server-Sent Events (GET /api/v1/requests/{uuid}/stream — live status without polling) · OpenAPI 3.1 (REST API spec format — consumer, admin, OIS specs) · Unix cron / POSIX (recurring schedule expressions in doc 37) · IANA health+json (RFC 8615 — /livez /readyz health response format) · GitOps / OpenGitOps v1.0 (all DCM artifacts in Git; PR-based contribution)
+
+### External CA Credential Providers (Optional)
+HashiCorp Vault PKI (native API + EST/ACME; recommended enterprise PKI for fsi/sovereign; operates as subordinate CA) · Venafi TLS Protect (ACME/EST/REST) · EJBCA (ACME/CMP/SCEP) — all implemented as x509_certificate Credential Providers per doc 31; NOT Auth Providers
+
+### Policy Family → Standards Mapping (doc 40 Section 9)
+AUTH → RFC 6749/7519/7662/OIDC/SCIM · CPX → FIPS 140/RFC 5280/8555/7030/8894/4210 · ICOM → RFC 8446/5280/SPIFFE/FIPS 140 · VER → RFC 8594/9745 · SES → RFC 7662/7009 · HLT → RFC 8615/Kubernetes probes · ZTS → NIST SP 800-207/800-63B · SCH/RDG → industry scheduling/DAG patterns · SMX/ATM → organizational risk governance
+
+---
+
+## SECTION 73 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, apply these instructions in addition to the numbered guidance in SECTION 60 (Documentation Structure):
 
@@ -4563,6 +4752,23 @@ When working on this project, apply these instructions in addition to the number
 198. **Admin API base URL is /api/v1/admin/ (version-first)** — NOT /admin/api/v1/; all 40 admin endpoints use /api/v1/admin/; this is the authoritative form used everywhere in the specs and data model docs
 199. **Consumer API has idempotency (1.5), rate limiting (1.6), request IDs (1.7), and standard envelope (1.8)** — POST requests support Idempotency-Key header (PT24H retention); rate limits are profile-governed (60/min minimal → 600/min sovereign) with Retry-After on 429; all list responses use {"items":[...],"total":N,"next_cursor":"..."} envelope; X-DCM-Request-ID and X-DCM-Correlation-ID on all responses
 200. **OIS health check response is normative (not optional)** — providers MUST return {status: pass|warn|fail, version, dcm_registration_status}; missing/malformed body = warn; 3 consecutive non-200 = provider.unhealthy event; response format follows RFC 8615 / IANA health+json
+201. **Doc 35 (35-session-revocation.md) is complete** — session lifecycle: intent→requested→realized store model; AUTH-016 (deprovisioning revokes sessions AND credentials in parallel); AUTH-017 (revocation SLA: PT5M minimal → PT5S sovereign); AUTH-018 (ALL components check revocation registry on every bearer token request — no exceptions); AUTH-019 (emergency revocation = critical urgency, non-suppressable); AUTH-020 (introspection endpoint authenticated); AUTH-021 (oldest session revoked on concurrent limit breach); AUTH-022 (refresh tokens invalidated on parent session revocation); session endpoints: DELETE /api/v1/auth/session, DELETE /api/v1/auth/sessions, GET /api/v1/auth/sessions, DELETE /api/v1/auth/sessions/{uuid}; admin: POST /api/v1/admin/actors/{uuid}/revoke-sessions
+202. **Doc 36 (36-internal-component-auth.md) is complete** — ICOM-001 (all internal calls mTLS); ICOM-002 (scoped interaction credential required IN ADDITION to mTLS on every call); ICOM-003 (unauthorized source → 403 + audit); ICOM-004 (components may only call declared allowed_targets); ICOM-005 (all internal calls audited); ICOM-006 (P90D max cert validity); ICOM-007 (bootstrap tokens one-time-use, PT1H max); ICOM-008 (compromised cert → CRL immediately); ICOM-009 (Internal CA root in all trust stores at deploy); component communication graph is declared and enforced — not implicit; every call: mTLS cert (transport identity) + ZTS-002 interaction credential (operation authorization)
+203. **Session revocation and internal component auth complete the zero trust model** — external boundary: provider↔DCM uses mTLS + scoped credentials (CPX-001–CPX-012); internal boundary: component↔component uses Internal CA mTLS + ZTS-002 interaction credentials (ICOM-001–ICOM-009); actor sessions: Auth Provider issues tokens; Session Revocation Registry checked on every request (AUTH-018); credentials: Credential Provider manages values that never touch DCM stores (CPX-001); together these four surfaces cover the complete trust boundary
+
+201. **35-session-revocation.md (AUTH-016–AUTH-022)** — session revocation and credential revocation are PARALLEL on actor deprovisioning (not sequential); revocation registry must be checked on EVERY request by ALL components; sovereign profile: no revocation registry cache; emergency revocation (security_event) is critical urgency + non-suppressable; refresh tokens are invalidated when parent session is revoked (AUTH-022)
+202. **36-internal-component-auth.md (ICOM-001–ICOM-009)** — network position grants ZERO trust for internal calls — same five-check boundary model as external; every internal call requires BOTH mTLS cert AND ZTS-002 interaction credential; bootstrap tokens are one-time-use PT1H max; unauthorized source component → 403 + high-urgency audit; component certs from Internal CA only, max P90D, never external CA
+203. **SES and ICOM domains added to capabilities matrix** — matrix is now 177 capabilities across 28 domains; SES-001–SES-005 (session lifecycle, deprovisioning, emergency revocation, introspection, concurrent enforcement); ICOM-001–ICOM-005 (mTLS, bootstrap, call authorization, interaction credentials, cert revocation)
+204. **Domain prefix totals now 28** — IAM CAT REQ PRV LCM DRF POL LAY INF ING AUD OBS STO FED GOV ACC ZTS GMX DRC FCM SMX MPX CPX DPO ATM EVT VER SES ICOM; README and taxonomy both updated to 177/28
+205. **Doc 37 (Scheduled Requests): dual policy evaluation** — GateKeeper runs at declaration AND at dispatch; dispatch-time rejection = FAILED not retried; schedule field is optional addition to existing POST /api/v1/requests body; SCHEDULED status is cancellable; not_after deadline miss = terminal FAILED (SCH-005)
+206. **Doc 38 (Request Dependency Graph): distinct from type-level and Meta Provider deps** — consumer-declared ad-hoc ordering for independent requests; POST /api/v1/request-groups; PENDING_DEPENDENCY status counts against quota at submission not dispatch; max 50 requests per group; circular deps → 422 at submission; field injection passes realized outputs into dependent request fields automatically
+207. **Doc 39 (DCM Self-Health): three endpoints, different purposes** — /livez (liveness, PT5S max, no external calls, Kubernetes restarts pod on fail) vs /readyz (readiness, checks 5 core dependencies, Kubernetes removes from LB) vs /api/v1/admin/health (per-component detail, admin auth required, Prometheus metrics at /metrics); all follow RFC 8615 / IANA health+json
+208. **Capabilities matrix now 189 across 31 domains** — SES(5) ICOM(5) SCH(4) RDG(4) HLT(4) added; domain prefixes: IAM CAT REQ PRV LCM DRF POL LAY INF ING AUD OBS STO FED GOV ACC ZTS GMX DRC FCM SMX MPX CPX DPO ATM EVT VER SES ICOM SCH RDG HLT (31 total)
+209. **40-standards-catalog.md is the authoritative source for all DCM standards** — forbidden algorithms (MD5, SHA-1, DES, 3DES, RC4, RSA<2048) are prohibited in ALL profiles with no exceptions; TLS 1.0/1.1 prohibited in ALL profiles; ECDSA P-384 is the mandated algorithm for Internal CA certs; AAL mapping: minimal/dev=AAL1, standard/prod=AAL2, fsi=AAL2+, sovereign=AAL3; doc 40 Section 8 maps every standard to the docs that use it
+209. **External CAs belong in the Credential Provider (NOT Auth Provider)** — Auth Provider authenticates identity; Credential Provider manages credential lifecycle; External CAs (Vault PKI, Venafi, EJBCA, AWS ACM PCA) are x509_certificate Credential Providers using ACME(RFC 8555)/EST(RFC 7030)/SCEP/CMP protocols; ICOM-009 updated — trust anchor is any registered CA root, not just built-in Internal CA; doc 36 profile table: cert lifetime P180D(minimal) → P14D(sovereign); sovereign requires HSM-backed certs if hardware_attested posture
+210. **Live updates: SSE stream + OIS interim status** — GET /api/v1/requests/{uuid}/stream (text/event-stream, closes on terminal status) for browser/CLI without polling; events: status_change, progress_updated, approval_required, approval_recorded, heartbeat(30s); OIS providers POST /api/v1/provider/entities/{uuid}/status for interim progress with step_current/step_total/constituent_status; request.progress_updated event added to doc 33; rate-limited: max 1 interim status per 10s per entity
+211. **Profile coverage added to docs 36-39** — doc36 cert lifetime table(P180D minimal→P14D sovereign), algorithm min table; doc37 max scheduling horizon(P365D minimal→P7D sovereign), concurrent scheduled limit, maintenance window approval tier; doc38 max group size(100 minimal→5 sovereign), group timeout max, field injection validation strictness, nesting depth; doc39 metrics scraping restrictions(sovereign internal only), /api/v1/admin/health MFA requirements(fsi/sovereign)
+212. **40-standards-catalog.md is the authoritative standards reference** — 19 RFCs, 3 cryptographic standards tables (permitted algorithms, forbidden algorithms, FIPS levels), 6 compliance frameworks, 7 CNCF ecosystem projects, W3C SSE, OpenAPI 3.1, SPIFFE (informative), HashiCorp Vault PKI / Venafi / EJBCA as External CA Credential Provider backends (NOT Auth Providers); Section 9 maps all 17 policy families to their standards basis; usage map tracks which standards appear in which documents
 195. **33-event-catalog.md is the SINGLE authoritative source for all DCM event types** — 82 events across 26 domains; all events share the base envelope (event_uuid, event_type, event_schema_version, timestamp from Commit Log, urgency, payload, links); consumers implement idempotency using event_uuid; critical urgency events are non-suppressable; non-standard events use reverse-DNS prefix; event_schema_version only increments on breaking changes
 194. **Tier registry changes are gated by impact detection** — any change that creates a SECURITY_DEGRADATION (tier gravity or position decreased) blocks activation until each degradation is explicitly accepted by a verified-tier or above reviewer via Admin API; BROKEN_REFERENCE also blocks; PROFILE_GAP is a warning that does not block; all changes produce an impact report in the Audit Store (ATM-009–012)
 193. **Authority tiers are named positions in an ordered list — not fixed enum values** — tier weight derived from list position at evaluation time; organizations insert custom tiers between existing ones without breaking existing name references; 'authorized' tier always means 'highest current gravity' regardless of what's been inserted before it; ATM-001: never hardcode tier weights
