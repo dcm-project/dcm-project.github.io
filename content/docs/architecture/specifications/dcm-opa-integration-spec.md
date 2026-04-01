@@ -1,5 +1,9 @@
 # DCM OPA Integration Specification
 
+**Document Status:** 📋 Draft — Ready for Implementation Feedback
+**Document Type:** Integration Specification
+
+
 > **AEP Alignment:** DCM API endpoints referenced in this spec follow [AEP](https://aep.dev) conventions. `resource_type` accepts FQN string or Registry UUID — DCM resolves internally. See `schemas/openapi/dcm-consumer-api.yaml` and `dcm-admin-api.yaml`.
 
 

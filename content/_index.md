@@ -3,42 +3,48 @@ title: DCM Project
 toc: false
 ---
 
-> **⚠️ Active Development** — The DCM project is under active development. Architecture, data model, and specifications are work in progress. [Contribute on GitHub](https://github.com/dcm-project).
-
 # Data Center Management
 
-Hyperscaler-like cloud experience for
-enterprise on-premises and sovereign cloud infrastructure
+**Hyperscaler-like cloud experience for enterprise on-premises and sovereign cloud infrastructure.**
 
-{{< button href="/docs" >}}Get Started{{< /button >}}
-{{< button href="https://github.com/dcm-project" >}}View on GitHub{{< /button >}}
+DCM is an open-source governing framework that gives enterprise IT organizations the operational model and self-service capabilities of a public cloud provider — on infrastructure they own and control.
 
-## About DCM
+{{< button href="/docs/project-overview" >}}What is DCM?{{< /button >}}
+{{< button href="/docs" >}}Documentation{{< /button >}}
+{{< button href="https://github.com/dcm-project" >}}GitHub{{< /button >}}
 
-The Data Center Management (DCM) project provides a hyperscaler-like cloud experience
-for enterprise on-premises and sovereign cloud infrastructure. DCM is an
-**API-first, technology-agnostic framework** that relies on a declarative data model
-where the desired state of infrastructure is defined as code.
+---
 
-The overarching goal is to define the configuration of an entire data center in
-version-controlled code, enabling rapid deployment and full environment recovery.
+## The Problem DCM Solves
 
-## Core Principles
+Enterprise on-premises infrastructure is managed by dozens of disconnected tools and manual processes. A single VM can take weeks across five teams. No one has a trustworthy answer to: *what exists, what was requested, what was provisioned, and does current state match intended state?*
+
+DCM establishes a unified, declarative single source of truth for all infrastructure state and connects it to a policy-driven control plane that governs every lifecycle operation — from request to decommission.
+
+## Three Foundational Abstractions
 
 {{< cards >}}
-  {{< card title="API-First Design" icon="plug" subtitle="Technology-agnostic framework built on modern API principles for maximum flexibility." >}}
-  {{< card title="Cloud-Native Approach" icon="cloud" subtitle="Moving away from monolithic management toward distributed, cloud-native principles." >}}
-  {{< card title="Service Catalog" icon="book-open" subtitle="Comprehensive catalog system for managing services and infrastructure offerings." >}}
-  {{< card title="Rules Engine" icon="adjustments" subtitle="Built-in governance and policy enforcement through a flexible rules engine." >}}
+  {{< card title="Data" icon="database" subtitle="Every artifact with a UUID, lifecycle state, and field-level provenance. Four states: Intent · Requested · Realized · Discovered." >}}
+  {{< card title="Provider" icon="plug" subtitle="Eleven typed provider contracts. Service, Information, Storage, Meta, Credential, Auth, Policy, Notification, Message Bus, ITSM, Peer DCM." >}}
+  {{< card title="Policy" icon="shield-check" subtitle="Seven typed policy schemas. GateKeeper · Validation · Transformation · Orchestration Flow · Recovery · Governance Matrix · Lifecycle." >}}
+{{< /cards >}}
+
+## Who Benefits
+
+{{< cards >}}
+  {{< card title="Application Teams" icon="users" subtitle="Self-service catalog. Request infrastructure. Receive provisioned resources. No tickets, no manual coordination." >}}
+  {{< card title="Platform Engineers" icon="cog" subtitle="Single control plane. Policy-governed standards. Automatic drift detection. Consistency is structural." >}}
+  {{< card title="Security & Compliance" icon="lock-closed" subtitle="Policy-as-code tested before activation. Tamper-evident audit trail. Continuous accreditation monitoring." >}}
+  {{< card title="Regulated Industries" icon="building-library" subtitle="FedRAMP · CMMC · HIPAA · SOC 2 · ISO 27001 · DoD IL2–IL6. Compliance by construction." >}}
 {{< /cards >}}
 
 ---
 
-## Explore More
+## Explore
 
 {{< cards >}}
-  {{< card link="docs" title="Documentation" icon="document-text" subtitle="Guides, tutorials, and technical documentation." >}}
-  {{< card link="docs/enhancements" title="Enhancements" icon="light-bulb" subtitle="Enhancement proposals documenting new features and changes." >}}
-  {{< card link="blog" title="Blog & Updates" icon="rss" subtitle="Latest news, releases, and articles." >}}
-  {{< card link="docs/architecture" title="Architecture" icon="template" subtitle="High-level design, data model, specifications, and Kubernetes integration." >}}
+  {{< card link="docs/project-overview" title="Project Overview" icon="information-circle" subtitle="What DCM is, what it does, who it benefits, where it operates." >}}
+  {{< card link="docs/architecture" title="Architecture" icon="template" subtitle="Data model, specifications, and design decisions." >}}
+  {{< card link="docs/capabilities-matrix" title="Capabilities" icon="table-cells" subtitle="299 capabilities across 38 domains." >}}
+  {{< card link="https://github.com/dcm-project" title="GitHub" icon="code-bracket" subtitle="Source, issues, and contributions." >}}
 {{< /cards >}}

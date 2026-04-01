@@ -1,5 +1,9 @@
 # DCM Consumer API Specification
 
+**Document Status:** 📋 Draft — Ready for Implementation Feedback
+**Document Type:** API Narrative Specification
+
+
 > **📋 Draft**
 >
 > This specification covers the full Consumer API surface. Endpoint paths, request/response structures, and authentication flows represent design intent and will be refined as implementation proceeds. Feedback and contributions welcome via [GitHub Issues](https://github.com/dcm-project/issues).
@@ -371,42 +375,149 @@ Response 200:
 
   "schema": {
     "fields": [
+
+      // ── Static constraint fields ───────────────────────────────────────────
       {
         "field_name": "cpu_count",
-        "type": "integer",
-        "required": true,
-        "editable_post_realization": false,
-        "constraint": {
-          "visibility": "full",            # full | summary | hidden
-          "type": "range",
-          "min": 1,
-          "max": 32,
-          "allowed_values": [1, 2, 4, 8, 16, 32],
-          "reason": "CPU counts must be powers of 2 for NUMA alignment"
-        }
-      },
-      {
-        "field_name": "memory_gb",
+        "display_name": "CPU Cores",
         "type": "integer",
         "required": true,
         "editable_post_realization": false,
         "constraint": {
           "visibility": "full",
-          "type": "range",
-          "min": 2,
-          "max": 256
+          "type": "enum",
+          "allowed_values": [1, 2, 4, 8, 16, 32],
+          "default": 4,
+          "reason": "CPU counts must be powers of 2 for NUMA alignment"
         }
       },
+
+      // ── Layer-referenced field: OS image ───────────────────────────────────
+      // Allowed values come from active os_image Reference Data Layers.
+      // Each entry carries the full structured layer data the GUI needs.
+      // Consumer submits the layer UUID; DCM injects all image metadata into payload.
+      {
+        "field_name": "os_image",
+        "display_name": "Operating System Image",
+        "type": "string",
+        "required": true,
+        "editable_post_realization": false,
+        "constraint": {
+          "visibility": "full",
+          "type": "layer_reference",
+          "layer_type": "os_image",
+          "allowed_values": [
+            {
+              "value": "layer-uuid-rhel-9-4",
+              "display_name": "RHEL 9.4",
+              "os_family": "rhel",
+              "version": "9.4",
+              "fips_compliant": true,
+              "eol_date": "2032-05-31",
+              "approved_for_classifications": ["public","internal","confidential","restricted"]
+            },
+            {
+              "value": "layer-uuid-ubuntu-24-04",
+              "display_name": "Ubuntu 24.04 LTS",
+              "os_family": "ubuntu",
+              "version": "24.04",
+              "fips_compliant": false,
+              "eol_date": "2029-04-30",
+              "approved_for_classifications": ["public","internal"]
+            }
+          ]
+        }
+      },
+
+      // ── Layer-referenced field: location ───────────────────────────────────
+      // Allowed values come from active location.data_center layers the
+      // consumer is entitled to and that this catalog item is eligible for.
+      // Selecting a location causes the full location layer chain
+      // (Country → Region → Zone → Site → DC) to assemble into the payload.
+      {
+        "field_name": "location",
+        "display_name": "Allocation Location",
+        "type": "string",
+        "required": true,
+        "editable_post_realization": false,
+        "constraint": {
+          "visibility": "full",
+          "type": "layer_reference",
+          "layer_type": "location.data_center",
+          "allowed_values": [
+            {
+              "value": "layer-uuid-fra-dc1",
+              "display_name": "DC1 — Frankfurt Alpha",
+              "code": "FRA-DC1",
+              "zone": "eu-west-1a",
+              "region": "EU West",
+              "sovereignty": "EU/GDPR",
+              "certifications": ["ISO 27001", "SOC 2 Type II"],
+              "max_data_classification": "restricted",
+              "capacity_status": "available"
+            },
+            {
+              "value": "layer-uuid-ams-dc2",
+              "display_name": "DC2 — Amsterdam Beta",
+              "code": "AMS-DC2",
+              "zone": "eu-west-1b",
+              "region": "EU West",
+              "sovereignty": "EU/GDPR",
+              "certifications": ["ISO 27001"],
+              "max_data_classification": "confidential",
+              "capacity_status": "limited"
+            }
+          ]
+        }
+      },
+
+      // ── Layer-referenced field: approved_size ──────────────────────────────
+      // Allowed values come from active vm_size Reference Data Layers.
+      // Selecting a size injects CPU, RAM, and storage defaults into the payload
+      // (which the consumer can override within the size's declared constraints).
+      {
+        "field_name": "size",
+        "display_name": "VM Size",
+        "type": "string",
+        "required": false,
+        "editable_post_realization": false,
+        "constraint": {
+          "visibility": "full",
+          "type": "layer_reference",
+          "layer_type": "vm_size",
+          "allowed_values": [
+            {
+              "value": "layer-uuid-small",
+              "display_name": "Small (2 CPU / 8 GB)",
+              "cpu_count": 2, "memory_gb": 8, "storage_gb": 40
+            },
+            {
+              "value": "layer-uuid-medium",
+              "display_name": "Medium (8 CPU / 32 GB)",
+              "cpu_count": 8, "memory_gb": 32, "storage_gb": 80
+            },
+            {
+              "value": "layer-uuid-large",
+              "display_name": "Large (16 CPU / 64 GB)",
+              "cpu_count": 16, "memory_gb": 64, "storage_gb": 160
+            }
+          ]
+        }
+      },
+
+      // ── Policy-injected hidden field ───────────────────────────────────────
       {
         "field_name": "monitoring_agent",
         "type": "string",
         "required": false,
         "editable_post_realization": false,
         "constraint": {
-          "visibility": "hidden",         # injected by policy — consumer cannot set
-          "override": "immutable"
+          "visibility": "hidden",
+          "override": "immutable",
+          "note": "Injected by policy — consumer cannot set or view"
         }
       }
+
     ]
   },
 

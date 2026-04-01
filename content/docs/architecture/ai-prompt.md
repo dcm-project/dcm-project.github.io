@@ -5124,7 +5124,364 @@ Brownfield ingestion, Static Replace, In-Place Upgrade.
 All 10 provider types: ✅ covered. All 7 policy output schemas: ✅ covered. All major model flows: ✅ covered.
 
 
-## SECTION 86 — WORKING INSTRUCTIONS FOR AI MODELS
+## SECTION 86 — LOCATION TOPOLOGY LAYER MODEL (doc 48)
+
+**New doc:** 48-location-topology-layers.md — specifies where resources can be allocated, how location data flows into requests as Core Layers, and how consumers select locations.
+
+**Core concept:** Location is not a string field. It is a resolved chain of versioned Core Layers — one per level of the topology hierarchy. When a consumer selects "DC1 — Frankfurt Alpha", DCM assembles Country → Region → Zone → Site → Data Center layers into the request payload, injecting all structured location data at each level.
+
+**Standard hierarchy (9 levels, configurable names, standard types):**
+- Level 1 Country (CTY) — jurisdiction, regulatory frameworks, ISO codes
+- Level 2 Region (RGN) — interconnects, latency profile, failover region
+- Level 3 Zone/AZ (AZ) — isolation boundary, HA peers, RPO/RTO
+- Level 4 Site/Campus (SITE) — physical address, security tier, facilities contacts
+- Level 5 Data Center (DC) — tier classification, power/cooling, PUE, certifications
+- Level 6 Hall/Pod (HALL) — optional; network segment, cooling type
+- Level 7 Cage/Enclosure (CAGE) — optional; tenant isolation, access control
+- Level 8 Rack (RACK) — rack units, power circuits, ToR switch
+- Level 9 Unit/Slot (UNIT) — optional; typically provider-managed
+
+**Authority model:** Each level has a designated owning authority (Data Center Operations, Network Operations, Facilities, Platform Governance). Changes require GitOps PRs approved by the owning authority. Upper levels (Country, Region, Zone) require platform_admin approval; lower levels (Hall, Cage, Rack) can be operator-approved.
+
+**Custom types:** Custom levels insertable anywhere using decimal level values (e.g., Fleet=3.5, Ship=4.5 in a Navy deployment). Navy example included in doc.
+
+**Priority bands:** Location layers occupy dedicated bands in the Core Layer priority space: Country=100.xx, Region=200.xx, Zone=300.xx, Site=400.xx, DC=500.xx, Hall=600.xx, Cage=700.xx, Rack=800.xx. Ensures specific always overrides general.
+
+**Consumer API (NEW):**
+- GET /api/v1/locations — list available location nodes (entitlement-filtered, filterable by resource_type, catalog_item, level, classification)
+- GET /api/v1/locations/{uuid} — full detail including hierarchy, sovereignty, compliance, capacity
+- ServiceRequest now accepts location_uuid or location_handle
+- Consumer selects at any level; Placement Engine refines to specific DC at dispatch
+
+**Admin API (NEW):**
+- GET/POST /api/v1/admin/location-types — manage location type registry
+- GET /api/v1/admin/locations — all location nodes (no entitlement filter)
+- PATCH /api/v1/admin/locations/{uuid} — update mutable fields (e.g., rack_units_available)
+
+**OpenAPI updates:** Consumer API now 63 paths; Admin API now 44 paths. LocationList, LocationSummary, LocationDetail schemas added to consumer API.
+
+**Placement Engine integration:** Location layers feed LOC-005 sovereignty enforcement (max_data_classification per DC), Step 1 sovereignty pre-filter, Step 3 capability filter, and Placement Policy expressions (input.payload.location.jurisdiction, etc.).
+
+**9 system policies: LOC-001 through LOC-009.**
+
+**Matrix:** 38 domains / 294 capabilities.
+
+
+## SECTION 87 — REFERENCE DATA LAYERS + LAYER-REFERENCED FIELD CONSTRAINTS
+
+**Core clarification applied:** Layer data is the source of allowed values for resource type fields. This is not new architecture — it is the `layer_reference` constraint type made explicit throughout the documentation.
+
+**Pattern:** A field in a Resource Type Specification can declare `constraint.type: layer_reference` with a `layer_type` name. At catalog item render time, DCM resolves the active instances of that layer type into the `allowed_values` list. The consumer selects from that list; DCM injects the full layer data into the assembled payload.
+
+**Standard reference data layer types:**
+- `location.data_center` — where resources can be placed (hierarchy: Country→Region→Zone→Site→DC→Hall→Cage→Rack)
+- `os_image` — approved OS images (Platform Security team)
+- `vm_size` — approved VM size profiles (Platform Team)
+- `network_zone` — available network zones (Network Operations)
+- `environment` — deployment environments (Platform Governance)
+- `storage_class` — storage tiers (Storage Operations)
+- `gpu_profile` — GPU configurations (Platform Team)
+
+**Governance model:** Reference Data Layer instances have IDENTICAL lifecycle, controls, security, and governance as Resource Types — `developing → proposed → active → deprecated → retired`, GitOps workflow, versioned, owned by declared authority, immutable once active. Adding a new approved OS image = adding a new `os_image` layer. No Resource Type Specification change needed.
+
+**Changes made this session:**
+
+doc 03 (layering): New Section 3.7 — Reference Data Layers. Defines the pattern, governance model, and YAML format for `os_image` and `vm_size` reference data layers. Updated Core Layers cross-ref.
+
+doc 05 (resource types): New Section 2.1b — Layer-Referenced Field Constraints. Explains why `layer_reference` is preferred over static enums. Complete table of standard layer types with owning authorities. Shows what the catalog item field constraint looks like when resolved (full `allowed_values` with structured data). Adds `layer_reference` and `layer_reference_list` to the field constraint type vocabulary, including `filter`, `display_field`, `value_field` sub-fields.
+
+consumer-api-spec.md Section 3.2: Catalog item field schema now shows four field examples:
+  - `cpu_count` — static `enum` constraint (unchanged)
+  - `os_image` — `layer_reference` to `os_image` type (resolved `allowed_values` with image metadata)
+  - `location` — `layer_reference` to `location.data_center` type (resolved with DC name, zone, certifications, capacity_status)
+  - `size` — `layer_reference` to `vm_size` type (resolved with CPU/RAM defaults)
+  Section 3.3 submit request shows layer UUIDs in the fields object with comments explaining DCM's resolution.
+
+doc 48 (location): New Section 0 — Pattern Context. Explicitly frames location as one application of the Reference Data Layer pattern. Section 8 (Consumer Selection Model) updated: location selection is via the catalog item field constraint, not a separate /locations endpoint. Shows how filter clause on the layer_reference constraint controls which DCs appear per catalog item.
+
+API changes: Removed standalone /api/v1/locations and /api/v1/locations/{uuid} consumer endpoints (wrong model — location is a field constraint, not a separate API). Admin API keeps /api/v1/admin/location-types and /api/v1/admin/locations (correct — admin manages the Reference Data Layer registry). Consumer API back to 61 paths.
+
+
+## SECTION 88 — RESOURCE TYPE AUTHORITY + UNIFIED LAYER MODEL CLARIFICATION
+
+**Core clarification:** All of DCM's data — Resource Type Specifications, Reference Data Layers, Service Layers, provider extension layers — is built on the same layer model with the same lifecycle, governance, ownership, and security model. This was architecturally correct but not explicitly stated.
+
+**What was already in the architecture (confirmed, no changes needed):**
+- Three-tier registry (DCM Core / Verified Community / Organization) — doc 20
+- Provider as Resource Type Publisher (doc 28 section 6.1)
+- Resource Type Specification vs Catalog Item distinction (doc 05 section 2.1a)
+- Portability classification (universal/conditional/provider-specific/exclusive) — doc 05 section 4
+- Provider-specific extension fields must be marked portability-breaking — doc 05 section 4
+- Layer domain model (system/platform/tenant/service/provider) — doc 03 section 4.1
+- Service Layers contributed by providers — doc 28 section 6.3
+- GitOps workflow for resource type proposals — doc 20 section 3.1
+
+**What was added (4 targeted additions):**
+
+**1. Resource Type Authority — Stewardship Model (doc 05 new Section 2.1c):**
+Every Resource Type Specification has a declared Resource Type Authority — the team responsible for defining, maintaining, evolving, and deprecating it. Same `owned_by` governance model as all other DCM artifacts. Required approver for all future version PRs. Standard authority assignments by category: Compute→Platform Team, Network→Network Ops, Storage→Storage Ops, Security→CISO, etc. Three tiers: DCM maintainers (Tier 1), named community maintainers (Tier 2), org domain teams (Tier 3).
+
+**2. Three-Way Field Constraint Model (doc 05 new Section 3a):**
+Resource Type Authorities choose per field:
+- Option 1 — layer_reference: valid values are active instances of a named layer type (location, OS images, network zones). Portable. Value governance delegated to the layer type's authority.
+- Option 2 — provider-declared constraint: ad-hoc enum/range in the Resource Type Spec or Catalog Item. CPU counts, memory ranges, protocol versions. Portable if values are vendor-neutral.
+- Option 3 — no constraint: free-form or provider judgment. Names, descriptions, provider-internal IDs.
+Decision guide table included. Key point: VM size is Option 2 or 3 by default — not layer-referenced unless the org explicitly wants a governed size catalog. This is an organizational decision, not an architectural mandate.
+
+**3. Provider Extension Layers (doc 05 Section 6.2 extended):**
+Providers can contribute extension layers (domain: provider) alongside their catalog item declaration — `provider_extension_layer_handles` field. These inject provider-specific fields during payload assembly only when that catalog item is selected. Cannot override platform/tenant layers. Same portability_breaking: true semantics as inline extensions. Resource Type Authority may adopt popular extensions as conditional fields in a future spec version.
+
+**4. Unified Layer Model Statement (doc 03 Section 3.7 + Section 4.1):**
+Explicit statement that Resource Type Specifications ARE data layer artifacts. Same lifecycle, same governance, same GitOps workflow, same authority model, same domain access control. The Resource Type Registry is a specialized layer store. All DCM data — type definitions, reference data, service configuration, provider extensions — lives in this one unified model.
+
+**Authority vs Publisher clarification (doc 28 Section 6.1):** Resource Type Authority defines the spec; Service Provider publishes the catalog item implementing it. Often the same team. May be different: platform team defines Compute.VirtualMachine; Nutanix, VMware, and bare metal teams independently register catalog items implementing it.
+
+
+## SECTION 89 — SECTION 9 EXAMPLES: RESOURCE TYPE + LAYER LIFECYCLE (dcm-examples.md)
+
+dcm-examples.md expanded from 2,189 to 3,381 lines. Section 9 added — 8 subsections showing
+the complete lifecycle of VM and WebApp resources from layer definition through rehydration.
+
+**9.1 Layer Definitions:** Full YAML for all foundational layers — OS image (Platform Security Team),
+location/DC (Data Center Operations), network zone (Network Operations), zone and country ancestor layers.
+Each with complete artifact_metadata, owned_by, domain, data blocks.
+
+**9.2 Resource Type Specifications:** Complete `Compute.VirtualMachine` v2.1.0 spec showing:
+- Universal fields: cpu_count/memory_gb/storage_gb (range constraints — intrinsic), os_image/location/
+  network_zone/environment (layer_reference — governed lists)
+- Conditional fields: high_availability, gpu_profile (layer_reference)
+- Extension point declaration for provider hypervisor config
+- Application.WebApp v1.0.0 spec: app_name/tier_level (static enum — intrinsic),
+  environment/location (layer_reference), web_replica_count/db_engine (range/enum).
+
+**9.3 Provider Catalog Items:** Two providers implementing Compute.VirtualMachine:
+- Nutanix EU-WEST: portable (portability_class: portable), narrows CPU/RAM enums,
+  contributes Service Layer with AHV hypervisor defaults, backup policy, monitoring agent.
+- VMware EU-WEST: non-portable (portability_class: provider-specific), contributes
+  Provider Extension Layer with vsphere_resource_pool/datastore_cluster/vmware_tools_version.
+
+**9.4-9.5 VM Request and Processing Pipeline:** Full 8-step trace from consumer submission through
+intent capture → layer reference resolution → layer assembly (showing each contributing layer and field
+provenance) → policy evaluation (GateKeeper, Validation, Transformation each shown) → placement →
+requested state write (with provenance on every field) → dispatch → realized state.
+
+**9.6 WebApp as a Service Request:** Meta Provider orchestration: DB first, then 3 web VMs with
+db_host injected from DB realization, then LoadBalancer with backend_pool injected from VM IPs.
+Tier 1 GateKeeper policies enforcing HA, minimum replicas, LTM requirement. Environment layer
+injecting production defaults (backup, TTL=null, approval tier, log retention).
+
+**9.7 VM Rehydration (DR failover DC1→DC2):** Shows location override in placement_constraints,
+fresh layer resolution against DC2 layer chain (different cluster_uuid in Nutanix Service Layer),
+certification gap warning (SOC 2 not at AMS-DC2), hostname preserved / FQDN updated, entity_uuid
+preserved across DC move. Static Replace vs Rehydration contrast explained in pipeline steps.
+
+**9.8 WebApp Rehydration (standards refresh — no incident):** Rolling replacement pattern for Tier 1.
+Shows: retired OS image → auto-upgrade Transformation policy substitutes RHEL 9.5; environment layer
+v1.2 injects new log_retention_days=365 and vulnerability scanning; new Tier 1 GateKeeper bumps
+replica count 3→4; DB unchanged (no OS dependency). Full audit record showing every field change,
+its source layer/policy, and version.
+
+
+## SECTION 90 — DOCUMENTATION CLEANUP PASS (2026-03)
+
+No prior implementations exist — DCM is at v1. All migration/backward-compat/update language
+removed from documentation. Every doc is the authoritative first-version spec.
+
+**Removed entirely:**
+- All 38 Active Development Notice blockquotes across every data model and specification doc
+- `## 7. V1 Migration` section from doc 13 — V1 concept has no basis in first implementation; `v1_migration` ingestion_source type renamed `legacy_import`; `v1_identifier` → `legacy_identifier`
+- `## 7. Migration from Current Constructs` section from doc 15 (universal groups)
+- `## 9. Migration Path — Standalone SPA → RHDH` from RHDH spec — replaced with clean "Deployment Options" section (standalone_spa vs rhdh are configuration choices, not migration paths)
+
+**Reframed (concept kept, backward-looking framing removed):**
+- doc 06 section 7a.6: "Updated table (supersedes 7.2)" → "Provider Lifecycle Events"
+- doc 07: "dependency graph superseded by entity relationships" → scope cross-reference
+- doc 08: "superseded by Universal Group Model" → "Related: see Universal Group Model"
+- doc 09: "This document supersedes dependency graph concept" → plain cross-reference
+- doc 13: "V1 migration and brownfield ingestion are the same" → "same ingestion model for all sources"
+- doc 18: "outbound webhook superseded by Notification Model" → "one delivery channel within Notification Model"
+- doc 23: "This model supersedes standalone webhooks" → "outbound webhooks are one delivery channel"
+- doc 26: "Section 4 superseded by Governance Matrix" → scope statement
+- doc 27: "This document supersedes Section 4 of doc 26" → cross-reference
+- doc 11 (k8s): "Migration Path — Kubernetes-Native to DCM-Managed" → "Incremental Adoption"
+- doc 34: "Client Migration Path" → "Version Upgrade Path"; "backward compat" → "version-compatible"; "deprecation window" → "until version is sunset"
+- doc 15: "preserve backward compatibility with existing API consumers" → "for convenience"
+- OIS spec: "during the deprecation window" → "until the OIS version is sunset"
+
+**Verification:** 12 stale patterns — all clean after cleanup pass.
+
+---
+
+## SECTION 91 — SYNC AUDIT AND FULL RESYNC (2026-03)
+
+Full Hugo content sync performed. State before sync:
+- 5 data model docs missing from Hugo entirely (43-provider-callback-auth, 44-kessel-evaluation, 45-consistency-review, 46-workload-analysis, 47-accreditation-monitor)
+- 44 of 53 data model docs stale (primarily -5 line delta from Active Development Notice removal)
+- 7 specs stale (dcm-examples, dcm-registration-spec, dcm-operator-interface-spec, dcm-rhdh-integration-spec, 11-kubernetes-compatibility, consumer-api-spec, dcm-operator-sdk-api)
+- Capabilities Matrix and DISCUSSION-TOPICS stale
+- AI prompt had one stale matrix reference: "36 domains / 281 capabilities" (from Provider Readiness Gates session before Accreditation Monitor domain was added)
+
+**After sync:** All 53 data model docs × 2 Hugo locations: in sync. All 14 specs: in sync. All top-level docs: in sync. AI prompt matrix refs updated to 37/287.
+
+---
+
+## SECTION 92 — ARCHITECTURE GAPS ANALYSIS (2026-03)
+
+Systematic scan of all docs, schemas, and capabilities matrix. Summary:
+
+**Tier 1 — Spec gaps (documented capability, API endpoints missing):**
+- Federation Admin API (doc 22 architecture complete; no OpenAPI paths for tunnel management, peer listing, trust posture)
+- Scheduled/Deferred Requests maintenance-windows endpoints (doc 37 specifies them; not in admin YAML)
+- Workload Analysis endpoints (doc 46 specifies GET /workload-profile and :analyze; not in consumer YAML)
+- Accreditation Monitor contract-event and :configure-webhook endpoints (doc 47; not in admin YAML)
+
+**Tier 2 — Implementation gaps (no specification exists):**
+- Cost Analysis component internal model (376 refs; no spec for how it calculates)
+- Cross-region data replication model (multi-region assumed; consistency + sovereignty enforcement at replication layer unspecified)
+- Secret zero / initial credential bootstrap (day-0 sequence has no spec; chicken-and-egg problem every deployer hits)
+- Multi-tenancy at storage layer (row-level security, tenant-scoped encryption — not specified)
+- Rate limiting implementation (policy references it; enforcement mechanics unspecified)
+- Audit log hash chain implementation (tamper evidence concept documented; implementation not specified)
+
+**Tier 3 — Security posture gaps:**
+- No threat model document (attack surfaces, adversary profiles, STRIDE analysis)
+- No supply chain security spec (SBOM, provider package signing, operator container provenance)
+- No secrets scanning spec for GitOps stores
+
+**Tier 4 — Experience gaps:**
+- New tenant onboarding flow not specified
+- Pre-request cost estimation UX not specified end-to-end
+- Provider sandbox/test mode not specified
+- Capacity forecasting model not specified
+- SLA/SLO tracking not specified
+
+**Two ownership ambiguities:**
+- Who issues operation_uuid — API Gateway or Request Orchestrator?
+- Who owns the Credential Revocation Registry?
+
+---
+
+## SECTION 93 — LIGHTSPEED INTERFACE CONCEPT + DISCUSSION TOPICS (2026-03)
+
+**DISCUSSION-TOPICS.md updated:** Item 6 added — "Universal Lightspeed Interface for Operations."
+
+Concept: a universal, high-velocity operational surface for all DCM actions regardless of provider, resource type, or lifecycle stage. Operations that currently require multiple tool hops, context switching, and approval interruptions should be expressible and executable in a single interaction.
+
+**Key design questions captured for future roadmap:**
+- New GUI surface, CLI, AI agent interface, or all three?
+- How does it relate to existing Web UI spec and Flow GUI spec?
+- What does "lightspeed" mean operationally — sub-second execution, zero-confirmation for pre-approved patterns, predictive pre-staging?
+- How does it interact with Authority Tier model — can it auto-route approval gates without interrupting operator flow?
+- Is this the primary interface for the AIOps layer referenced in the README?
+
+**Status:** Concept only — no design work started. Future roadmap item.
+
+
+## SECTION 94 — ALL ARCHITECTURE GAPS ADDRESSED (2026-03)
+
+All gaps from Section 92 gap analysis resolved.
+
+**Tier 1 — API Endpoint Gaps (all closed):**
+- Federation Admin API: 6 new admin YAML paths including GET/POST /api/v1/admin/federation/peers, :set-trust-posture, :suspend, /routed-requests, GET/PATCH /api/v1/admin/federation/config. Schemas: FederationPeer, FederationPeerRegistration, FederationConfig.
+- Scheduled Requests: 3 new admin paths for maintenance windows: GET/POST /maintenance-windows, GET/PATCH/DELETE /maintenance-windows/{uuid}, GET /maintenance-windows/{uuid}/scheduled-requests. Schemas: MaintenanceWindow, MaintenanceWindowCreate, MaintenanceWindowPatch.
+- Workload Analysis: 2 new consumer paths — GET /resources/{uuid}/workload-profile, POST /resources/{uuid}/workload-profile:analyze. WorkloadProfile schema added.
+- Accreditation Monitor: 3 new admin paths — :verify, :configure-webhook, /contract-event.
+- Final counts: consumer 63 paths / 33 schemas; admin 56 paths / 27 schemas.
+
+**Tier 2 — Implementation Gaps (doc 49 — 49-implementation-specifications.md, 728 lines):**
+- Rate Limiting (sec 2): Token bucket at API Gateway. Per-actor bucket, profile-governed parameters (60/min minimal to 600/min prod), PT120S TTL on state. 5 policies RLM-001 through RLM-005.
+- Audit Hash Chain (sec 3): SHA-256 with canonical concatenation (0x1F separator). GENESIS anchor for chain start. Continuous per-write verification + periodic sweep (PT1H sovereign, PT12H prod). Chain resealing endpoint: POST /api/v1/admin/audit/entities/{uuid}:reseal-chain.
+- Multi-Tenancy at Storage Layer (sec 4): GitOps=directory namespace, EventStream=per-tenant stream, Snapshot=PostgreSQL RLS + AES-256-GCM per-tenant key, Search=index namespace. Cryptographic tenant deletion via key revocation. 4 policies STI-001 through STI-004.
+- Cross-Region Replication (sec 5): Per-store replication model. Sovereignty-aware routing enforced at replication layer. Lag monitoring with degraded/unavailable state transitions. Last-write-wins + vector clocks for conflict resolution.
+- Secret Zero Bootstrap (sec 6): Bootstrap manifest with internal CA + pre-shared component credentials replaced by mTLS within PT5M of CA startup. Credential Provider takes CA key ownership on registration. Air-gapped options: embedded vault / operator passphrase / HSM. 4 policies BOOT-001 through BOOT-004.
+
+**Ownership Ambiguities (sec 7) — Both resolved:**
+- operation_uuid: issued by API Gateway at ingress (operation_uuid == request_uuid). API Gateway writes initial Operation; Request Orchestrator updates via shared fast store.
+- Credential Revocation Registry: owned by Credential Provider. Key: credential_uuid to revocation metadata. TTL: max(credential_ttl, P90D). Session Revocation Registry is separate — owned by Auth component.
+
+**Tier 3 — Security Posture (sec 8):**
+- Threat model: 5 boundaries (Consumer Ingress, Provider Interface, Admin, Internal Component, Storage). Highest-risk: Credential Provider compromise and Internal CA compromise — mitigated by air-gapped Credential Provider and HSM-backed CA for sovereign profiles.
+- Supply chain: provider OpenAPI spec signing (mTLS private key; rejected at GATE-SP-01 if unsigned), container image provenance via Sigstore/Cosign, GitOps secrets scanning, SBOM mandatory for fsi/sovereign. 5 policies SEC-001 through SEC-005.
+
+**Tier 4 — Experience Gaps (sec 9):**
+- New Tenant Onboarding (sec 9.1): full sequence — entity, groups, quota, admin actor, Git namespace, audit stream, member invitations, onboarding_complete event.
+- Pre-Request Cost Estimation UX (sec 9.2): catalog display then POST /cost/estimate with fields then dry_run: true for placement preview then actual submit.
+- Provider Sandbox/Test Mode (sec 9.3): sandbox_mode: true in registration, excluded from production placement, explicit targeting via _test_context, graduation path to production.
+- SLA/SLO Tracking (sec 9.4): SLO declared in Resource Type Specification (time_to_operational, uptime, drift_detection_latency), continuous measurement from audit records, breach events, consumer status endpoint, admin aggregate report endpoint.
+
+
+## SECTION 95 — CONTINUED: MATRIX + SPEC CLEANUP (2026-03)
+
+**Capabilities Matrix updated:** 38 domains / 299 capabilities (was 294).
+New capabilities added from doc 49 implementation specifications:
+- OBS-006: SLA/SLO Declaration (Resource Type Spec + consumer status endpoint + admin report)
+- OBS-007: SLO Breach Detection and Notification
+- STO-007: Cross-Region Sovereignty-Aware Replication (routing enforced at replication layer)
+- STO-008: Tenant-Scoped Storage Isolation (RLS + per-tenant stream + index namespace)
+- STO-009: Tenant-Scoped Encryption for fsi/sovereign (AES-256-GCM, Credential Provider managed)
+- ZTS-007: Provider OpenAPI Spec Signing (SEC-001, mandatory at GATE-SP-01)
+- ZTS-008: GitOps Secrets Scanning (SEC-002, SECRETS_DETECTED rejection)
+- ZTS-009: SBOM Declaration (SEC-003, mandatory fsi/sovereign)
+- PRV-010: Provider Sandbox/Test Mode
+- GOV-008: Tenant Onboarding Workflow
+
+**Admin API:** Added `GET /api/v1/admin/workload-analysis` — aggregate workload profile view across all tenants with archetype/confidence/resource_type filtering and archetype_distribution histogram. Admin API now: 57 paths / 27 schemas.
+
+**All 15 specification docs now have Document Status headers.** 7 specs updated: cncf-strategy, consumer-api-spec, dcm-admin-api-spec, dcm-flow-gui-spec, dcm-opa-integration-spec, dcm-operator-interface-spec, dcm-registration-spec.
+
+**Open markers: 0.** No TODO/FIXME, no Active Dev Notices, no superseded-by language, no V1 Migration references anywhere in the corpus.
+
+**Current state:** 55 data model docs / 15 specifications / 4 OpenAPI schemas / 38 domains / 299 capabilities / 97 prompt sections.
+
+
+## SECTION 96 — PROJECT OVERVIEW DOCUMENT (project-overview.md)
+
+New canonical document added: `project-overview.md` (located at dcm-docs root and Hugo /docs/project-overview).
+
+**Purpose:** Single authoritative description of DCM for any audience — engineers, business stakeholders, executives, or community members encountering the project for the first time. Referenced from README and Hugo navigation as the first document to read.
+
+**Content:**
+- What DCM Is: governing control plane above provisioning tools; not a deployment tool; the management plane that connects existing automation
+- Architecture in one sentence + event loop diagram
+- The Problem DCM Solves: 5 specific problems (fragmented ops, long TTM, private cloud gap, unreliable data, compliance overhead)
+- What DCM Does: three abstractions in full — Data (4 states), Policy (7 types with table), Provider (11 types with table)
+- What this enables: self-service consumer experience; standards enforced structurally
+- Who Benefits: Consumers, Platform Engineers, Security/Compliance, SRE, Auditors, FinOps — each with specific value statement
+- Where DCM Operates: deployment topology table (single-region/federated/hub-regional/sovereign), data sovereignty model, target environments with compliance frameworks listed
+- Key Facts table: accurate current counts (55 docs, 15 specs, 299 caps/38 domains, 63 consumer paths, 57 admin paths)
+- 9 Core Design Principles
+
+**README.md updated:** Accurate counts, new project-overview link as first doc in foundation table, all doc ranges updated (55 data model docs, 15 specs), AI prompt described as 98 sections.
+
+**Hugo updated:**
+- Root _index.md: replaced thin 'About DCM' with full What/Who/Three Abstractions/Benefits layout; Active Dev Notice removed
+- docs/_index.md: replaced Active Dev Notice with navigation cards including project-overview link
+- architecture/overview.md: Active Development Notice removed
+- /docs/project-overview.md: new Hugo page from project-overview.md
+
+
+## SECTION 97 — HOW + ETHOS SECTIONS ADDED
+
+**project-overview.md expanded** from 164 to 327 lines. Two new sections added:
+
+**## How DCM Works** (5 subsections):
+- The Event Loop: policy-driven event loop diagram showing event → Policy Engine → typed outputs → Providers/Data → new events
+- The Request Lifecycle: 5-step numbered sequence from intent declaration through layer assembly, policy evaluation, dispatch, and ongoing lifecycle
+- How Policy Replaces Hard-Coded Logic: why every business rule is a Policy artifact and what that means operationally
+- How Providers Integrate: base contract + capability extension model; organizations wrap existing automation, not replace it
+- How Data Sovereignty Is Enforced: structural property evaluated at every boundary; Governance Matrix always boolean; no scoring override
+
+**## Ethos** (5 subsections):
+- Security Is the Baseline, Not a Feature: minimal profile = security with minimal overhead, not minimal security; secure path must also be easy path
+- The Governed Path Must Also Be the Easy Path: self-service is the delivery mechanism for governance; if governed path is harder, teams route around it
+- Compliance Is Constructed, Not Audited: audit evidence and provenance are structural products of operations, not reconstructed post-hoc
+- The Architecture Should Be Easy to Implement and Extend: three-abstraction test; no core changes for new capabilities that fit Data/Provider/Policy
+- No Silent Behavior: every operation produces an observable artifact; every state transition audited; every decision has typed output
+
+**README.md updated** with condensed How + Ethos sections: event loop summary, request lifecycle in one paragraph, four design priority ethos statements, links to full sections in project-overview.md.
+
+
+## SECTION 98 — WORKING INSTRUCTIONS FOR AI MODELS
 
 When working on this project, apply these instructions in addition to the numbered guidance in SECTION 60 (Documentation Structure):
 

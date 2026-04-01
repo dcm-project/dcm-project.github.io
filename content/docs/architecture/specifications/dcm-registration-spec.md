@@ -1,5 +1,9 @@
 # DCM Registration Specification
 
+**Document Status:** 📋 Draft — Ready for Implementation Feedback
+**Document Type:** Registration Specification
+
+
 > **AEP Alignment:** Registration API endpoints follow [AEP](https://aep.dev) conventions — custom methods use colon syntax (`POST /admin/registrations/{uuid}:approve`). `resource_type` in provider capabilities accepts FQN string or Registry UUID. See `schemas/openapi/dcm-admin-api.yaml` for the normative specification.
 
 

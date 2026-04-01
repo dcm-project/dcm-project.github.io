@@ -324,6 +324,12 @@ DCM defines six layer types. Each has a distinct purpose, scope, ownership model
 - Geographic region layer
 - Environment layer (production, staging, development)
 
+> **Location Topology:** Location layers are one application of the Reference Data
+> Layer pattern (Section 3.7). The standard schema for each location level —
+> Country, Region, Zone, Site, Data Center, Hall, Cage, and Rack — is specified
+> in [Location Topology Layer Model](48-location-topology-layers.md), including
+> field definitions, priority bands, authority model, and hierarchy assembly.
+
 ---
 
 ### 3.3 Intermediate / Customization Layers
@@ -429,6 +435,142 @@ type_scope:
 
 ---
 
+### 3.7 Reference Data Layers
+
+**All of DCM's data — including Resource Type Specifications — is built on the same
+layer model.** A Resource Type Specification is itself a data layer artifact: versioned,
+owned by a declared Resource Type Authority, stored in GitOps, subject to the standard
+lifecycle, and subject to the same domain-based access control as all other layers. The
+only distinction is that Resource Type Specifications live in the Resource Type Registry
+(which is itself a specialized layer store) rather than the Core Layer Store.
+
+This unified model means:
+- The same governance tooling manages resource type definitions, reference data, and
+  service configuration
+- The same lifecycle (developing → proposed → active → deprecated → retired) applies
+  to all three
+- The same ownership declarations, the same GitOps workflow, the same authority tiers
+- Provider extension layers (domain: `provider`) extend resource types for a specific
+  catalog item without modifying the Resource Type Specification itself — they are
+  injected during payload assembly only when that catalog item is selected
+
+**Purpose:** Provide governed, versioned sets of allowed values for use as field
+constraints in Resource Type Specifications and Provider Catalog Items. Reference Data
+Layers are the source of truth for any enumerated choice a consumer makes when
+requesting a resource.
+
+**Scope:** Declared per layer type. A Reference Data Layer of type `os_image` is only
+valid as a constraint source for fields that declare `layer_type: os_image`. Reference
+Data Layers are not injected into the assembled request payload in the same way as other
+layers — they are resolved at catalog render time to produce the `allowed_values` list
+for a field constraint.
+
+**Ownership:** The team or authority responsible for governing that category of data.
+
+| Layer Type | Owning Authority | What it governs |
+|------------|-----------------|-----------------|
+| `location.*` | Data Center Operations | Where resources can be placed |
+| `os_image` | Platform Security / OS Team | Approved OS images and versions |
+| `vm_size` | Platform Team | Approved VM size profiles |
+| `network_zone` | Network Operations | Available network zones and their properties |
+| `environment` | Platform Governance | Deployment environments and their policy sets |
+| `storage_class` | Storage Operations | Available storage tiers |
+| `gpu_profile` | Platform Team | Approved GPU configurations |
+
+**Characteristics:**
+- Same lifecycle as all other layers: `developing → proposed → active → deprecated → retired`
+- Same governance: GitOps workflow, owned by declared authority, approved by designated tier
+- Same versioning: `Major.Minor.Revision` — breaking changes require a major bump
+- Same security: domain-based access control, same policy enforcement
+- **Not merged into the request payload directly** — they are resolved at catalog render time
+  to produce the field constraint `allowed_values` list
+- **Their structured data IS injected** when a consumer selects a value: selecting a
+  location layer injects all location context; selecting an OS image layer injects
+  image UUID, SHA, version, and EOL date into the payload
+
+**Adding a new allowed value** for any layer-referenced field means adding a new
+Reference Data Layer instance of the appropriate type. No changes to the Resource Type
+Specification, the catalog item, or any policy. The new value becomes available to
+all catalog items that reference that layer type on the next sync cycle.
+
+**Retiring an allowed value** means retiring the Reference Data Layer instance.
+Existing resources that used that value are unaffected. Future requests cannot
+select it.
+
+**Example — OS Image layer:**
+
+```yaml
+layer:
+  artifact_metadata:
+    uuid: <uuid>
+    handle: "platform/os-images/rhel-9-4-approved"
+    version: "1.0.0"
+    status: active
+    owned_by:
+      display_name: "Platform Security Team"
+      group_handle: "groups/platform-security"
+    created_via: pr
+
+  layer_type: reference_data
+  reference_data_type: os_image
+  scope: type_agnostic
+
+  priority:
+    value: "150.01.0"
+    label: "platform.reference.os-image.rhel-9-4"
+    category: platform_reference
+
+  data:
+    image_name: "RHEL 9.4"
+    image_uuid: "img-rhel-9-4-20260315"
+    image_sha256: "a1b2c3d4..."
+    os_family: rhel
+    major_version: 9
+    minor_version: 4
+    release_date: "2026-03-15"
+    eol_date: "2032-05-31"
+    approved_for_classifications: [public, internal, confidential, restricted]
+    cis_benchmark_version: "CIS RHEL 9 Benchmark v1.0"
+    fips_compliant: true
+
+  concern_tags: [os-image, rhel, approved, fips-compliant]
+```
+
+**Example — VM Size layer:**
+
+```yaml
+layer:
+  artifact_metadata:
+    uuid: <uuid>
+    handle: "platform/vm-sizes/medium-general-purpose"
+    version: "2.1.0"
+    status: active
+    owned_by:
+      display_name: "Platform Team"
+      group_handle: "groups/platform-team"
+    created_via: pr
+
+  layer_type: reference_data
+  reference_data_type: vm_size
+  scope: type_agnostic   # applies across providers for Compute.VirtualMachine
+
+  data:
+    size_name: "Medium — General Purpose"
+    size_code: "gp-medium"
+    display_name: "Medium (8 CPU / 32 GB)"
+    cpu_count: 8
+    memory_gb: 32
+    storage_gb: 80
+    network_bandwidth_gbps: 10
+    approved_for_workloads: [web, application, database, batch]
+    cost_tier: standard
+
+  concern_tags: [vm-size, general-purpose, approved]
+```
+
+---
+
+
 ## 4. Layer Identity — Domain, Handle, and Priority
 
 Every layer has a formal identity model with three components that together make it uniquely identifiable, locatable, and orderable within DCM.
@@ -446,7 +588,15 @@ The **Layer Domain** mirrors the Policy domain model exactly. It declares owners
 | `provider` | Provider Catalog Item layers | Provider owner | Nothing above provider |
 | `request` | Consumer-declared values in the request itself | Consumer | Nothing above request — lowest authority |
 
-A lower-domain layer cannot override a higher-domain layer. A `tenant` layer cannot override a `platform` layer. This is enforced at ingestion — the conflict detection pipeline checks domain authority before allowing a merge.
+A lower-domain layer cannot override a higher-domain layer.
+
+**Provider extension layers** (`domain: provider`) are contributed by Service Providers
+as part of their catalog item registration. They add provider-specific fields to the
+assembled payload for their offering only. They cannot override platform or tenant layers.
+They carry the same portability implications as inline `provider_specific_extensions` in
+the catalog item declaration — any request using them is non-portable and must be
+explicitly marked. See [Resource Type Hierarchy](05-resource-type-hierarchy.md) Section 6.2
+for the catalog item `provider_extension_layer_handles` declaration. A `tenant` layer cannot override a `platform` layer. This is enforced at ingestion — the conflict detection pipeline checks domain authority before allowing a merge.
 
 **Domain mirrors policy authority:** Just as system-domain policies have highest authority in the Policy Engine, system-domain layers have highest authority in the assembly process. The same mental model applies to both.
 

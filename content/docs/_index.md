@@ -5,19 +5,17 @@ sidebar:
   open: false
 ---
 
-> **⚠️ Active Development** — DCM documentation is actively being developed. Content represents work in progress and is subject to change as design decisions are finalized.
-
 # DCM Documentation
 
-Documentation for the DCM (Data Center Management) project — a governing framework
-that provides a hyperscaler-like cloud experience for enterprise on-premises and
-sovereign cloud infrastructure.
+Documentation for the DCM (Data Center Management) project — an open-source governing framework for enterprise on-premises and sovereign cloud infrastructure.
+
+**New here?** Start with the [Project Overview](/docs/project-overview) — what DCM is, what it does, who it benefits, and where it operates.
 
 ## Documentation Sections
 
 {{< cards >}}
-  {{< card link="architecture" title="Architecture" icon="template" subtitle="High-level design, data model, specifications, and Kubernetes integration." >}}
-  {{< card link="capabilities" title="Capabilities Map" icon="view-grid" subtitle="Interactive map of 95 foundational capabilities across 15 domains. Filter by domain, perspective, or search. Includes CSV export for Jira import." >}}
-  {{< card link="taxonomy" title="Taxonomy" icon="book-open" subtitle="Authoritative vocabulary reference for all DCM architecture and implementation work. Core vocabulary, anti-vocabulary, roles, and capability prefixes." >}}
-  {{< card link="enhancements" title="Enhancements" icon="document-text" subtitle="Enhancement proposals documenting new features, architectural decisions, and significant changes." >}}
+  {{< card link="project-overview" title="Project Overview" icon="information-circle" subtitle="What DCM is, why it exists, who it benefits, and where it operates." >}}
+  {{< card link="architecture" title="Architecture" icon="template" subtitle="Data model (55 docs), specifications (15 docs), and OpenAPI schemas." >}}
+  {{< card link="capabilities-matrix" title="Capabilities Matrix" icon="table-cells" subtitle="299 capabilities across 38 domains." >}}
+  {{< card link="taxonomy" title="Taxonomy" icon="book-open" subtitle="Precise vocabulary for the DCM architecture." >}}
 {{< /cards >}}

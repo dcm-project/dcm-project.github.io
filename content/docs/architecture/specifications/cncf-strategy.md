@@ -1,5 +1,9 @@
 # DCM — CNCF Strategy and Community Engagement Plan
 
+**Document Status:** 📋 Draft — Ready for Implementation Feedback
+**Document Type:** Strategy Document
+
+
 
 
 **Version:** 0.1.0-draft  

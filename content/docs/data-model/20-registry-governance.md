@@ -92,7 +92,21 @@ Air-gapped Registry (offline copy)
 
 ### 3.1 The PR-Based Proposal Flow
 
+The PR submitter becomes the **Resource Type Authority** for the submitted specification
+unless an alternative authority is declared in the `owned_by` field. The authority is
+the required approver for all future version PRs against that specification — no version
+of the specification can be activated without the authority's approval (or the authority
+designating a successor via a formal authority transfer PR).
+
 Resource Type proposals follow a GitOps PR-based workflow — not form submissions or tickets. A proposal is a Pull Request against the registry repository.
+
+> **Resource Type Authority:** The PR submitter becomes the **Resource Type Authority**
+> for the specification unless an alternative is declared in the `owned_by` field.
+> The authority is the required approver for all future version PRs — no new version
+> activates without their approval. Authority can be transferred via a formal transfer PR.
+> This is the same `owned_by` governance model applied to all DCM artifacts.
+
+
 
 ```
 1. Author creates Resource Type Specification draft

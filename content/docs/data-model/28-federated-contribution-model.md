@@ -251,6 +251,23 @@ POST /api/v1/contribute/resource-group
 
 ### 6.1 Provider as Resource Type Publisher
 
+**Resource Type Authority vs Service Provider Publisher — the distinction:**
+
+The **Resource Type Authority** (doc 05, Section 2.1c) is the team responsible for
+defining and maintaining the Resource Type Specification — the vendor-neutral contract
+all providers must implement. The authority may be a DCM Project maintainer (Tier 1),
+a named community maintainer (Tier 2), or an organization's domain team (Tier 3).
+
+A **Service Provider** implements that specification in their Catalog Item and publishes
+provider-specific extensions and Service Layers on top of it. A provider is the publisher
+of their catalog item — not necessarily the author of the underlying Resource Type Spec.
+
+In many cases they are the same team: a networking team may both define `Network.VLAN`
+as the Resource Type Authority AND register as the Service Provider that realizes VLANs.
+In other cases they are different: a platform team defines `Compute.VirtualMachine`
+as the Resource Type Authority, and multiple compute providers (Nutanix, VMware, bare
+metal) each independently register Catalog Items implementing that specification.
+
 Service Providers are not just execution targets — they are first-class contributors of the resource type definitions that consumers request. A provider registering a new virtual machine offering publishes the Resource Type Specification, the Catalog Item, and the Service Layer that consumers use to interact with it.
 
 **What this enables:**

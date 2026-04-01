@@ -1,5 +1,9 @@
 # DCM Flow GUI Specification
 
+**Document Status:** 📋 Draft — Ready for Implementation Feedback
+**Document Type:** User Interface Specification
+
+
 > **📋 Draft**
 >
 > This specification defines the DCM Flow GUI — the visual interface for platform engineers to compose, test, simulate, and manage DCM's policy-driven orchestration. All views, data contracts, API endpoints, and component structure are specified. Feedback and contributions welcome via [GitHub Issues](https://github.com/dcm-project/issues).

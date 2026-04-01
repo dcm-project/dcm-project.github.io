@@ -55,6 +55,50 @@ These terms are frequently conflated. The distinction is architectural:
 DCM maintains an official **Resource Type Registry** — the authoritative source of standard resource type definitions. The registry is the foundation of portability across the DCM ecosystem.
 
 
+
+### 2.1c Resource Type Authority — Stewardship Model
+
+Every Resource Type Specification in the DCM registry is owned by a **Resource Type
+Authority** — the team or individual responsible for defining, maintaining, evolving,
+and deprecating that specification. This is not an implicit role; it is a declared
+field in the registry entry.
+
+The Resource Type Authority has full responsibility for:
+- Defining the universal fields (the vendor-neutral contract all providers must implement)
+- Deciding which fields are `conditional` vs `universal`
+- Declaring `layer_reference` constraints where the allowed values should be
+  governed by a named layer type rather than a static list
+- Reviewing provider extension proposals that add fields to their resource type
+- Publishing new versions when the contract changes
+- Deprecating the specification and declaring a replacement when it's superseded
+
+**Authority assignment by registry tier:**
+
+| Tier | Who is the Resource Type Authority |
+|------|------------------------------------|
+| Tier 1 — DCM Core | DCM Project maintainers (community PRs + named maintainer approval) |
+| Tier 2 — Verified Community | Named community maintainer(s) declared at registry entry time |
+| Tier 3 — Organization | Designated platform team, domain team, or SME group per the organization's governance model |
+
+**Within Tier 3 (Organization), typical authority assignments:**
+
+| Resource Type Category | Typical Owning Authority |
+|-----------------------|--------------------------|
+| `Compute.*` | Platform / Virtualization Team |
+| `Network.*` | Network Operations |
+| `Storage.*` | Storage Operations |
+| `Security.*` | Security / CISO Office |
+| `Platform.*` | Platform Engineering |
+| `Process.*` | Automation / DevOps Platform Team |
+| `Application.*` | Application Platform Team |
+
+**The authority model is the same as all other DCM artifacts.** Resource Type
+Specifications are versioned, GitOps-managed, authority-owned, and subject to
+the standard `developing → proposed → active → deprecated → retired` lifecycle.
+The Resource Type Authority is the approver in the GitOps workflow — the PR must
+be approved by the authority before the specification activates.
+
+
 ### 2.1a Catalog Item vs Resource Type Specification — Critical Distinction
 
 These two terms are frequently conflated throughout the documentation. They are distinct concepts at different levels of the hierarchy:
@@ -167,6 +211,108 @@ The broadest classification. Defines the domain of a resource without any specif
 
 ---
 
+
+### 2.1b Layer-Referenced Field Constraints
+
+Fields in a Resource Type Specification can declare their allowed values as **a set of
+active layer instances** rather than as a static list. This is the `layer_reference`
+constraint type.
+
+**Why this matters:**
+
+A static `enum: [rhel, ubuntu, windows-server]` is valid at definition time but
+immediately becomes a governance problem — updating it requires a new version of the
+Resource Type Specification, goes through the full registry approval process, and
+affects all providers simultaneously.
+
+A `layer_reference` constraint delegates allowed-value governance to the layer system.
+The set of valid values for a field is determined at catalog item render time by
+querying the active layer instances of the declared layer type. Adding a new approved
+OS image is adding a new OS Image layer — owned by the appropriate authority, versioned,
+subject to GitOps workflow, immediately available to all catalog items that reference
+that layer type, without touching the Resource Type Specification.
+
+**Examples of layer-referenced fields:**
+
+| Field | Layer Type | Who creates layers | What a layer contains |
+|-------|-----------|-------------------|----------------------|
+| `location` | `location.data_center` | Data Center Operations | DC name, code, certifications, sovereignty, power, network |
+| `os_image` | `os_image` | Platform Security / OS Team | image name, version, SHA, approved status, EOL date |
+| `size` (optional) | `vm_size` | Platform Team | size name, CPU, RAM, storage defaults — **only if the org wants to constrain sizes via governed list**; organizations may instead let providers declare ad-hoc size constraints in their catalog items |
+| `network_zone` | `network_zone` | Network Operations | zone name, VLAN range, allowed protocols, firewall rules |
+| `environment` | `environment` | Platform Governance | environment name, policy set, TTL defaults, approval tier |
+| `storage_class` | `storage_class` | Storage Operations | class name, IOPS, throughput, redundancy, cost per GB |
+
+**The pattern applies to any field where:**
+- The valid values are governed by a specific team or authority
+- The set of values changes over time (new options added, old ones retired)
+- Each value carries structured metadata beyond just its name
+- Governance, versioning, and audit of the allowed set matters
+
+**The pattern does NOT apply to fields where:**
+- The valid values are intrinsic to the resource type itself (CPU range, memory range)
+- The provider is the appropriate authority for what values are valid for their offering
+- The field is informational (names, descriptions, tags)
+
+**This is an organizational decision.** The Resource Type Specification declares whether
+a field uses `layer_reference` or a static constraint. Organizations can choose either
+approach. A VM `size` field could use `layer_reference` if the organization wants to
+maintain a governed size catalog — or it could use a static `range` constraint and let
+each provider declare their available sizes in their Catalog Item. Both are valid.
+Neither requires the other. The Resource Type Authority decides per field based on
+whether organizational governance of the allowed values adds value.
+
+**What the consumer sees:**
+
+When `GET /api/v1/catalog/{uuid}` renders a field with a `layer_reference` constraint,
+DCM resolves the active layer instances of that type and returns them as the
+`allowed_values` list — each entry containing both the value to submit and the
+display data the GUI needs to render the selection:
+
+```json
+{
+  "field_name": "location",
+  "type": "string",
+  "required": true,
+  "constraint": {
+    "type": "layer_reference",
+    "layer_type": "location.data_center",
+    "allowed_values": [
+      {
+        "value": "layer-uuid-fra-dc1",
+        "display_name": "DC1 — Frankfurt Alpha",
+        "code": "FRA-DC1",
+        "zone": "eu-west-1a",
+        "sovereignty": "EU/GDPR",
+        "certifications": ["ISO 27001", "SOC 2 Type II"],
+        "capacity_status": "available"
+      },
+      {
+        "value": "layer-uuid-ams-dc2",
+        "display_name": "DC2 — Amsterdam Beta",
+        "code": "AMS-DC2",
+        "zone": "eu-west-1b",
+        "sovereignty": "EU/GDPR",
+        "certifications": ["ISO 27001"],
+        "capacity_status": "limited"
+      }
+    ]
+  }
+}
+```
+
+The consumer submits the layer UUID as the field value. DCM resolves it to the full
+layer, assembles the layer chain into the payload, and the provider receives the
+complete structured location context — not just a string.
+
+**Governance model:** Layer instances for any layer type follow the same lifecycle,
+controls, security, and governance as Resource Types themselves — they are versioned
+artifacts, owned by a declared authority, stored in GitOps, subject to the standard
+`developing → proposed → active → deprecated → retired` lifecycle. The authority
+that creates and governs the layer instances is the same authority that governs
+what values are valid for that field.
+
+
 ### Level 2 — Resource Type
 
 Defines an abstract resource within a category. A Resource Type represents a class of resource that multiple providers can implement. Resource Types are the primary unit of portability in DCM.
@@ -182,6 +328,12 @@ Defines an abstract resource within a category. A Resource Type represents a cla
 ---
 
 ### Level 3 — Resource Type Specification
+
+The data contract for a Resource Type. A Resource Type Specification is itself
+a **data layer artifact** — it follows the same versioning, ownership, lifecycle,
+GitOps governance, and domain model as all other DCM layers. The Resource Type
+Authority is the `owned_by` declaration on the specification artifact. Changes
+produce new versions. The specification is immutable once active.
 
 The data contract for a Resource Type. Defines all fields — universal, conditional, and any declared extension points — along with their types, constraints, and portability classifications.
 
@@ -211,6 +363,104 @@ A specific provider's concrete implementation of a Resource Type Specification. 
 **Example:** `Nutanix.VM.Small` implements `Compute.VirtualMachine` with `cpu_count: 4`, `ram_gb: 16`, `storage_gb: 60`
 
 ---
+
+
+## 3a. Field Constraint Model — Three Choices
+
+When a Resource Type Authority defines a field, they make a deliberate decision
+about how that field's valid values are governed. There are three options:
+
+### Option 1 — Layer-Referenced Constraint
+
+```yaml
+field_name: location
+constraint:
+  type: layer_reference
+  layer_type: location.data_center
+```
+
+**Use when:** The valid values are a governed, versioned, authority-owned set that
+changes over time and carries structured metadata. Location, OS images, network zones,
+storage classes, and approved size profiles are all layer-referenced by default in DCM.
+
+**Portability:** Fields with `layer_reference` constraints are **fully portable** — any
+provider implementing this resource type resolves the same layer type to its own
+available instances. The consumer submits a layer UUID; each provider resolves it
+against their own registered location or OS image layers.
+
+**Governance:** Adding a new valid value = adding a new Reference Data Layer instance.
+No Resource Type Specification change needed. The authority that owns the layer type
+governs the set of valid values independently of the Resource Type Authority.
+
+---
+
+### Option 2 — Provider-Declared Constraint (ad-hoc)
+
+```yaml
+field_name: cpu_count
+constraint:
+  type: enum
+  allowed_values: [1, 2, 4, 8, 16, 32]
+  reason: "Powers of 2 required for NUMA alignment"
+```
+
+**Use when:** The valid values are inherent to the resource type itself and do not
+change based on what an organization has provisioned or approved. CPU counts, memory
+ranges, protocol versions, and other intrinsic technical constraints belong here.
+
+**When providers use it at catalog item level:** A provider can declare ad-hoc
+constraints in their Catalog Item declaration — restricting or narrowing the values
+declared in the Resource Type Specification for *their specific offering*. A provider
+may not offer all CPU counts the spec allows; their catalog item declares the subset
+they support. This is valid and does not affect portability as long as they stay within
+the bounds declared by the Resource Type Specification.
+
+**Portability:** Depends on how the constraint is used:
+- In the Resource Type Specification: portable if values are vendor-neutral
+- In the Catalog Item: provider narrows the spec's values — still portable if
+  another provider's catalog item supports the same field with overlapping values
+
+---
+
+### Option 3 — No Constraint (Provider Judgment)
+
+```yaml
+field_name: display_name
+constraint:
+  type: pattern
+  pattern: '^[a-z0-9-]{3,63}$'
+  # Or simply: no constraint block — free-form
+```
+
+**Use when:** The field is informational, free-form, or the provider is the
+appropriate authority for what constitutes a valid value for their offering.
+Names, descriptions, tags, and provider-internal identifiers belong here.
+
+**Portability:** No constraint means any value is valid — fully portable but
+with no guarantee of behavioral equivalence across providers.
+
+---
+
+### Decision Guide for Resource Type Authorities
+
+| Field characteristic | Recommended constraint type |
+|---------------------|----------------------------|
+| Value is from a governed, versioned, org-managed list | `layer_reference` |
+| Value determines which physical infrastructure is used | `layer_reference` |
+| Value is intrinsic to the resource type (CPU count, protocol) | `enum` or `range` |
+| Provider narrows a spec-defined range in their catalog item | `enum` or `range` at catalog item level |
+| Value is informational / naming / description | `pattern` or no constraint |
+| Value is entirely provider-internal | No constraint in spec; provider declares in catalog item |
+
+**An organization decides per field** — some fields in a resource type will be
+layer-referenced (location, OS image), some will have ad-hoc constraints (CPU range),
+and some will be free-form (display name). The Resource Type Authority makes these
+decisions when publishing the specification. Organizations can always add more
+governance later by adding a `layer_reference` constraint to a field that previously
+used an ad-hoc enum — this is a non-breaking minor version change.
+
+---
+
 
 ## 4. Portability Classification
 
@@ -250,7 +500,31 @@ field_name:
     portability_notes: <human-readable explanation>
     supported_by: <all|list of provider UUIDs — for conditional fields>
   constraints:
-    - <constraint definition>
+    - type: <range|enum|pattern|layer_reference|layer_reference_list>
+      # range: min/max numeric bounds
+      # enum: static list of allowed string values
+      # pattern: regex pattern for string validation
+      # layer_reference: value must be the UUID of an active layer of the declared type
+      #   — used for single-select fields (e.g., pick one location)
+      # layer_reference_list: value is a list of layer UUIDs of the declared type
+      #   — used for multi-select fields (e.g., list of allowed zones)
+
+      # For layer_reference and layer_reference_list:
+      layer_type: <registered layer type name>
+      # e.g., layer_type: location.data_center
+      #        layer_type: os_image
+      #        layer_type: approved_size
+      filter:
+        # Optional: restrict which layer instances are valid values
+        # Applied at catalog item render time to produce the available list
+        tags: [<tag>, ...]            # only layers with these tags
+        domain: <platform|tenant|...> # only layers from this domain
+        concern_tags: [<tag>, ...]    # only layers with these concern tags
+      display_field: <field path>     # which layer field to show as display label
+      # e.g., display_field: data.dc_name → shows "DC1 — Frankfurt Alpha"
+      value_field: <field path>       # which layer field is the submitted value
+      # e.g., value_field: artifact_metadata.uuid → submits the layer UUID
+      #        value_field: data.dc_code           → submits "FRA-DC1"
   default_value: <default if not specified>
   provenance:
     <standard provenance metadata — see context-and-purpose.md>
@@ -356,9 +630,31 @@ catalog_item:
   conditional_fields_supported:
     <list of conditional field names this provider supports>
   provider_specific_extensions:
-    <additional fields beyond the base specification>
-    <each field must be marked portability_breaking: true>
-  portability_warning: <true|false — true if any provider-specific extensions are present>
+    # Provider adds fields beyond the Resource Type Specification.
+    # Each field MUST be marked portability_breaking: true.
+    # The catalog item MUST set portability_warning: true.
+    # The Resource Type Authority MAY review and accept these as
+    # 'conditional' fields in a future version of the specification
+    # if multiple providers adopt the same extension.
+    #
+    # Example:
+    nutanix_acropolis_affinity_group:
+      type: string
+      portability_breaking: true
+      description: "Nutanix-specific affinity group assignment"
+
+  # Provider extension layers — alternative to inline extensions.
+  # Providers may contribute a Service Layer (domain: provider) that adds
+  # fields injected during payload assembly for their offering only.
+  # These layers are registered with DCM alongside the catalog item.
+  # They carry the same portability_breaking: true semantics.
+  provider_extension_layer_handles:
+    - "providers/nutanix-eu-west/layers/acropolis-extensions-v1"
+    # Layer domain: provider — cannot override platform or tenant layers
+    # Applied only when this catalog item is selected for dispatch
+
+  portability_warning: <true|false — true if any provider-specific extensions present>
+  portability_class: <portable|conditional|provider-specific|exclusive>
 ```
 
 ---

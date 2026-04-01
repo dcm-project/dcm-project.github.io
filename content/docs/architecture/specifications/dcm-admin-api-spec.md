@@ -1,5 +1,9 @@
 # DCM Admin API Specification
 
+**Document Status:** 📋 Draft — Ready for Implementation Feedback
+**Document Type:** API Narrative Specification
+
+
 > **📋 Draft**
 >
 > This specification has been promoted from Work in Progress to Draft status. Complete Admin API covering all platform admin operations with request/response examples. It is ready for implementation feedback but has not yet been formally reviewed for final release.

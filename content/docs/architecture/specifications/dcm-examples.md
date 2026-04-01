@@ -2187,3 +2187,1195 @@ Platform Admin investigation:
   Accreditation: status → active (manual override with audit record)
   new_requests: unblocked
 ```
+
+
+# Section 9 — Resource Type and Data Layer Lifecycle (End-to-End)
+
+This section traces the complete lifecycle of two real resource types — a Virtual Machine
+and a Web Application as a Service — from the initial layer definitions authored by their
+owning authorities, through provider catalog item registration, layer assembly at request
+time, and finally through rehydration for both.
+
+The goal is to make concrete the abstract model: layers are data, resource types are built
+from layers, providers extend them with their own layers, and every field in every request
+payload knows exactly which layer set it and why.
+
+---
+
+## 9.1 Layer Definitions — Who Defines What, and Who Owns It
+
+Before any VM can be provisioned or any WebApp offered, the foundational data layers must
+exist. These are created by different authorities, each responsible for their domain.
+
+### Reference Data Layers (created by authority teams, stored in GitOps)
+
+**OS Image layer — owned by Platform Security Team:**
+
+```yaml
+# GitOps path: platform/reference-data/os-images/rhel-9-4-approved.yaml
+layer:
+  artifact_metadata:
+    uuid: "os-img-rhel-9-4"
+    handle: "platform/reference-data/os-images/rhel-9-4"
+    version: "1.0.0"
+    status: active
+    owned_by:
+      display_name: "Platform Security Team"
+      group_handle: "groups/platform-security"
+    created_via: pr
+    created_at: "2026-01-15T09:00:00Z"
+
+  layer_type: reference_data
+  reference_data_type: os_image
+  domain: platform
+
+  data:
+    image_name: "RHEL 9.4 — Approved Standard"
+    image_uuid: "img-rhel-9-4-20260315"
+    image_sha256: "a1b2c3d4e5f6..."
+    os_family: rhel
+    major_version: 9
+    minor_version: 4
+    release_date: "2026-03-15"
+    eol_date: "2032-05-31"
+    fips_compliant: true
+    cis_benchmark_ref: "CIS RHEL 9 Benchmark v1.0"
+    approved_for_classifications: [public, internal, confidential, restricted]
+    requires_subscription: true
+
+  concern_tags: [os-image, rhel, approved, fips-compliant, platform-standard]
+```
+
+**Location layer — owned by Data Center Operations:**
+
+```yaml
+# GitOps path: platform/locations/dc/fra-dc1.yaml
+layer:
+  artifact_metadata:
+    uuid: "loc-fra-dc1"
+    handle: "locations/dc/fra-dc1"
+    version: "2.1.0"
+    status: active
+    owned_by:
+      display_name: "Data Center Operations — Frankfurt"
+      group_handle: "groups/dc-operations-fra"
+    created_via: pr
+
+  layer_type: reference_data
+  reference_data_type: location.data_center
+  domain: platform
+  location_type: data_center
+
+  location_hierarchy:
+    parent_handle: "locations/az/eu-west-1a"
+    ancestors:
+      - { handle: "locations/region/eu-west", type: region }
+      - { handle: "locations/country/de",     type: country }
+
+  data:
+    dc_name: "DC1 — Frankfurt Alpha"
+    dc_code: "FRA-DC1"
+    tier_classification: tier_3
+    pue_rating: 1.35
+    redundancy_model: "2N"
+    jurisdiction: "EU/GDPR"
+    sovereignty_zone: "eu-west-sovereign"
+    max_data_classification: restricted
+    certifications:
+      - { standard: "ISO 27001", valid_until: "2027-06-30" }
+      - { standard: "SOC 2 Type II", valid_until: "2026-12-31" }
+    network_uplinks:
+      - { carrier: "DE-CIX", bandwidth_gbps: 100, redundant: true }
+
+  concern_tags: [location, data-center, frankfurt, eu-west, tier-3, iso27001]
+```
+
+**Network zone layer — owned by Network Operations:**
+
+```yaml
+# GitOps path: platform/reference-data/network-zones/prod-dmz-fra.yaml
+layer:
+  artifact_metadata:
+    uuid: "nz-prod-dmz-fra"
+    handle: "platform/reference-data/network-zones/prod-dmz-fra"
+    version: "1.1.0"
+    status: active
+    owned_by:
+      display_name: "Network Operations"
+      group_handle: "groups/network-ops"
+    created_via: pr
+
+  layer_type: reference_data
+  reference_data_type: network_zone
+  domain: platform
+
+  data:
+    zone_name: "Production DMZ — Frankfurt"
+    zone_code: "PROD-DMZ-FRA"
+    vlan_range: "100-199"
+    allowed_inbound_protocols: [HTTPS, SSH]
+    allowed_outbound_protocols: [HTTPS, DNS, NTP]
+    firewall_policy_ref: "policies/network/prod-dmz-baseline"
+    nat_enabled: true
+    internet_facing: true
+    approved_for_classifications: [public, internal]
+
+  concern_tags: [network-zone, dmz, production, frankfurt, internet-facing]
+```
+
+**Core location context layers — assembled automatically from hierarchy:**
+
+```yaml
+# Zone layer (parent of FRA-DC1) — owned by Data Center Operations
+layer:
+  artifact_metadata:
+    uuid: "loc-az-eu-west-1a"
+    handle: "locations/az/eu-west-1a"
+    version: "1.0.0"
+    status: active
+    owned_by: { display_name: "Data Center Operations", group_handle: "groups/dc-operations" }
+
+  layer_type: reference_data
+  reference_data_type: location.zone
+  domain: platform
+
+  data:
+    zone_name: "EU West Zone A"
+    zone_code: "eu-west-1a"
+    isolation_boundary: full
+    target_rpo_minutes: 15
+    target_rto_minutes: 60
+    ha_peer_zones: ["locations/az/eu-west-1b"]
+
+# Country layer — owned by Platform Governance
+layer:
+  artifact_metadata:
+    uuid: "loc-country-de"
+    handle: "locations/country/de"
+    version: "1.0.0"
+    status: active
+    owned_by: { display_name: "Platform Governance", group_handle: "groups/platform-governance" }
+
+  layer_type: reference_data
+  reference_data_type: location.country
+  domain: platform
+
+  data:
+    country_name: "Germany"
+    iso_3166_1_alpha2: "DE"
+    data_sovereignty_jurisdiction: "EU/GDPR"
+    regulatory_frameworks: [GDPR, NIS2, eIDAS]
+```
+
+---
+
+### 9.2 Resource Type Specification — Defined by the Resource Type Authority
+
+The Platform Team is the Resource Type Authority for `Compute.VirtualMachine`.
+They define the vendor-neutral contract all providers must implement.
+
+```yaml
+# GitOps path: registry/resource-types/compute/virtual-machine/v2-1-0.yaml
+resource_type_specification:
+  artifact_metadata:
+    uuid: "rt-compute-vm"
+    handle: "registry/compute/VirtualMachine"
+    fully_qualified_name: "Compute.VirtualMachine"
+    version: "2.1.0"
+    status: active
+    owned_by:
+      display_name: "Platform Team — Virtualization"
+      group_handle: "groups/platform-team"
+    tier: 1    # DCM Core — maintained by DCM Project
+
+  category: Compute
+  description: "A virtual machine instance. The foundational compute resource."
+
+  # Universal fields — all providers MUST implement these
+  universal_fields:
+
+    cpu_count:
+      type: integer
+      required: true
+      description: "Number of virtual CPUs"
+      portability: { classification: universal }
+      constraints:
+        - type: range
+          min: 1
+          max: 256
+          # Note: constraint is a range — provider judgment for what they support.
+          # No layer_reference here: CPU count is intrinsic to the resource type,
+          # not a governed organizational list.
+
+    memory_gb:
+      type: integer
+      required: true
+      description: "RAM in gigabytes"
+      portability: { classification: universal }
+      constraints:
+        - type: range
+          min: 1
+          max: 4096
+
+    storage_gb:
+      type: integer
+      required: true
+      description: "Primary disk size in gigabytes"
+      portability: { classification: universal }
+      constraints:
+        - type: range
+          min: 10
+          max: 65536
+
+    os_image:
+      type: string
+      format: layer-uuid
+      required: true
+      description: "Approved OS image. Must be a UUID of an active os_image reference data layer."
+      portability: { classification: universal }
+      constraints:
+        - type: layer_reference
+          layer_type: os_image
+          # Allowed values = active os_image layers.
+          # Adding a new approved OS = adding a new os_image layer.
+          # No spec change needed.
+
+    location:
+      type: string
+      format: layer-uuid
+      required: true
+      description: "Allocation location. Must be a UUID of an active location.data_center layer."
+      portability: { classification: universal }
+      constraints:
+        - type: layer_reference
+          layer_type: location.data_center
+          # Allowed values = active DC layers. Each carries jurisdiction,
+          # certifications, sovereignty zone, and capacity status.
+
+    network_zone:
+      type: string
+      format: layer-uuid
+      required: false
+      description: "Network zone. If omitted, placement policy selects default."
+      portability: { classification: universal }
+      constraints:
+        - type: layer_reference
+          layer_type: network_zone
+
+    hostname:
+      type: string
+      required: false
+      description: "VM hostname. If omitted, DCM generates one per naming policy."
+      portability: { classification: universal }
+      constraints:
+        - type: pattern
+          pattern: '^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$'
+
+    environment:
+      type: string
+      format: layer-uuid
+      required: false
+      description: "Deployment environment. Controls policy set and approval tier."
+      portability: { classification: universal }
+      constraints:
+        - type: layer_reference
+          layer_type: environment
+
+  # Conditional fields — declared by providers that support them
+  conditional_fields:
+
+    high_availability:
+      type: boolean
+      required: false
+      description: "Enable HA — live migration on host failure"
+      portability:
+        classification: conditional
+        portability_notes: "Supported by most hypervisor providers; not applicable for bare metal"
+
+    gpu_profile:
+      type: string
+      format: layer-uuid
+      required: false
+      description: "GPU configuration. Must be a UUID of an active gpu_profile reference data layer."
+      portability:
+        classification: conditional
+        portability_notes: "Only providers with GPU hardware support this field"
+      constraints:
+        - type: layer_reference
+          layer_type: gpu_profile
+
+    backup_policy:
+      type: string
+      required: false
+      description: "Backup schedule reference"
+      portability:
+        classification: conditional
+
+  # Extension point declaration — where providers MAY add fields
+  extension_points:
+    - name: provider_hypervisor_config
+      description: "Provider-specific hypervisor configuration"
+      portability_impact: provider_specific  # using this makes catalog item non-portable
+
+  lifecycle_operations: [create, read, update, delete, suspend, resume, rehydrate, drift_check]
+```
+
+**The WebApp Resource Type — defined by the Application Platform Team:**
+
+```yaml
+# GitOps path: registry/resource-types/application/web-app/v1-0-0.yaml
+resource_type_specification:
+  artifact_metadata:
+    uuid: "rt-app-webapp"
+    handle: "registry/application/WebApp"
+    fully_qualified_name: "Application.WebApp"
+    version: "1.0.0"
+    status: active
+    owned_by:
+      display_name: "Application Platform Team"
+      group_handle: "groups/app-platform"
+    tier: 3    # Organization tier
+
+  category: Application
+  description: >
+    A complete web application stack: load balancer, application VMs, and
+    database — provisioned and lifecycle-managed as a single compound resource.
+    Implemented by a Meta Provider that orchestrates constituent atomic resources.
+
+  universal_fields:
+
+    app_name:
+      type: string
+      required: true
+      description: "Application name — used in DNS, naming, and tagging"
+      portability: { classification: universal }
+      constraints:
+        - type: pattern
+          pattern: '^[a-z0-9-]{3,48}$'
+
+    environment:
+      type: string
+      format: layer-uuid
+      required: true
+      description: "Deployment environment (controls redundancy, approval tier, TTL)"
+      portability: { classification: universal }
+      constraints:
+        - type: layer_reference
+          layer_type: environment
+
+    location:
+      type: string
+      format: layer-uuid
+      required: true
+      description: "Target zone or data center"
+      portability: { classification: universal }
+      constraints:
+        - type: layer_reference
+          layer_type: location.data_center
+
+    tier_level:
+      type: string
+      required: true
+      description: "Service tier governing redundancy, SLA, and approval"
+      portability: { classification: universal }
+      constraints:
+        - type: enum
+          allowed_values: [tier_1, tier_2, tier_3]
+          # Static enum — tier names are intrinsic to the resource type.
+          # Each tier carries policy implications enforced by GateKeeper policies.
+
+    web_replica_count:
+      type: integer
+      required: false
+      description: "Number of web tier VMs. Policy enforces minimums per tier."
+      portability: { classification: universal }
+      constraints:
+        - type: range
+          min: 1
+          max: 20
+
+    db_engine:
+      type: string
+      required: true
+      description: "Database engine"
+      portability: { classification: universal }
+      constraints:
+        - type: enum
+          allowed_values: [postgresql, mysql, mariadb]
+
+    db_storage_gb:
+      type: integer
+      required: true
+      constraints:
+        - type: range
+          min: 50
+          max: 10000
+
+  lifecycle_operations: [create, read, update, delete, suspend, resume, rehydrate, scale_out, drift_check]
+```
+
+---
+
+## 9.3 Provider Catalog Items — Implementing the Resource Type
+
+Two compute providers register catalog items implementing `Compute.VirtualMachine`.
+Both must cover all universal fields. Each adds provider-specific constraints and
+optionally extends with their own layers.
+
+**Provider A — Nutanix EU-WEST (portable catalog item):**
+
+```yaml
+# GitOps path: providers/nutanix-eu-west/catalog/vm-standard.yaml
+catalog_item:
+  uuid: "ci-nutanix-eu-west-vm-std"
+  name: "Nutanix EU-WEST — Standard VM"
+  version: "1.3.0"
+  status: active
+
+  implements:
+    resource_type_uuid: "rt-compute-vm"
+    resource_type_version: "2.1.0"
+    resource_type_fully_qualified_name: "Compute.VirtualMachine"
+
+  portability_warning: false        # no provider-specific extensions
+  portability_class: portable
+
+  # Universal fields — Nutanix's implementation of the spec
+  universal_fields:
+    cpu_count:
+      constraint: { type: enum, allowed_values: [2, 4, 8, 16, 32] }
+      # Nutanix narrows the spec's 1-256 range to their supported sizes.
+      # Still portable: another provider may offer overlapping values.
+
+    memory_gb:
+      constraint: { type: enum, allowed_values: [4, 8, 16, 32, 64, 128, 256] }
+
+    storage_gb:
+      constraint: { type: range, min: 40, max: 4096 }
+
+    os_image:
+      # Inherits layer_reference from spec — no override needed.
+      # Nutanix resolves the consumer's os_image layer UUID against their
+      # registered OS image inventory at dispatch time.
+
+    location:
+      # Inherits layer_reference from spec.
+      # Only location layers in Nutanix's registered availability_zones appear
+      # in allowed_values when this catalog item is selected.
+      filter:
+        availability_zones: ["eu-west-1a", "eu-west-1b"]
+
+  # Conditional fields this provider supports
+  conditional_fields_supported:
+    - high_availability    # Nutanix AOS live migration supported
+
+  # Nutanix contributes a Service Layer (domain: service) with defaults
+  # that apply when this catalog item is selected
+  service_layer_handle: "providers/nutanix-eu-west/layers/vm-platform-defaults"
+
+  # Cost metadata
+  cost_metadata:
+    pricing_model: per_hour
+    base_cost_per_vcpu_hour: 0.025
+    base_cost_per_gb_ram_hour: 0.008
+    currency: USD
+
+  sovereignty:
+    data_residency: EU
+    jurisdiction_codes: [DE, NL]
+    availability_zones: ["eu-west-1a", "eu-west-1b"]
+```
+
+**Nutanix Service Layer — injected for all Nutanix VM requests:**
+
+```yaml
+# GitOps path: providers/nutanix-eu-west/layers/vm-platform-defaults.yaml
+layer:
+  artifact_metadata:
+    uuid: "sl-nutanix-eu-west-vm"
+    handle: "providers/nutanix-eu-west/layers/vm-platform-defaults"
+    version: "2.0.0"
+    status: active
+    owned_by:
+      display_name: "Nutanix EU-WEST Operations"
+      group_handle: "providers/nutanix-eu-west/ops-team"
+    created_via: pr
+
+  layer_type: service
+  domain: service
+  type_scope:
+    resource_type_fqn: "Compute.VirtualMachine"
+    scope_inheritance: exact
+
+  # These fields are injected into every Nutanix VM request payload
+  data:
+    hypervisor: "AHV"                           # Nutanix Acropolis Hypervisor
+    cluster_uuid: "nutanix-cluster-fra-01"
+    storage_container: "default-container"
+    network_function_chain: "nfc-prod-default"
+    backup_enabled: true                        # Nutanix default backup policy
+    backup_schedule: "daily-7d-retention"
+    cvm_cores: 2                                # Controller VM allocation
+    monitoring_agent: "nutanix-era-agent"
+    support_tier: "standard"
+```
+
+**Provider B — VMware EU-WEST (provider-extended, non-portable):**
+
+```yaml
+# GitOps path: providers/vmware-eu-west/catalog/vm-enterprise.yaml
+catalog_item:
+  uuid: "ci-vmware-eu-west-vm-ent"
+  name: "VMware EU-WEST — Enterprise VM"
+  version: "1.0.0"
+  status: active
+
+  implements:
+    resource_type_uuid: "rt-compute-vm"
+    resource_type_version: "2.1.0"
+    resource_type_fully_qualified_name: "Compute.VirtualMachine"
+
+  portability_warning: true         # provider-specific extensions present
+  portability_class: provider-specific
+
+  universal_fields:
+    cpu_count:
+      constraint: { type: range, min: 1, max: 128 }
+    memory_gb:
+      constraint: { type: range, min: 2, max: 2048 }
+    storage_gb:
+      constraint: { type: range, min: 20, max: 8192 }
+
+  conditional_fields_supported:
+    - high_availability
+
+  # VMware extends the resource type with vSphere-specific fields
+  # via a provider extension layer (domain: provider)
+  provider_extension_layer_handles:
+    - "providers/vmware-eu-west/layers/vsphere-extensions-v1"
+
+  # These extension fields make the catalog item non-portable —
+  # if a consumer uses them, their request is VMware-specific
+```
+
+**VMware Provider Extension Layer — makes catalog item non-portable:**
+
+```yaml
+# GitOps path: providers/vmware-eu-west/layers/vsphere-extensions-v1.yaml
+layer:
+  artifact_metadata:
+    uuid: "pl-vmware-vsphere-ext"
+    handle: "providers/vmware-eu-west/layers/vsphere-extensions-v1"
+    version: "1.0.0"
+    status: active
+    owned_by:
+      display_name: "VMware EU-WEST Operations"
+      group_handle: "providers/vmware-eu-west/ops-team"
+
+  layer_type: provider_extension
+  domain: provider              # lowest authority — cannot override platform/tenant layers
+  type_scope:
+    resource_type_fqn: "Compute.VirtualMachine"
+
+  # VMware-specific fields exposed to consumers of this catalog item.
+  # These are NOT part of the Resource Type Specification.
+  # Using them makes the request non-portable (VMware-only).
+  extension_fields:
+    vsphere_resource_pool:
+      type: string
+      portability_breaking: true
+      description: "vSphere resource pool name"
+      constraint: { type: enum, allowed_values: ["prod-pool-a", "prod-pool-b", "dev-pool"] }
+
+    vsphere_datastore_cluster:
+      type: string
+      portability_breaking: true
+      description: "vSphere datastore cluster for VMDK placement"
+
+    vmware_tools_version:
+      type: string
+      portability_breaking: true
+      description: "Minimum VMware Tools version"
+      constraint: { type: pattern, pattern: '^\d+\.\d+\.\d+$' }
+
+  # These fields also inject defaults for the provider's own use
+  data:
+    hypervisor: "ESXi 8.0"
+    cluster_name: "vmware-cluster-fra-01"
+    distributed_switch: "dvs-prod-01"
+    admission_control: true
+```
+
+---
+
+## 9.4 Consumer Request — VM Provisioning
+
+The consumer browses the catalog, sees the two VM offerings, selects the Nutanix one,
+picks their location and OS image from the resolved `allowed_values` lists, and submits.
+
+**What the consumer sees (GET /api/v1/catalog/ci-nutanix-eu-west-vm-std):**
+
+```json
+{
+  "catalog_item_uuid": "ci-nutanix-eu-west-vm-std",
+  "display_name": "Nutanix EU-WEST — Standard VM",
+  "resource_type": "Compute.VirtualMachine",
+  "portability_class": "portable",
+  "portability_warning": false,
+
+  "schema": {
+    "fields": [
+      {
+        "field_name": "cpu_count",
+        "type": "integer",
+        "required": true,
+        "constraint": { "type": "enum", "allowed_values": [2, 4, 8, 16, 32] }
+      },
+      {
+        "field_name": "os_image",
+        "type": "string",
+        "required": true,
+        "constraint": {
+          "type": "layer_reference",
+          "layer_type": "os_image",
+          "allowed_values": [
+            {
+              "value": "os-img-rhel-9-4",
+              "display_name": "RHEL 9.4 — Approved Standard",
+              "os_family": "rhel",
+              "fips_compliant": true,
+              "eol_date": "2032-05-31"
+            },
+            {
+              "value": "os-img-ubuntu-24-04",
+              "display_name": "Ubuntu 24.04 LTS",
+              "os_family": "ubuntu",
+              "fips_compliant": false,
+              "eol_date": "2029-04-30"
+            }
+          ]
+        }
+      },
+      {
+        "field_name": "location",
+        "type": "string",
+        "required": true,
+        "constraint": {
+          "type": "layer_reference",
+          "layer_type": "location.data_center",
+          "allowed_values": [
+            {
+              "value": "loc-fra-dc1",
+              "display_name": "DC1 — Frankfurt Alpha",
+              "code": "FRA-DC1",
+              "zone": "eu-west-1a",
+              "sovereignty": "EU/GDPR",
+              "certifications": ["ISO 27001", "SOC 2 Type II"],
+              "capacity_status": "available"
+            },
+            {
+              "value": "loc-ams-dc2",
+              "display_name": "DC2 — Amsterdam Beta",
+              "code": "AMS-DC2",
+              "zone": "eu-west-1b",
+              "sovereignty": "EU/GDPR",
+              "certifications": ["ISO 27001"],
+              "capacity_status": "limited"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
+**Consumer submits request:**
+
+```json
+POST /api/v1/requests
+{
+  "catalog_item_uuid": "ci-nutanix-eu-west-vm-std",
+  "fields": {
+    "cpu_count": 8,
+    "memory_gb": 32,
+    "storage_gb": 120,
+    "os_image": "os-img-rhel-9-4",
+    "location": "loc-fra-dc1",
+    "hostname": "payments-api-01"
+  }
+}
+```
+
+---
+
+## 9.5 Request Processing Pipeline — VM
+
+Tracing every step from submission to realization, showing which layer contributes
+which field and why.
+
+```
+Step 1 — INTENT STATE CAPTURED
+──────────────────────────────
+Stored verbatim — the consumer's exact submission:
+  {
+    "catalog_item_uuid": "ci-nutanix-eu-west-vm-std",
+    "fields": {
+      "cpu_count": 8,
+      "memory_gb": 32,
+      "storage_gb": 120,
+      "os_image": "os-img-rhel-9-4",       // layer UUID
+      "location": "loc-fra-dc1",            // layer UUID
+      "hostname": "payments-api-01"
+    }
+  }
+Intent UUID: intent-vm-001
+Stored in: Intent Store (GitOps — immutable)
+Nothing modified. No policies run yet. This is the permanent record of consumer intent.
+
+Step 2 — LAYER REFERENCE RESOLUTION
+─────────────────────────────────────
+DCM resolves each layer UUID to its full artifact:
+  os_image → layer "os-img-rhel-9-4":
+    image_uuid: "img-rhel-9-4-20260315"
+    image_sha256: "a1b2c3..."
+    fips_compliant: true
+    eol_date: "2032-05-31"
+
+  location → layer "loc-fra-dc1" + ancestor chain:
+    Country layer (loc-country-de):
+      jurisdiction: EU/GDPR
+      regulatory_frameworks: [GDPR, NIS2]
+    Zone layer (loc-az-eu-west-1a):
+      zone_code: eu-west-1a
+      target_rpo_minutes: 15
+      isolation_boundary: full
+    Data Center layer (loc-fra-dc1):
+      dc_code: FRA-DC1
+      sovereignty_zone: eu-west-sovereign
+      max_data_classification: restricted
+      certifications: [ISO 27001, SOC 2 Type II]
+
+Step 3 — LAYER ASSEMBLY (precedence order, lowest first)
+──────────────────────────────────────────────────────────
+  1. Base Layer (platform/base/compute-vm-baseline):
+     → monitoring_agent: null (to be injected by policy)
+     → backup_enabled: false (default)
+     → Source: Base Layer
+
+  2. Core Layers assembled:
+     ┌─ Country layer (loc-country-de):
+     │   location.jurisdiction = EU/GDPR
+     │   location.regulatory_frameworks = [GDPR, NIS2]
+     ├─ Zone layer (loc-az-eu-west-1a):
+     │   location.zone_code = eu-west-1a
+     │   location.rpo_minutes = 15
+     └─ DC layer (loc-fra-dc1):
+         location.dc_code = FRA-DC1
+         location.sovereignty_zone = eu-west-sovereign
+         location.max_data_classification = restricted
+
+  3. Service Layer (providers/nutanix-eu-west/layers/vm-platform-defaults):
+     → hypervisor = AHV
+     → cluster_uuid = nutanix-cluster-fra-01
+     → storage_container = default-container
+     → backup_enabled = true        (overrides Base Layer default)
+     → backup_schedule = daily-7d-retention
+     → monitoring_agent = nutanix-era-agent
+
+  4. OS Image layer data injected (resolved from os-img-rhel-9-4):
+     → os.image_uuid = img-rhel-9-4-20260315
+     → os.image_sha256 = a1b2c3...
+     → os.fips_compliant = true
+     → os.eol_date = 2032-05-31
+
+  5. Request Layer (consumer's fields — highest data layer precedence):
+     → cpu_count = 8
+     → memory_gb = 32
+     → storage_gb = 120
+     → hostname = payments-api-01
+
+Assembled payload at this point (before policies):
+  cpu_count: 8            [source: Request Layer]
+  memory_gb: 32           [source: Request Layer]
+  storage_gb: 120         [source: Request Layer]
+  hostname: payments-api-01 [source: Request Layer]
+  os.image_uuid: img-rhel-9-4-20260315  [source: os_image reference layer]
+  hypervisor: AHV         [source: Service Layer / Nutanix]
+  location.dc_code: FRA-DC1             [source: Core Location Layer]
+  location.zone_code: eu-west-1a        [source: Core Location Layer]
+  location.jurisdiction: EU/GDPR        [source: Core Location Layer]
+  location.sovereignty_zone: eu-west-sovereign  [source: Core Location Layer]
+  backup_enabled: true    [source: Service Layer / Nutanix]
+  monitoring_agent: nutanix-era-agent   [source: Service Layer / Nutanix]
+
+Step 4 — POLICY EVALUATION
+────────────────────────────
+  GateKeeper — Sovereignty Check:
+    PASS: location.sovereignty_zone = eu-west-sovereign
+          tenant data classification ≤ restricted
+          No cross-border transfer
+
+  Validation — FIPS Requirement (FSI profile):
+    PASS: os.fips_compliant = true
+
+  Transformation — Monitoring Agent Injection:
+    ADD: monitoring_agent = nutanix-era-agent  (already present — no override)
+    ADD: monitoring_config.endpoint = monitoring.internal:9090
+    ADD: monitoring_config.scrape_interval = 30s
+    Provenance: { source: policy/transform/monitoring-inject, immutable: true }
+
+  Transformation — Naming Convention:
+    MODIFY: hostname = payments-api-01 → validated against pattern '^[a-z0-9-]{3,63}$' ✓
+    ADD: fqdn = payments-api-01.fra-dc1.eu-west.corp.example.com
+    Provenance: { source: policy/transform/naming-convention }
+
+  GateKeeper — Cost Gate (if estimate > threshold):
+    Estimated cost: $0.38/hour → $274/month
+    Tenant monthly budget: $5,000 remaining
+    PASS: within budget
+
+Step 5 — PLACEMENT SELECTION
+──────────────────────────────
+  Placement Engine evaluates against location.sovereignty_zone = eu-west-sovereign:
+    Candidate providers:
+      Nutanix EU-WEST (eu-west-1a) → confirmed capacity
+      VMware EU-WEST (eu-west-1a) → confirmed capacity
+    
+    Filtered to catalog item ci-nutanix-eu-west-vm-std → Nutanix EU-WEST selected
+    Reserve query confirmed: Nutanix holds capacity for this request (hold: PT5M)
+
+Step 6 — REQUESTED STATE WRITTEN
+──────────────────────────────────
+Full assembled payload stored in Requested Store.
+Every field carries provenance:
+  cpu_count: 8
+    _provenance: { source: request.layer, intent_uuid: intent-vm-001 }
+  hypervisor: AHV
+    _provenance: { source: service.layer/nutanix-vm-defaults, version: 2.0.0 }
+  location.dc_code: FRA-DC1
+    _provenance: { source: core.layer/loc-fra-dc1, version: 2.1.0 }
+  monitoring_agent: nutanix-era-agent
+    _provenance: { source: policy/transform/monitoring-inject, immutable: true }
+  os.image_uuid: img-rhel-9-4-20260315
+    _provenance: { source: reference.layer/os-img-rhel-9-4, version: 1.0.0 }
+
+Step 7 — DISPATCH TO PROVIDER
+───────────────────────────────
+CreateRequest dispatched to Nutanix EU-WEST:
+  {
+    "dcm_entity_uuid": "vm-abc123",
+    "request_uuid": "req-xyz789",
+    "resource_type_uuid": "rt-compute-vm",
+    "resource_type_name": "Compute.VirtualMachine",
+    "fields": {
+      "cpu_count": 8,
+      "memory_gb": 32,
+      "storage_gb": 120,
+      "hostname": "payments-api-01",
+      "fqdn": "payments-api-01.fra-dc1.eu-west.corp.example.com",
+      "os_image_uuid": "img-rhel-9-4-20260315",
+      "hypervisor": "AHV",
+      "cluster_uuid": "nutanix-cluster-fra-01",
+      "backup_enabled": true,
+      "monitoring_agent": "nutanix-era-agent"
+      // Full payload — Nutanix naturalizes to their API format
+    }
+  }
+
+Step 8 — REALIZED STATE WRITTEN
+─────────────────────────────────
+Nutanix provisions the VM, denaturalizes the result:
+  {
+    "dcm_entity_uuid": "vm-abc123",
+    "resource_id": "nutanix-vm-8f7e6d5c",   // Nutanix's internal ID
+    "lifecycle_state": "OPERATIONAL",
+    "realized_fields": {
+      "primary_ip": "10.100.1.42",
+      "mac_address": "00:50:56:8f:7e:6d",
+      "host_uuid": "nutanix-host-001",
+      "realized_at": "2026-03-31T10:05:33Z",
+      "nutanix_vm_uuid": "8f7e6d5c-..."    // provider-native ID stored for correlation
+    }
+  }
+Entity vm-abc123 → status: OPERATIONAL
+```
+
+---
+
+## 9.6 Consumer Request — WebApp as a Service
+
+The WebApp catalog item is backed by a Meta Provider that orchestrates VM, LoadBalancer,
+and Database constituent resources — all provisioned as one consumer action.
+
+**Consumer submits:**
+
+```json
+POST /api/v1/requests
+{
+  "catalog_item_uuid": "ci-webapp-payments-stack",
+  "fields": {
+    "app_name": "payments-portal",
+    "environment": "env-layer-production",   // layer UUID — production environment
+    "location": "loc-fra-dc1",               // layer UUID — FRA-DC1
+    "tier_level": "tier_1",
+    "web_replica_count": 3,
+    "db_engine": "postgresql",
+    "db_storage_gb": 500
+  }
+}
+```
+
+**What the Meta Provider orchestrates (transparent to consumer):**
+
+```
+Meta Provider decomposes the request into constituent requests:
+
+  Constituent 1: Compute.VirtualMachine × 3 (web tier)
+    os_image: os-img-rhel-9-4          // from platform OS image reference layer
+    location: loc-fra-dc1              // same DC as parent request
+    cpu_count: 4                       // from environment layer defaults
+    memory_gb: 16                      // from environment layer defaults
+    hostname: payments-portal-web-{1,2,3}
+    network_zone: nz-prod-dmz-fra      // injected by Placement Policy (tier_1 + web)
+
+  Constituent 2: Network.LoadBalancer × 1
+    location: loc-fra-dc1
+    protocol: HTTPS
+    port: 443
+    health_check_path: /health
+    backend_pool: []   // filled by dependency injection after VM realization
+
+  Constituent 3: Storage.DatabaseInstance × 1
+    location: loc-fra-dc1
+    db_engine: postgresql
+    storage_gb: 500
+    high_availability: true            // enforced by tier_1 GateKeeper policy
+    backup_enabled: true               // injected by environment layer
+
+Environment layer injection (env-layer-production):
+  default_cpu_per_vm: 4
+  default_ram_per_vm: 16
+  backup_enabled: true
+  ttl: null                           // production: no TTL
+  approval_tier: team_lead            // changes require team lead approval
+  monitoring: mandatory
+  log_retention_days: 90
+
+Tier 1 GateKeeper policies fire:
+  → Minimum 3 web VMs enforced (3 requested ✓)
+  → HA required on database (high_availability: true injected)
+  → LTM required in front of web tier (LoadBalancer constituent ✓)
+  → Cross-zone redundancy check: 3 VMs placed across ≥2 zones ✓
+
+Dispatch sequence:
+  T+0s:   Database dispatched (no dependencies)
+  T+45s:  Database REALIZED → db_host=10.100.2.10
+  T+45s:  Web VMs dispatched (db_host injected from db realization)
+  T+90s:  Web VMs REALIZED → ips=[10.100.1.42, 10.100.1.43, 10.100.1.44]
+  T+90s:  LoadBalancer dispatched (backend_pool injected from VM realization)
+  T+105s: LoadBalancer REALIZED → vip=203.0.113.42
+
+Realized entity: Application.WebApp
+  entity_uuid: webapp-payments-portal
+  status: OPERATIONAL
+  constituents:
+    web_vms: [vm-web-001, vm-web-002, vm-web-003]
+    load_balancer: lb-001
+    database: db-001
+  endpoint: payments-portal.fra-dc1.eu-west.corp.example.com → 203.0.113.42
+```
+
+---
+
+## 9.7 Rehydration — VM (Intent Mode, DR Failover)
+
+The payments-api-01 VM is in DC1 which is unavailable. The consumer triggers
+rehydration — replaying the original intent through current policies and layers,
+placing the new VM in DC2.
+
+This is NOT Static Replace (which re-executes the Requested State verbatim).
+Rehydration re-runs the full assembly pipeline from Intent State — applying today's
+layers and policies, including the new location constraint.
+
+```
+Consumer: POST /api/v1/resources/vm-abc123:rehydrate
+  {
+    "mode": "intent",
+    "reason": "DC1 unavailable — DR failover to DC2",
+    "placement_constraints": {
+      "location": "loc-ams-dc2"    // consumer explicitly targets DC2 layer UUID
+    }
+  }
+
+Pipeline:
+
+Step 1 — RETRIEVE INTENT STATE (intent-vm-001)
+  Original consumer submission:
+    cpu_count: 8, memory_gb: 32, storage_gb: 120
+    os_image: os-img-rhel-9-4       // same layer UUID — still valid
+    location: loc-fra-dc1           // OVERRIDDEN by placement_constraints
+    hostname: payments-api-01
+
+Step 2 — LAYER REFERENCE RESOLUTION (fresh run)
+  os_image (os-img-rhel-9-4): same layer, still active
+    → resolves to current approved RHEL 9.4 image
+    → Note: if Platform Security had retired RHEL 9.4 and issued RHEL 9.5,
+      the new os_image layer UUID would need to be in the intent, OR a
+      Transformation policy could auto-upgrade to the latest approved image.
+
+  location OVERRIDE → loc-ams-dc2:
+    Country layer (loc-country-nl):
+      jurisdiction: EU/GDPR (same sovereignty zone — valid for this tenant)
+    Zone layer (loc-az-eu-west-1b):
+      zone_code: eu-west-1b
+    DC layer (loc-ams-dc2):
+      dc_code: AMS-DC2
+      sovereignty_zone: eu-west-sovereign    // same zone — rehydration permitted
+      certifications: [ISO 27001]            // SOC 2 not present here
+
+Step 3 — LAYER ASSEMBLY (fresh — current layers used, not original)
+  Service Layer: providers/nutanix-eu-west/layers/vm-platform-defaults
+    → cluster_uuid: nutanix-cluster-ams-01   // different cluster in DC2
+    → storage_container: dc2-default-container
+    (This is the key difference from Static Replace — current service layer
+     reflects DC2 infrastructure, not DC1)
+
+Step 4 — POLICY EVALUATION (fresh — current policies applied)
+  GateKeeper — Sovereignty Check:
+    PASS: loc-ams-dc2 in eu-west-sovereign zone
+          Same regulatory scope — GDPR/NIS2 still applies
+
+  Validation — Certification Check:
+    WARNING: loc-ams-dc2 has ISO 27001 but not SOC 2 Type II
+    Active policy: warn-only for standard profile
+    Provenance: { audit_warning: "SOC 2 Type II not available at AMS-DC2" }
+
+  Transformation — Hostname preservation:
+    hostname: payments-api-01 (preserved from intent — same logical identity)
+    fqdn: payments-api-01.ams-dc2.eu-west.corp.example.com  (DC2 FQDN)
+
+Step 5 — PLACEMENT
+  Nutanix EU-WEST operates in both zones — selected (same provider)
+  Reserve query: Nutanix AMS cluster confirms capacity
+
+Step 6 — NEW REQUESTED STATE WRITTEN
+  Linked to: intent-vm-001 (same original intent)
+  New requested state UUID: req-rehydrate-vm-abc123-002
+  Location fields now reflect AMS-DC2 chain
+  Full provenance chain preserved:
+    req-001 → [FRA-DC1 realization]
+    req-002 → [AMS-DC2 rehydration] ← current
+
+Step 7 — DISPATCH + REALIZATION
+  Original DC1 VM: status → DECOMMISSIONED (DC1 cleanup queued for when DC1 recovers)
+  New AMS-DC2 VM: OPERATIONAL
+  entity_uuid: vm-abc123 (PRESERVED — same entity, new location)
+  primary_ip: 10.200.1.55    // AMS-DC2 IP
+  DNS updated: payments-api-01.ams-dc2.eu-west.corp.example.com
+
+Provenance chain for payments-api-01:
+  Intent captured: 2026-03-01 (intent-vm-001)
+  Realized in DC1: 2026-03-01 (req-001) → realized-001
+  Rehydrated to DC2: 2026-03-31 (req-002) → realized-002 [linked to intent-vm-001]
+```
+
+---
+
+## 9.8 Rehydration — WebApp as a Service (Intent Mode, Standards Refresh)
+
+The payments-portal WebApp was provisioned 6 months ago. The Platform Security Team
+has published a new approved OS image (RHEL 9.5) and retired RHEL 9.4. The organization
+runs a quarterly rehydration cycle to bring all Tier 1 apps up to current standards.
+
+This is different from the VM failover rehydration — no DC change, no incident.
+The goal is standards refresh: replay intent through current layers to pick up the
+new OS image and any updated policy/layer defaults.
+
+```
+Platform Admin: POST /api/v1/resources/webapp-payments-portal:rehydrate
+  {
+    "mode": "intent",
+    "reason": "Q1 2026 standards refresh — RHEL 9.5 rollout, updated env layer defaults",
+    "reuse_intent_version": null     // use original intent as-is
+  }
+
+Intent State retrieved (for each constituent):
+
+  Web VMs (× 3):
+    app_name: payments-portal
+    os_image: os-img-rhel-9-4    // RETIRED — no longer active layer
+    location: loc-fra-dc1        // still valid
+    tier_level: tier_1
+
+  Database:
+    db_engine: postgresql
+    location: loc-fra-dc1
+    storage_gb: 500
+
+Layer Resolution — key changes since original provisioning:
+
+  os_image (os-img-rhel-9-4): STATUS = retired
+    → Transformation policy: "os_image_auto_upgrade" fires
+    → Finds current latest active os_image layer for os_family=rhel:
+      os-img-rhel-9-5 (RHEL 9.5, released 2026-09-01)
+    → REPLACES os_image in assembled payload
+    → Provenance: { auto_upgraded_from: "os-img-rhel-9-4", by: policy/transform/os-image-auto-upgrade }
+
+  environment layer (env-layer-production): VERSION bumped from 1.0 to 1.2
+    → New defaults: log_retention_days: 365 (was 90 — compliance requirement added)
+    → New: vulnerability_scan_enabled: true
+    → backup_schedule: weekly-30d-retention (was daily-7d)
+    → These new defaults inject into the assembled payload
+
+  location (loc-fra-dc1): VERSION 2.1.0 → 2.2.0
+    → New certification added: DORA (EU Digital Operational Resilience Act)
+    → Injected into payload and audit record
+
+Policy changes since original provisioning:
+
+  New GateKeeper: "vulnerability_scan_on_rehydrate" (added 2026-06-01)
+    → Requires: vulnerability_scan_schedule declared before realization
+    → Transformation: adds vulnerability_scan_enabled: true, schedule: weekly
+
+  Tier 1 minimum web replicas: increased from 3 to 4 (policy updated 2026-08-01)
+    → GateKeeper fires: current request has web_replica_count: 3
+    → Policy action: AUTO_ADJUST (adds one more VM to constituent requests)
+    → Consumer notified: "web_replica_count adjusted from 3 to 4 per updated Tier 1 policy"
+    → New VM constituent added to rehydration dispatch
+
+Rehydration Execution:
+
+  Rolling replacement strategy (Tier 1 — zero downtime):
+    Phase 1: Provision new VMs with RHEL 9.5 (alongside existing RHEL 9.4 VMs)
+      → 4 new VMs provisioned in FRA-DC1 (RHEL 9.5, updated env defaults)
+      → Load balancer backend pool updated: drain RHEL 9.4 VMs one at a time
+    Phase 2: Verify new VMs healthy (health check passes)
+    Phase 3: Remove old RHEL 9.4 VMs from pool → decommission
+    Phase 4: Database: snapshot + engine version check (no RHEL dependency — unchanged)
+
+Result:
+  payments-portal: OPERATIONAL
+  RHEL version: 9.4 → 9.5 (on all 4 web VMs)
+  Replica count: 3 → 4 (Tier 1 policy enforcement)
+  Log retention: 90 days → 365 days
+  Vulnerability scanning: enabled (new policy)
+  DC: FRA-DC1 (unchanged)
+
+Provenance chain for payments-portal:
+  Original intent: 2026-03-01 (env-layer-production v1.0, rhel-9-4, 3 replicas)
+  Q1 refresh: 2026-09-30 (env-layer-production v1.2, rhel-9-5, 4 replicas)
+  Both intent records preserved — can audit exactly what changed between cycles.
+
+Audit record highlights:
+  os_image: auto-upgraded from os-img-rhel-9-4 (retired) → os-img-rhel-9-5
+    by: policy/transform/os-image-auto-upgrade
+  web_replica_count: 3 → 4
+    by: policy/gatekeeper/tier1-minimum-replicas v2.0
+  log_retention_days: 90 → 365
+    by: environment layer env-layer-production v1.2
+  vulnerability_scan_enabled: false → true
+    by: policy/gatekeeper/vulnerability-scan-on-rehydrate v1.0
+```
+
+---

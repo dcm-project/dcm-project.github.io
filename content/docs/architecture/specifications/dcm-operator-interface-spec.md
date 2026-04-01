@@ -1,5 +1,9 @@
 # DCM Operator Interface Specification
 
+**Document Status:** 📋 Draft — Ready for Implementation Feedback
+**Document Type:** Operator Interface Specification
+
+
 
 > ## 📋 Draft — Promoted from Work in Progress
 >

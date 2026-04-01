@@ -90,7 +90,8 @@
 | PRR-004 | Tenant Metadata Endpoint (GATE-SP-04) | — | Implement GET /api/v1/tenants/{uuid}/metadata returning usage data | Require for standard+ profile activation; enforce quota integration | PRV-001 |
 | PRR-005 | Prometheus Metrics (GATE-SP-05) | — | Expose required metric families at declared metrics_endpoint | Validate metric presence during approval; gate standard+ activation | PRV-001, HLT-005 |
 | PRR-006 | AEP.DEV Linting (GATE-SP-06) | — | Pass AEP linter against OpenAPI spec with no errors before registration; include linting report URL | Gate standard+ activation on linting pass; block activation on errors | PRV-001 |
-| PRR-007 | Multi-Tenant Dispatch (GATE-SP-07) | — | Accept tenant_uuid in all dispatch payloads; return tenant-scoped resources | Gate standard+ activation on multi-tenant compatibility test | PRV-001 |
+
+| PRV-010 | Provider Sandbox/Test Mode | Submit test requests targeting sandbox providers via `_test_context.target_provider_uuid`; sandbox providers visible in registry with `status: sandbox` | Register with `sandbox_mode: true`; implement full OIS contract; graduate to production via standard approval | Manage sandbox provider registry; review graduation requests; sandbox providers excluded from production placement | PRV-001, GATE-SP-01 || PRR-007 | Multi-Tenant Dispatch (GATE-SP-07) | — | Accept tenant_uuid in all dispatch payloads; return tenant-scoped resources | Gate standard+ activation on multi-tenant compatibility test | PRV-001 |
 
 ---
 
@@ -190,7 +191,9 @@
 | OBS-002 | Metrics and Telemetry Export | — | Expose resource-level metrics to DCM | Configure observability export; integrate enterprise observability platform | — |
 | OBS-003 | Curated Event Stream Subscription | Subscribe to observability event types via Message Bus | — | Configure event stream publication policies; manage subscriber roles | OBS-002 |
 | OBS-004 | Alert and Notification Management | Receive resource and policy alerts via declared channels | — | Configure alert routing; manage notification channels and escalation | OBS-001 |
-| OBS-005 | Cost Analysis and Attribution | View cost estimates and actuals for owned resources | Provide cost metadata; report utilization | Configure Cost Analysis component; manage cost attribution policies | PRV-006 |
+
+| OBS-006 | SLA/SLO Declaration | View SLO status for owned resources (`GET /resources/{uuid}/slo-status`) | Declare resource_type SLOs in Resource Type Specification; report realization timing via callbacks | Configure SLO targets per resource type; view aggregate SLO performance report (`GET /admin/slo/report`) | RLM-001, LCM-001 |
+| OBS-007 | SLO Breach Detection and Notification | Receive `slo.breach_approaching` and `slo.breach_detected` events | — | Configure SLO breach routing and escalation; review aggregate breach reports | OBS-006, EVT-001 || OBS-005 | Cost Analysis and Attribution | View cost estimates and actuals for owned resources | Provide cost metadata; report utilization | Configure Cost Analysis component; manage cost attribution policies | PRV-006 |
 
 ---
 
@@ -203,7 +206,10 @@
 | STO-003 | Discovered State Store Management | — | — | Configure Discovered Store; manage retention policies per profile | DRF-001 |
 | STO-004 | Search Index Management | Use entity and catalog search | — | Configure Search Index; manage rebuild on failure | STO-001 |
 | STO-005 | Backup and Recovery | — | — | Configure backup schedules; test recovery procedures | STO-001, STO-002 |
-| STO-006 | Provenance Model Configuration | — | — | Select and configure provenance model (full_inline / deduplicated / tiered); manage tier transitions | STO-001 |
+
+| STO-007 | Cross-Region Sovereignty-Aware Replication | — | Declare replication capabilities and sovereignty constraints at registration; honor replication routing decisions | Configure replication topology; monitor replication lag; respond to `storage.replication_lag_exceeded` events | STO-001, GOV-001 |
+| STO-008 | Tenant-Scoped Storage Isolation | Data is isolated by tenant at storage layer (RLS + separate stream/namespace) | — | Configure isolation strategy per profile; enforce STI-001 through STI-004 policies | STO-001, IAM-001 |
+| STO-009 | Tenant-Scoped Encryption (fsi/sovereign) | — | — | Configure per-tenant AES-256-GCM encryption keys via Credential Provider; manage key rotation schedule (P90D fsi / P30D sovereign) | STO-008, CPR-001 || STO-006 | Provenance Model Configuration | — | — | Select and configure provenance model (full_inline / deduplicated / tiered); manage tier transitions | STO-001 |
 
 ---
 
@@ -229,7 +235,8 @@
 | GOV-004 | Resource Type Lifecycle | — | Manage deprecation notices; declare successor types; maintain migration guidance | Enforce deprecation timelines; manage sunset periods | GOV-003 |
 | GOV-005 | Platform Configuration Management | — | — | Manage platform-wide layers; configure profiles; manage deployment manifest | LAY-001, POL-005 |
 | GOV-006 | Bootstrap and Self-Hosting | — | — | Manage DCM self-deployment; verify bootstrap manifest; handle repave scenarios | STO-001 |
-| GOV-007 | Sovereign Deployment Management | — | — | Manage air-gapped DCM instances; configure signed bundle import; manage offline registry | FED-001, STO-001 |
+
+| GOV-008 | Tenant Onboarding Workflow | Trigger onboarding completion: receive `tenant.onboarding_complete` when first entity OPERATIONAL | — | Execute full provisioning sequence: tenant entity, default groups, quota, admin actor, GitOps namespace, audit stream; dispatch `tenant.created` and member invitation events | IAM-001, STO-008 || GOV-007 | Sovereign Deployment Management | — | — | Manage air-gapped DCM instances; configure signed bundle import; manage offline registry | FED-001, STO-001 |
 
 ---
 
@@ -255,7 +262,10 @@
 | ZTS-003 | Certificate Rotation Management | — | Implement certificate rotation before expiry; use transition window to avoid downtime | Monitor certificate expiry; fire P14D rotation warnings; manage P7D transition window | ZTS-001 |
 | ZTS-004 | Zero Trust Posture Configuration | — | — | Configure zero_trust_posture per profile (none/boundary/full/hardware_attested); manage posture overrides | POL-005 |
 | ZTS-005 | Hardware Attestation (Sovereign Profile) | — | Present hardware-attested identity (TPM/HSM) for sovereign profile interactions | Configure hardware attestation requirements; manage HSM integration; enforce for sovereign profile | ZTS-001, ZTS-002 |
-| ZTS-006 | Five-Check Boundary Enforcement | — | Pass all five boundary checks on every interaction: identity → authorization → accreditation → matrix → sovereignty | Monitor boundary check audit records; respond to INTERACTION_DENIED events | ZTS-001, ACC-001, GMX-001 |
+
+| ZTS-007 | Provider OpenAPI Spec Signing (SEC-001) | — | Sign OpenAPI spec with mTLS private key at registration; rejected at GATE-SP-01 if unsigned | Verify signature during registration approval pipeline | PRV-001, ZTS-001 |
+| ZTS-008 | GitOps Secrets Scanning (SEC-002) | Commits with detected secrets rejected with `SECRETS_DETECTED` audit record | Ensure service layer SCM does not contain plaintext secrets | Configure scanning ruleset; review and remediate detected secrets | GOV-001, AUD-001 |
+| ZTS-009 | Software Bill of Materials (SBOM) Declaration (SEC-003) | — | Declare SBOM reference at registration (mandatory for fsi/sovereign) | Enforce SBOM requirement during registration approval for fsi/sovereign profiles | PRV-001, ACR-001 || ZTS-006 | Five-Check Boundary Enforcement | — | Pass all five boundary checks on every interaction: identity → authorization → accreditation → matrix → sovereignty | Monitor boundary check audit records; respond to INTERACTION_DENIED events | ZTS-001, ACC-001, GMX-001 |
 
 ---
 
@@ -572,6 +582,21 @@
 ---
 
 
+## 38. Location Topology Management
+
+| ID | Capability | Consumer | Service Provider | Platform/Admin | Depends On |
+|----|-----------|---------|---------|---------------|-----------|| LOC-001 | Location Type Registry | Browse available location types (standard and custom) | Declare supported locations in provider registration capability declaration | Register custom location types; manage standard type definitions; deprecate types | PRV-001 |
+| LOC-002 | Location Node Management | Browse available locations via `GET /api/v1/locations`; filter by resource type, data classification, sovereignty zone | Declare which location nodes (DC, Zone, etc.) the provider serves at registration | Create, version, and retire location layer instances via GitOps; update mutable capacity fields | LOC-001 |
+| LOC-003 | Location Selection at Request Time | Submit `location_uuid` or `location_handle` with service request; select at any level (Country through Rack); DCM refines to specific DC at placement | — | Configure default location selection rules; enforce location-based placement policies | LOC-001, LOC-002 |
+| LOC-004 | Location Layer Assembly | Transparent — full location context injected into payload automatically | Receive full location context in dispatch payload (location.country_code, location.zone_code, location.dc_code, etc.) | Configure layer assembly order; define location-level field overrides | LOC-002, DLM-001 |
+| LOC-005 | Location-Based Sovereignty Enforcement | See sovereignty zone and data residency on each location node | Declare sovereignty capabilities per served location | Configure `max_data_classification` per location; enforce cross-border policies at location layer | LOC-002, GOV-001 |
+| LOC-006 | Location Hierarchy Navigation | Browse parent/child location relationships; query ancestors of a selected node | — | Manage location hierarchy; validate acyclicity on layer submission | LOC-001, LOC-002 |
+| LOC-007 | Custom Location Types | Use custom location types in selection (e.g., Fleet/Ship in Navy context) | Declare support for resources at custom location types | Register and manage custom types; define level insertion point in hierarchy | LOC-001 |
+| LOC-008 | Location Capacity Visibility | See `capacity_status` (available/limited/full) and `providers_available` count per location | Report capacity scoped to location during reserve query | Update mutable capacity fields (e.g., rack_units_available) without a new layer version | LOC-002, PRV-001 |
+
+---
+
+
 ## Capability Count Summary
 
 | Domain | Capabilities |
@@ -700,13 +725,76 @@
 | Scheduled and Deferred Requests | 6 |
 | Request Dependency Graph | 6 |
 | DCM Self-Health | 6 |
+| Identity and Access Management | 21 |
+| Service Catalog | 7 |
+| Request Lifecycle Management | 10 |
+| Provider Contract and Realization | 16 |
+| Resource Lifecycle Management | 7 |
+| Drift Detection and Remediation | 5 |
+| Policy Management | 7 |
+| Data Layer Management | 5 |
+| Information and Data Integration | 6 |
+| Ingestion and Brownfield Management | 4 |
+| Audit and Compliance | 5 |
+| Observability and Operations | 5 |
+| Storage and State Management | 6 |
+| DCM Federation and Multi-Instance | 5 |
+| Platform Governance and Administration | 7 |
+| Accreditation Management | 6 |
+| Zero Trust and Security Posture | 6 |
+| Unified Governance Matrix | 7 |
+| Drift Reconciliation | 5 |
+| Federated Contribution Model | 7 |
+| Scoring Model | 10 |
+| Meta Provider Composability | 8 |
+| Credential Provider Model | 12 |
+| Authority Tier Model | 12 |
+| Event Catalog | 7 |
+| API Versioning | 8 |
+| Session Revocation | 11 |
+| Internal Component Authentication | 8 |
+| Scheduled and Deferred Requests | 6 |
+| Request Dependency Graph | 6 |
+| DCM Self-Health | 6 |
+| Identity and Access Management | 21 |
+| Service Catalog | 7 |
+| Request Lifecycle Management | 10 |
+| Provider Contract and Realization | 16 |
+| Resource Lifecycle Management | 7 |
+| Drift Detection and Remediation | 5 |
+| Policy Management | 7 |
+| Data Layer Management | 5 |
+| Information and Data Integration | 6 |
+| Ingestion and Brownfield Management | 4 |
+| Audit and Compliance | 5 |
+| Observability and Operations | 6 |
+| Storage and State Management | 8 |
+| DCM Federation and Multi-Instance | 5 |
+| Platform Governance and Administration | 7 |
+| Accreditation Management | 6 |
+| Zero Trust and Security Posture | 8 |
+| Unified Governance Matrix | 7 |
+| Drift Reconciliation | 5 |
+| Federated Contribution Model | 7 |
+| Scoring Model | 10 |
+| Meta Provider Composability | 8 |
+| Credential Provider Model | 12 |
+| Authority Tier Model | 12 |
+| Event Catalog | 7 |
+| API Versioning | 8 |
+| Session Revocation | 11 |
+| Internal Component Authentication | 8 |
+| Scheduled and Deferred Requests | 6 |
+| Request Dependency Graph | 6 |
+| DCM Self-Health | 6 |
 | Operational Reference | 4 |
 | Web Interfaces | 14 |
 | ITSM Integration | 7 |
 | Provider Callback Authentication | 10 |
 | Workload Analysis | 5 |
 | Accreditation Monitoring | 6 |
-| **Total** | **287** |
+| Location Topology Management | 7 |
+| **Total** | **299** |
 
 ---
 
