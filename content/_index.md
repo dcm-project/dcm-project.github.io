@@ -3,66 +3,53 @@ title: DCM Project
 toc: false
 ---
 
-<div class="hx-mt-6"></div>
+# Data Center Management
 
-{{< hextra/hero-headline >}}
-  Data Center Management
-{{< /hextra/hero-headline >}}
+**Hyperscaler-like cloud experience for enterprise on-premises and sovereign cloud infrastructure.**
 
-<div class="hx-mt-6"></div>
+DCM is an open-source governing framework that gives enterprise IT organizations the operational 
+model and self-service capabilities of a public cloud provider — on infrastructure they own and control.
 
-{{< hextra/hero-subtitle >}}
-  Hyperscaler-like cloud experience for&nbsp;<br class="sm:hx-block hx-hidden" />enterprise on-premises and sovereign cloud infrastructure
-{{< /hextra/hero-subtitle >}}
-
-<div class="hx-mt-6"></div>
-
-{{< hextra/hero-button text="Get Started" link="docs" >}}
-{{< hextra/hero-button text="View on GitHub" link="https://github.com/dcm-project" >}}
-
-<div class="hx-mt-6"></div>
-
-## About DCM
-
-The Data Center Management (DCM) project provides a hyperscaler-like cloud experience for enterprise on-premises and sovereign cloud infrastructure. DCM is an **API-first, technology-agnostic framework** that relies on a declarative data model where the desired state of infrastructure is defined as code.
-
-The overarching goal is to define the configuration of an entire data center in version-controlled code, enabling rapid deployment and full environment recovery.
-
-<div class="hx-mt-12"></div>
-
-## Core Principles
-
-{{< hextra/feature-grid >}}
-  {{< hextra/feature-card
-    title="🔌 API-First Design"
-    subtitle="Technology-agnostic framework built on modern API principles for maximum flexibility."
-    style="background: radial-gradient(ellipse at 50% 80%,rgba(194,97,254,0.15),hsla(0,0%,100%,0));"
-  >}}
-  {{< hextra/feature-card
-    title="☁️ Cloud-Native Approach"
-    subtitle="Moving away from monolithic management toward distributed, cloud-native principles."
-    style="background: radial-gradient(ellipse at 50% 80%,rgba(62,151,255,0.15),hsla(0,0%,100%,0));"
-  >}}
-  {{< hextra/feature-card
-    title="📚 Service Catalog"
-    subtitle="Comprehensive catalog system for managing services and infrastructure offerings."
-  >}}
-  {{< hextra/feature-card
-    title="⚖️ Rules Engine"
-    subtitle="Built-in governance and policy enforcement through a flexible rules engine."
-  >}}
-{{< /hextra/feature-grid >}}
-
-<div class="hx-mt-16"></div>
+{{< button href="/docs/project-overview" >}}What is DCM?{{< /button >}}
+{{< button href="/docs" >}}Documentation{{< /button >}}
+{{< button href="/docs/implementations" >}}Implementations{{< /button >}}
+{{< button href="https://github.com/dcm-project" >}}GitHub{{< /button >}}
 
 ---
 
-<div class="hx-mt-16"></div>
+## The Problem DCM Solves
 
-## Explore More
+Enterprise on-premises infrastructure is managed by dozens of disconnected tools and manual 
+processes. A single VM can take weeks across five teams. No one has a trustworthy answer to: 
+*what exists, what was requested, what was provisioned, and does current state match intended state?*
+
+DCM establishes a unified, declarative single source of truth for all infrastructure state 
+and connects it to a policy-driven control plane that governs every lifecycle operation.
+
+## Three Foundational Abstractions
 
 {{< cards >}}
-  {{< card link="docs" title="Documentation" icon="book-open" subtitle="Guides, tutorials, and technical documentation" >}}
-  {{< card link="docs/enhancements" title="Enhancements" icon="light-bulb" subtitle="Enhancement proposals documenting new features and changes" >}}
-  {{< card link="blog" title="Blog & Updates" icon="newspaper" subtitle="Latest news, releases, and articles" >}}
+  {{< card title="Data" icon="database" subtitle="Every artifact with a UUID, lifecycle state, and field-level provenance. Four states: Intent · Requested · Realized · Discovered." >}}
+  {{< card title="Provider" icon="plug" subtitle="11 typed provider contracts. Service, Information, Storage, Meta, Credential, Auth, Policy, Notification, Message Bus, ITSM, Peer DCM." >}}
+  {{< card title="Policy" icon="shield-check" subtitle="7 typed policy schemas. GateKeeper · Validation · Transformation · Orchestration Flow · Recovery · Governance Matrix · Lifecycle." >}}
+{{< /cards >}}
+
+## Who Benefits
+
+{{< cards >}}
+  {{< card title="Application Teams" icon="users" subtitle="Self-service catalog. Request infrastructure. Receive provisioned resources. No tickets, no manual coordination." >}}
+  {{< card title="Platform Engineers" icon="cog" subtitle="Single control plane. Policy-governed standards. Automatic drift detection. Consistency is structural." >}}
+  {{< card title="Security & Compliance" icon="lock-closed" subtitle="Policy-as-code tested before activation. Tamper-evident audit trail. Continuous accreditation monitoring." >}}
+  {{< card title="Regulated Industries" icon="building-library" subtitle="FedRAMP · CMMC · HIPAA · SOC 2 · ISO 27001 · DoD IL2–IL6. Compliance by construction." >}}
+{{< /cards >}}
+
+---
+
+## Explore
+
+{{< cards >}}
+  {{< card link="docs/project-overview" title="Project Overview" icon="information-circle" subtitle="What DCM is, what it does, who it benefits, where it operates." >}}
+  {{< card link="docs/architecture" title="Architecture" icon="template" subtitle="55 data model docs · 15 specs · 299 capabilities across 38 domains." >}}
+  {{< card link="docs/implementations" title="Implementations" icon="rocket-launch" subtitle="Reference implementations. Example #1: Summit 2026 demo on OpenShift." >}}
+  {{< card link="https://github.com/dcm-project" title="GitHub" icon="code-bracket" subtitle="Source, issues, and contributions." >}}
 {{< /cards >}}
