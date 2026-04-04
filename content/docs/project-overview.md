@@ -78,22 +78,16 @@ Comparing these four states continuously is how DCM detects drift, enforces gove
 
 Every business rule, every compliance constraint, every operational standard is a Policy — never hard-coded, always auditable, always testable in shadow mode before enforcement.
 
-**Providers** are everything external that DCM integrates with. Twelve typed provider contracts share a common base (registration, health, mTLS, sovereignty declaration, accreditation, governance matrix enforcement) and add typed capability extensions:
+**Providers** are everything external that DCM integrates with. Six provider types share a common base contract (registration, health, mTLS, sovereignty declaration, accreditation, governance matrix enforcement) and add typed capability extensions:
 
 | Provider Type | Capability |
 |--------------|-----------|
-| **Service Provider** | Realizes infrastructure resources (VMs, networks, storage, containers, bare metal) |
+| **Service Provider** | Realizes infrastructure resources (VMs, networks, storage, containers, bare metal). Also covers credentials (internal or Vault), notifications (email/Slack), and ITSM integration via resource type declarations. |
 | **Information Provider** | Serves authoritative external data (CMDB, HR, finance, identity systems) |
 | **Meta Provider** | Composes multiple providers into compound catalog items (a "three-tier web app" as a single catalog entry) |
-| **Storage Provider** | Persists DCM state (GitOps stores, event streams, audit, search index) |
-| **Credential Provider** | Issues, rotates, and revokes secrets and credentials |
-| **Auth Provider** | Authenticates identities; resolves role and group memberships |
-| **Policy Provider** | Evaluates policies externally (OPA/Rego sidecar integration) |
-| **Notification Provider** | Delivers notifications to channels (Slack, PagerDuty, email, webhook) |
-| **Message Bus Provider** | Async event streaming to external systems (Kafka, etc.) |
-| **Registry Provider** | Serves the resource type registry (federated, air-gapped, or mirrored) |
-| **ITSM Provider** | Integrates ServiceNow, Jira, or other ITSM systems as approval gates |
+| **Auth Provider** | Authenticates identities; resolves role and group memberships. Multiple auth providers enable tenant-routed authentication. |
 | **Peer DCM** | Another DCM instance participating in federated deployment |
+| **Process Provider** | Executes ephemeral workflows (software install, backup, migration, compliance scan) via automation platforms (AAP, Tekton) |
 
 ### What This Enables
 
@@ -301,14 +295,14 @@ This is not just an audit requirement — it is an architectural property that m
 | **Provider types** | 12 (unified base contract + typed capability extensions) |
 | **Policy types** | 8 (typed output schemas with deterministic evaluation) |
 | **Entity lifecycle states** | 4 (Intent · Requested · Realized · Discovered) |
-| **Capabilities** | 299 across 38 domains |
-| **Data model documents** | 55 |
+| **Capabilities** | 331 across 39 domains |
+| **Data model documents** | 58 |
 | **Specifications** | 15 |
 | **OpenAPI paths** | 63 consumer · 57 admin · 5 operator · 7 provider callback |
 | **Compliance frameworks** | FedRAMP · CMMC · HIPAA · SOC 2 · ISO 27001 · PCI DSS · DoD IL2–IL6 |
 | **Deployment profiles** | minimal · dev · standard · prod · fsi · sovereign |
 | **License** | Apache 2.0 |
-| **Reference Implementation** | [Example #1 — Summit Demo](implementations/example-01-summit-demo/) — OpenShift + AAP + ACM + RHDH |
+| **Reference Implementation** | | **Reference Implementation** | [dcm-project/dcm-examples](https://github.com/dcm-project/dcm-examples) — Example #1: Summit Demo (OpenShift + AAP + ACM + RHDH) | — OpenShift + AAP + ACM + RHDH |
 | **GitHub** | https://github.com/dcm-project |
 
 ---

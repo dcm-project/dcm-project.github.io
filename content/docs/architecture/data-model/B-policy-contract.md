@@ -35,19 +35,108 @@ Every Policy in DCM — regardless of type — implements a single base contract
 
 **A policy fires when the data says it should fire.** There is no pre-assignment of policies to resource types, no routing tables, no static configuration. A policy declares its match conditions against data fields. If the data matches, the policy evaluates. Any piece of data in the request can be an inclusion trigger for a policy.
 
-### 2.1 Three Match Sources
+### 2.1 Four Match Sources
 
-Policies can match against data from three sources, all available during evaluation:
+Policies can match against data from four sources, all available during evaluation:
 
 | Source | What it contains | Examples |
 |--------|-----------------|---------|
 | **Request payload** | Consumer's declared fields + assembled layers + provenance | `resource_type`, `cpu_count`, `network_segment`, `sovereignty_zone`, `environment`, `application_uuid`, custom tags |
+| **Operation context** | What lifecycle operation is being performed and what changed | `operation.type`, `operation.changed_fields`, `operation.pipeline_stage` |
 | **Evaluation Context** | Constraints emitted by policies earlier in this evaluation pass | `allowed_zones`, `distribution_requirement`, `cost_ceiling`, `excluded_providers` |
 | **Entity metadata** | Tenant, actor, resource classification, lifecycle state | `tenant_uuid`, `actor.roles`, `data_classification`, `lifecycle_state`, `cost_center` |
 
-All three sources are addressable via dot-notation field paths. A policy matching on `context.constraints.allowed_zones` fires based on what sovereignty already decided. A policy matching on `request.data_classification` fires based on how the data is classified. A policy matching on `metadata.actor.roles` fires based on who is making the request.
+All four sources are addressable via dot-notation field paths.
 
-### 2.2 Specificity Spectrum
+### 2.2 Lifecycle Operation Types
+
+Every request into DCM carries an `operation.type` that identifies what lifecycle operation is being performed. This is the primary dimension for scoping which policies fire on which operations.
+
+| Operation Type | When it occurs | Description |
+|---------------|---------------|-------------|
+| `initial_provisioning` | Day 0 — first request for a new resource | Full pipeline: assembly, all policies, placement, dispatch |
+| `update` | Day 2 — modify an existing operational resource | Partial pipeline: assembly with existing entity as base, policies evaluate changed fields |
+| `scale` | Day 2 — change capacity (replicas, CPU, memory, storage) | Subset of update — only scaling-related fields change |
+| `rehydration` | Rebuild from stored state (DR, migration, refresh) | Full pipeline: all current policies re-evaluate from intent or realized state |
+| `decommission` | Day N — request to remove a resource | Decommission pipeline: dependency checks, notification, revocation, provider teardown |
+| `ownership_transfer` | Transfer entity between tenants | Re-evaluates tenant-scoped policies under new tenant context |
+| `subscription_renewal` | Subscription approaching expiry or renewal | Subscription lifecycle policies fire; may trigger re-evaluation of placement |
+| `drift_remediation` | Discovered state diverges from realized state | Remediation policies fire; may re-provision or accept drift |
+| `provider_migration` | Move entity to a different provider | Full placement re-evaluation; sovereignty re-evaluation |
+| `compliance_rescan` | Policy change triggers re-evaluation of existing resources | All matching policies re-evaluate; no placement unless policy requires it |
+
+**`operation.changed_fields`** — For `update` and `scale` operations, this is an array of field paths that changed from the current realized state. This enables policies to fire only when relevant fields change:
+
+```yaml
+# Fire only when placement-affecting fields change
+match:
+  conditions:
+    - field: operation.type
+      operator: in
+      value: [initial_provisioning, rehydration, provider_migration]
+  condition_logic: any
+
+# OR: fire on updates, but only when network or zone fields changed
+match:
+  conditions:
+    - field: operation.type
+      operator: equals
+      value: "update"
+    - field: operation.changed_fields
+      operator: contains
+      value: "placement.zone"
+  condition_logic: all
+```
+
+### 2.3 Policy Lifecycle Scope
+
+Each policy declares which lifecycle operations it applies to. This is configured per policy via `lifecycle_scope`:
+
+```yaml
+policy_artifact:
+  handle: "placement/sovereignty-zone-check"
+  lifecycle_scope:
+    operations: [initial_provisioning, rehydration, provider_migration]
+    # This policy fires on: new resources, rebuilds, and provider moves
+    # Does NOT fire on: memory updates, scaling, decommissions
+
+policy_artifact:
+  handle: "validation/vm-size-limits"
+  lifecycle_scope:
+    operations: [initial_provisioning, update, scale]
+    changed_field_filter: ["cpu_count", "memory_gb", "storage_gb"]
+    # Fires on new resources AND on updates that change sizing fields
+    # Does NOT fire on: tag changes, owner changes, etc.
+
+policy_artifact:
+  handle: "sovereignty/data-residency"
+  lifecycle_scope:
+    operations: all                         # fires on EVERY lifecycle operation
+    # Sovereignty is always checked — no exceptions
+```
+
+**Default lifecycle scope by policy type:**
+
+| Policy Type | Default `lifecycle_scope.operations` | Rationale |
+|-------------|-------------------------------------|-----------|
+| GateKeeper | `all` | Gatekeeping rules should always be checked |
+| Validation | `[initial_provisioning, update, scale, rehydration]` | Structural validation on any data change |
+| Transformation | `[initial_provisioning, rehydration]` | Inject/enrich on new builds and rebuilds; skip on minor updates |
+| Recovery | `all` | Recovery posture always applicable |
+| Orchestration Flow | `[initial_provisioning, rehydration, decommission]` | Pipeline orchestration on major lifecycle transitions |
+| Governance Matrix Rule | `all` | Boundary controls always checked |
+| Lifecycle | `all` | TTL/expiry constraints always active |
+| ITSM Action | `[initial_provisioning, update, decommission]` | ITSM records on provisioning, changes, and teardown |
+
+These defaults can be overridden per policy. Profile-governed minimums prevent downgrading below security requirements:
+
+| Profile | Minimum lifecycle scope |
+|---------|------------------------|
+| `minimal`, `dev` | No minimum — any scope permitted |
+| `standard`, `prod` | GateKeeper and Governance Matrix must be `all` |
+| `fsi`, `sovereign` | GateKeeper, Governance Matrix, and sovereignty-concern policies must be `all` — cannot be scoped to skip any lifecycle operation |
+
+### 2.4 Specificity Spectrum
 
 The same match model expresses policies at every level of specificity:
 
@@ -106,7 +195,7 @@ match:
   condition_logic: all
 ```
 
-### 2.3 Match Operators
+### 2.5 Match Operators
 
 | Operator | Description |
 |----------|------------|
@@ -124,7 +213,7 @@ match:
 
 `condition_logic: all` (default) requires all conditions to match. `condition_logic: any` requires at least one.
 
-### 2.4 Boundary Match Conditions (Governance Matrix)
+### 2.6 Boundary Match Conditions (Governance Matrix)
 
 Governance Matrix Rules use a four-axis boundary model for matching — subject, data, target, and context. These are structurally the same as field conditions but organized by the four axes of the Governance Matrix:
 
@@ -829,9 +918,393 @@ itsm_action_output:
 - Multiple ITSM Action policies on the same event fire independently (ITSM-POL-004)
 - Full audit record produced on every evaluation (ITSM-POL-003)
 
-## 18. Policy Composition
+## 18. Policy Override Model
 
-Policies compose through three mechanisms:
+When a policy blocks a request and the block needs to be overridden, DCM provides five override mechanisms organized by severity. Every override — regardless of mechanism — produces a Merkle tree audit leaf capturing the override justification, authorizer identity, and the policy that was overridden.
+
+### 18.1 Override Policy (Planned Exceptions)
+
+A policy artifact that explicitly overrides another policy for a defined scope. Goes through the standard policy lifecycle (developing → proposed → active) with review and shadow testing.
+
+```yaml
+policy_artifact:
+  handle: "override/payments-team-zone-c-exception"
+  policy_type: override
+  overrides: "sovereignty/eu-data-residency"
+  scope:
+    tenant_tags: ["payments"]
+    resource_types: ["Compute.VirtualMachine"]
+    operations: [rehydration, provider_migration]
+  effect: relax                              # relax a deny → allow
+  justification: "Payments team DR requires zone-c replica per BCP-2026-04"
+  expires_at: "2027-01-01"
+  review_required_before: "2026-10-01"
+  compensating_controls: []                  # optional — see Model 5
+```
+
+**Constraint:** Override policies cannot target `enforcement: hard` policies. Hard policies can only be overridden via Exception Grant or Manual Override with dual-approval. This is validated at policy activation — attempting to create an override policy targeting a hard policy is rejected.
+
+### 18.2 Exception Grant (Pre-Authorized Waivers)
+
+A pre-authorized, time-bounded, scope-limited waiver registered before any specific request needs it. Used for known upcoming needs (DR exercises, compliance transition periods, migration windows).
+
+```yaml
+exception_grant:
+  grant_uuid: <uuid>
+  policy_handle: "sovereignty/eu-data-residency"
+  scope:
+    tenants: ["payments-team"]
+    resource_types: ["Compute.VirtualMachine"]
+    operations: [rehydration, provider_migration]
+  effect: relax
+  compensating_controls:
+    - "audit/enhanced-logging"               # require field-granularity audit during grant
+    - "notification/security-team-alert"     # notify security team on every use
+  authorized_by: <actor_uuid>
+  approved_by: <actor_uuid>                  # dual-approval required for hard policies
+  justification: "BCP-2026-04 DR requires zone-c capability during Q2"
+  effective_from: "2026-04-01"
+  expires_at: "2026-07-01"
+  review_required_before: "2026-06-15"
+  renewable: true
+  max_renewals: 2
+  usage_count: 0                             # tracks how many times this grant was used
+  max_usage: null                            # null = unlimited within time window
+```
+
+Exception Grants can target hard enforcement policies — but require dual-approval. Compensating controls are mandatory when overriding hard policies.
+
+### 18.3 Manual Override (Immediate Authorization)
+
+A human with override authority grants a one-time exception for a specific blocked request. Used when a request is blocked and needs to proceed immediately (DR scenario, production incident, time-sensitive deployment).
+
+```yaml
+manual_override:
+  override_uuid: <uuid>
+  request_uuid: <uuid>                       # tied to a specific request
+  policy_overridden: "sovereignty/eu-data-residency"
+  authorized_by: <actor_uuid>                # must have override authority role
+  approved_by: <actor_uuid | null>           # second approver (required for hard policies)
+  reason: "DR scenario — zone-a unavailable, need zone-c placement"
+  scope: single_request                      # this request only — cannot be reused
+  expires_at: "2026-04-05T00:00:00Z"         # expires if not used within window
+  compensating_controls:
+    - "audit/enhanced-logging"
+```
+
+**Constraint:** Manual overrides of `enforcement: hard` policies require dual-approval (see §18.4). A single person can never override a hard policy.
+
+### 18.4 Dual-Approval Escalation
+
+Not a separate override mechanism — a modifier on Exception Grants and Manual Overrides that applies whenever a `hard` enforcement policy is being overridden. Two authorized individuals from different roles must independently approve.
+
+```yaml
+dual_approval:
+  first_approver:
+    actor_uuid: <uuid>
+    role: security_officer                   # must be from security role
+    approved_at: <ISO 8601>
+  second_approver:
+    actor_uuid: <uuid>
+    role: operations_lead                    # must be from operations role
+    approved_at: <ISO 8601>
+  role_separation_enforced: true             # same role cannot fill both slots
+```
+
+Dual-approval is automatically required whenever:
+- A Manual Override targets a `hard` enforcement policy
+- An Exception Grant targets a `hard` enforcement policy
+- Profile is `fsi` or `sovereign` and any override mechanism is used
+
+### 18.5 Compensating Control Substitution
+
+Instead of overriding a policy, substitute a different set of controls that satisfies the same security/compliance intent through a different mechanism. The original policy is not relaxed — it is satisfied differently.
+
+```yaml
+compensating_control:
+  control_uuid: <uuid>
+  replaces_policy: "sovereignty/eu-data-residency"
+  when:
+    conditions:
+      - field: operation.type
+        operator: equals
+        value: rehydration
+  substitute_controls:
+    - policy_handle: "sovereignty/sovereign-grade-encryption"
+    - policy_handle: "audit/field-granularity-override"
+    - policy_handle: "notification/security-team-immediate"
+  justification: "Zone-c permitted for DR if sovereign-grade encryption and enhanced audit active"
+  validated_by: <actor_uuid>                 # compliance officer who validated equivalence
+```
+
+Compensating controls are the only mechanism that does not actually override the policy — it replaces the enforcement with equivalent protection. Not all policies have meaningful compensating controls (data residency laws cannot be compensated by encryption).
+
+### 18.6 Severity Spectrum Summary
+
+| Severity | Mechanism | When | Who | Can target hard? | Audit |
+|----------|-----------|------|-----|-----------------|-------|
+| **Planned** | Override Policy | Known recurring exception | Policy author + reviewer | No — caught at activation | Full policy lifecycle |
+| **Pre-authorized** | Exception Grant | Known upcoming need | Dual-approval authority | Yes — with dual-approval + compensating controls | Grant record + usage tracking |
+| **Immediate** | Manual Override | Blocked request, needs to proceed now | Override authority | Yes — with dual-approval | Override record + justification |
+| **Structural** | Compensating Control | Policy can be met differently | Policy author + compliance | N/A — policy is satisfied, not overridden | Substitute control record |
+| **Modifier** | Dual-Approval | Any override of hard policy | Two individuals, different roles | Required | Both approver records |
+
+### 18.7 Override Audit
+
+Every override produces its own Merkle tree leaf:
+
+```yaml
+audit_leaf:
+  stage: policy_override
+  source: "override/payments-team-zone-c-exception"  # or exception_grant/manual_override UUID
+  source_type: override_policy | exception_grant | manual_override | compensating_control
+  override_target: "sovereignty/eu-data-residency"
+  override_effect: relax
+  authorized_by: <actor_uuid>
+  approved_by: <actor_uuid | null>
+  dual_approval: true | false
+  compensating_controls: [...]
+  justification: "..."
+  input_payload_hash: <sha-256>
+  output_payload_hash: <sha-256>
+  before_context_hash: <sha-256>
+  after_context_hash: <sha-256>
+  signature: <ed25519>
+```
+
+An auditor asking "why did this request bypass sovereignty?" gets the complete answer: which override mechanism was used, who authorized it, what compensating controls were active, and the cryptographic proof that the override was properly authorized.
+
+### 18.8 Policy Block Resolution
+
+When a policy blocks a request and no automatic resolution exists, DCM does not silently enter an override queue. The consumer is notified with actionable guidance: what blocked the request, why, and what their options are to resolve it.
+
+**Pipeline behavior when a policy blocks a request:**
+
+```
+Policy Engine evaluates request
+  → Policy blocks request
+  → Policy Engine checks automatic resolution:
+      1. Active Override Policy covering this scope? → Apply, continue pipeline
+      2. Active Exception Grant covering this scope? → Apply, continue pipeline
+      3. Active Compensating Control covering this scope? → Substitute, continue pipeline
+  → No automatic resolution available:
+      4. Request enters POLICY_BLOCKED status
+      5. Policy Engine builds resolution guidance (what blocked, why, options)
+      6. request.policy_blocked event published with guidance
+      7. Consumer notified with blocking details and resolution options
+      8. Consumer chooses a resolution action
+      9. Pipeline proceeds based on chosen action
+```
+
+**Resolution options presented to the consumer:**
+
+| Option | Action | What happens |
+|--------|--------|-------------|
+| **Modify request** | Consumer changes the blocked fields to be compliant | Request re-enters pipeline from assembly with updated fields. All policies re-evaluate. |
+| **Request override** | Consumer requests an override with justification | Request enters PENDING_OVERRIDE. Override approval flow begins (§18.9). |
+| **Cancel request** | Consumer abandons the request | Request moves to CANCELLED. Audit trail records cancellation with blocking context. |
+| **Escalate** | Consumer requests platform admin review | Notification routed to platform admin with full context. Admin can modify policies, register exception grant, or advise consumer. |
+
+**Resolution guidance (built by Policy Engine):**
+
+```yaml
+policy_block_resolution:
+  request_uuid: <uuid>
+  status: POLICY_BLOCKED
+  blocking_details:
+    - policy_handle: "sovereignty/eu-data-residency"
+      enforcement: hard
+      reason: "Zone eu-west-3 not in allowed zones [eu-west-1, eu-central-1]"
+      blocking_fields:
+        - field: placement.zone
+          current_value: "eu-west-3"
+          allowed_values: ["eu-west-1", "eu-central-1"]
+
+  resolution_options:
+    modify:
+      available: true
+      guidance:
+        - field: placement.zone
+          suggestion: "Change to eu-west-1 or eu-central-1 to comply with data residency policy"
+          compliant_values: ["eu-west-1", "eu-central-1"]
+    request_override:
+      available: true                        # false if profile prohibits consumer-initiated overrides
+      requires: dual_approval                # derived from enforcement level and profile
+      eligible_approver_roles: [security_officer, operations_lead]
+    cancel:
+      available: true                        # always available
+    escalate:
+      available: true
+      routes_to: [platform_admin]
+
+  timeout_at: <ISO 8601>                     # how long the request stays in POLICY_BLOCKED before auto-cancel
+```
+
+DCM builds the `compliant_values` guidance from the blocking policy's constraint output. If the sovereignty policy says `allowed_zones: [eu-west-1, eu-central-1]`, DCM includes those as the suggestion. If a GateKeeper says `max_cpu: 32` and the request asked for 64, DCM suggests values ≤ 32. For complex constraints (multi-policy interactions), DCM provides what it can determine and indicates when manual review is needed.
+
+**Consumer actions via API:**
+
+```
+# View blocking details and resolution options
+GET /api/v1/requests/{request_uuid}/resolution
+
+# Modify and resubmit blocked request
+POST /api/v1/requests/{request_uuid}:resolve
+Body: {
+  action: "modify",
+  modifications: { "placement.zone": "eu-west-1" }
+}
+
+# Request override (enters override approval flow)
+POST /api/v1/requests/{request_uuid}:resolve
+Body: {
+  action: "request_override",
+  justification: "DR scenario — zone-a unavailable",
+  compensating_controls: ["audit/enhanced-logging"]
+}
+
+# Cancel blocked request
+POST /api/v1/requests/{request_uuid}:resolve
+Body: { action: "cancel" }
+
+# Escalate to platform admin
+POST /api/v1/requests/{request_uuid}:resolve
+Body: {
+  action: "escalate",
+  context: "Need guidance on zone placement for DR scenario"
+}
+```
+
+**Events:**
+
+| Event | Published when | Payload |
+|-------|---------------|---------|
+| `request.policy_blocked` | Pipeline blocked, no automatic resolution | request_uuid, blocking_details, resolution_options, timeout_at |
+| `request.resolution_chosen` | Consumer selects a resolution action | request_uuid, action (modify/override/cancel/escalate) |
+| `request.modified_resubmit` | Consumer modifies and resubmits | request_uuid, modified_fields, re-enters pipeline |
+| `override.requested` | Consumer chooses request_override | request_uuid, justification, enters override approval flow |
+| `override.first_approval` | First approver acts (dual-approval flow) | override_request_uuid, approver, awaiting second approval |
+| `override.approved` | All required approvals received | override_request_uuid, approvers, compensating_controls |
+| `override.rejected` | Approver explicitly rejects | override_request_uuid, rejector, reason |
+| `override.expired` | Timeout reached with no decision | override_request_uuid, timeout_at |
+
+### 18.9 Override Approval Flow
+
+When the consumer chooses "request override," the request moves from `POLICY_BLOCKED` to `PENDING_OVERRIDE` and the approval flow begins. DCM provides the approval gate, the audit trail, and the API. The organization provides the deliberation process.
+
+**Override request record:**
+
+```yaml
+override_request:
+  override_request_uuid: <uuid>
+  request_uuid: <uuid>
+  blocking_policy_handle: "sovereignty/eu-data-residency"
+  blocking_policy_enforcement: hard | soft
+  blocking_reason: "Zone eu-west-3 not in allowed zones [eu-west-1, eu-central-1]"
+  required_approval_type: single | dual
+  eligible_approver_roles: [security_officer, operations_lead]
+  consumer_justification: "DR scenario — zone-a unavailable"
+  consumer_compensating_controls: ["audit/enhanced-logging"]
+  status: pending | approved | rejected | expired
+  timeout_at: <ISO 8601>
+  created_at: <ISO 8601>
+  first_approval:
+    actor_uuid: <uuid>
+    role: <role>
+    justification: "Approved — DR scenario confirmed, enhanced logging active"
+    approved_at: <ISO 8601>
+  second_approval:
+    actor_uuid: <uuid>
+    role: <role>
+    approved_at: <ISO 8601>
+```
+
+**Approver actions via Admin API:**
+
+```
+# Approve override
+POST /api/v1/admin/overrides/{request_uuid}/approve
+Body: { justification, compensating_controls[], role }
+
+# Reject override
+POST /api/v1/admin/overrides/{request_uuid}/reject
+Body: { reason }
+
+# Query pending overrides (approver dashboard)
+GET /api/v1/admin/overrides?status=pending&role={role}
+
+# Query override history
+GET /api/v1/admin/overrides/{request_uuid}
+```
+
+**Notification routing (configurable per profile):**
+
+```yaml
+block_notification:
+  # Consumer notification (always enabled)
+  consumer:
+    channels: [internal]                     # Consumer Portal shows blocked requests
+    include_guidance: true                   # Include resolution options and compliant values
+
+  # Override approver notification (when consumer requests override)
+  override_approvers:
+    channels:
+      - type: internal                       # Consumer Portal approver dashboard
+        enabled: true
+      - type: webhook                        # External system integration
+        url: "https://servicenow.example.com/api/dcm/override"
+        enabled: true
+      - type: webhook
+        url: "https://slack.example.com/api/dcm/override"
+        enabled: true
+    routing:
+      by_policy_domain:
+        sovereignty: [security_officer, compliance_manager]
+        platform: [operations_lead, platform_engineer]
+        tenant: [tenant_admin]
+      by_enforcement:
+        hard: [security_officer, operations_lead]
+        soft: [operations_lead]
+
+  # Escalation notification
+  escalation:
+    routes_to: [platform_admin]
+    channels: [internal, webhook]
+
+  # Override approval escalation (no response within window)
+  override_escalation:
+    if_no_response_after: PT1H
+    escalate_to: [platform_admin]
+```
+
+**Timeout behavior (profile-governed):**
+
+| Profile | Block timeout (auto-cancel) | Override timeout | Override escalation |
+|---------|---------------------------|-----------------|-------------------|
+| `minimal` | PT48H | PT24H | PT12H |
+| `dev` | PT48H | PT24H | PT12H |
+| `standard` | PT8H | PT4H | PT2H |
+| `prod` | PT8H | PT4H | PT1H |
+| `fsi` | PT4H | PT1H | PT30M |
+| `sovereign` | PT4H | PT1H | PT30M |
+
+Block timeout: how long a `POLICY_BLOCKED` request waits for any consumer action before auto-cancelling. Override timeout: how long a `PENDING_OVERRIDE` request waits for approver action. Both are configurable per profile.
+
+**Pipeline resume behavior:**
+
+When the consumer modifies and resubmits, the request re-enters the pipeline from assembly. Policies re-evaluate against the modified fields. The modification is recorded as a Merkle tree audit leaf.
+
+When an override is approved, the pipeline resumes from the exact stage where it was blocked. The assembled payload, earlier policy evaluations, and Evaluation Context are preserved. The approved override is injected into the Evaluation Context as a constraint modification before the blocked policy re-evaluates.
+
+Both paths produce audit leaves:
+- Modify path: modification leaf (what changed) + full re-evaluation leaves
+- Override path: override approval leaf (§18.7) + re-evaluation leaf
+
+---
+
+## 19. Policy Composition
+
+Policies compose through four mechanisms:
 
 **Domain precedence** (Section 4) — more-specific domains override less-specific:
 ```
@@ -841,25 +1314,30 @@ System policy (GateKeeper: cpu_count max 64)
               └── Resource-type policy (Transformation: inject monitoring)
 ```
 
-**Evaluation Context** (Section 7) — policies inform each other through constraints and hints. Sovereignty emits zone restrictions; tier distribution reads them and adjusts. Cost policy emits preferences; placement reads them and factors them in. Conflicts are detected and resolved automatically or escalated.
+**Evaluation Context** (Section 7) — policies inform each other through constraints and hints. Sovereignty emits zone restrictions; tier distribution reads them and adjusts. Conflicts are detected and resolved automatically or escalated.
 
-**Policy Groups** — Data artifacts that group related policies by concern_type. Profiles activate Policy Groups. "Apply the HIPAA profile" activates the HIPAA compliance domain's Policy Group, which contains all the GateKeeper, Validation, Transformation, and Governance Matrix policies required for HIPAA compliance — as a unit, versioned and reviewable together.
+**Policy Groups** — Data artifacts that group related policies by concern_type. Profiles activate Policy Groups. "Apply the HIPAA profile" activates the HIPAA compliance domain's Policy Group.
 
-For a single request, all active matching policies at all domain levels evaluate across multiple passes if needed. GateKeepers at all levels must allow (any deny blocks). Transformations from all levels are collected and applied in precedence order. Recovery policies use the most-specific matching policy. Constraints accumulate in the Evaluation Context and are available to all subsequent policies.
+**Override Model** (Section 18) — Override policies, exception grants, manual overrides, compensating controls, and dual-approval provide governed mechanisms for exceptions. Every override is auditable and time-bounded.
+
+For a single request, all active matching policies at all domain levels evaluate across multiple passes if needed. Active overrides modify the evaluation: an override policy relaxes or tightens a specific policy's effect; an exception grant temporarily suspends a policy for a scoped set of requests; a manual override suspends a policy for one request. Overrides participate in the Evaluation Context — downstream policies see the override's effect.
 
 ---
 
-## 19. Related Policies
+## 20. Related Policies
 
 | Policy | Rule |
 |--------|------|
 | `POL-001` | All DCM policy types implement the unified base contract. The output schema is the only thing that varies. |
 | `POL-002` | Every policy evaluation produces an audit record. No evaluation is silent. |
-| `POL-003` | Hard enforcement policies cannot be relaxed by any downstream rule at any domain level. |
+| `POL-003` | Hard enforcement policies require dual-approval to override. Override policies (Model 1) cannot target hard policies — caught at activation. |
 | `POL-004` | Policies in `proposed` status execute in shadow mode — output is captured and never applied. Shadow mode is the primary mechanism for safe policy change management. |
 | `POL-005` | The Policy Engine is the sole evaluator of all policies. No component bypasses the Policy Engine to enforce rules directly. |
 | `POL-006` | Adding a new policy type requires defining a new output schema. The base contract, evaluation algorithm, lifecycle, and audit obligations are inherited. |
 | `POL-007` | Policies ARE the orchestration. Pipeline steps are Policies firing on payload type events. Static flows are Orchestration Flow Policies with `ordered: true`. |
+| `POL-008` | Every override produces a Merkle tree audit leaf. Override justification, authorizer identity, compensating controls, and the overridden policy are captured. |
+| `POL-009` | Exception Grants and Manual Overrides must have expiry dates. Permanent overrides are not permitted — use an Override Policy with a review cycle instead. |
+| `POL-010` | Compensating controls must be validated by a compliance officer role before activation. Self-validation is not permitted. |
 
 ---
 

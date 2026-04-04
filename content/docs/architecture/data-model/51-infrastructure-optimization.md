@@ -489,7 +489,7 @@ These properties hold regardless of deployment profile or infrastructure choices
 - **Provider Contract** — registration, health, capability, sovereignty, naturalization/denaturalization
 - **Policy Engine** — 8 policy types, OPA/Rego, scoring model
 - **AEP compliance** on all APIs
-- **318 capabilities** across 39 domains
+- **331 capabilities** across 39 domains
 - **101 event payloads** across 22 domains
 
 ---

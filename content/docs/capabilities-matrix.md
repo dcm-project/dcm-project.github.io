@@ -136,7 +136,16 @@
 | POL-009 | Evaluation Context and Multi-Pass Convergence | — | — | Configure max evaluation passes; monitor convergence; manage escalation for unresolvable conflicts | POL-001, POL-008 |
 | POL-010 | Policy Templates | — | Contribute policy templates with parameterized Rego | Register templates (Gatekeeper ConstraintTemplate pattern); validate parameter schemas and constraint type references | POL-001, POL-008 |
 | POL-011 | DCM Constraint Types Library | — | — | Manage auto-generated Rego library (data.dcm.constraint_types); sync with Constraint Type Registry | POL-008, POL-010 |
-| POL-012 | Data-Driven Policy Matching | — | — | Configure match sources (request payload, evaluation context, entity metadata); validate match fields at activation | POL-001 |
+| POL-012 | Data-Driven Policy Matching | — | — | Configure match sources (request payload, operation context, evaluation context, entity metadata); validate match fields at activation | POL-001 |
+| POL-013 | Lifecycle-Scoped Policy Evaluation | — | — | Configure lifecycle_scope per policy (which operation types trigger it); enforce profile minimums (fsi/sovereign require sovereignty policies on all operations); configure changed_field_filter for update/scale operations | POL-001, POL-012 |
+| POL-014 | Override Policies | — | — | Author override policies targeting specific policies for defined scopes; enforce expiry and review dates; cannot target hard enforcement policies | POL-001, POL-003 |
+| POL-015 | Exception Grants | — | — | Create time-bounded, scope-limited waivers with compensating controls; track usage count; enforce dual-approval for hard policies; manage renewal limits | POL-001, AUD-008 |
+| POL-016 | Manual Override | Submit override request for blocked request with justification | — | Grant single-request overrides; enforce dual-approval for hard policies; manage override authority roles | POL-001, IAM-001 |
+| POL-017 | Dual-Approval Escalation | — | — | Configure role separation requirements; manage approval workflow for hard policy overrides; enforce fsi/sovereign dual-approval on all overrides | POL-001 |
+| POL-018 | Compensating Control Substitution | — | — | Define substitute control sets that satisfy policy intent through different mechanisms; require compliance officer validation | POL-001 |
+| POL-019 | Override Approval Flow | Submit override request for blocked request; view pending overrides awaiting approval | — | Configure override notification routing (internal, webhook); configure timeout per profile; configure escalation rules; manage override authority roles | POL-016, IAM-001 |
+| POL-020 | Override Notification Routing | — | — | Configure per-profile notification channels (LISTEN/NOTIFY, webhook to ServiceNow/Jira/Slack); configure routing by policy domain and enforcement level; configure escalation timeouts | POL-019 |
+| POL-021 | Policy Block Resolution | View blocking details, resolution guidance with compliant values; choose resolution action (modify, request override, cancel, escalate) | — | Configure block timeout per profile; configure resolution guidance generation; manage escalation routing | POL-001 |
 
 ---
 
