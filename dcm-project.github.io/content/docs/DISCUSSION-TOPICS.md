@@ -597,18 +597,3 @@ A universal operations interface concept — working title "Lightspeed" — for 
 
 **Status:** Concept note — no design work started. Capture for roadmap planning.
 
-### 7. Spectral AEP Linter + CI Workflow Adoption (PR #18 review)
-
-**Source:** [PR #18](https://github.com/dcm-project/dcm/pull/18) by Fale — first draft of Interoperability API and Service Spec design guidelines.
-
-**PR #18 disposition:** The interoperability API and object design RFC are superseded by the current architecture (4 canonical OpenAPI specs, 58 data model docs). Several conventions in PR #18 (camelCase fields, PascalCase enums, YAML content type, K8s apiVersion/kind/spec/status structure) contradict the team's established patterns (snake_case fields, UPPER_SNAKE_CASE enums, JSON, flat REST entities). PR should be closed with acknowledgment and pointer to current architecture.
-
-**What to adopt:** The `.spectral.yaml` AEP linter config and the GitHub Actions CI workflow that validates OpenAPI specs against AEP rules. This enforces PRR-006 (AEP.DEV Linting) in CI.
-
-**Blockers before adoption:**
-- The team's greenfield specs use OpenAPI 3.1.0; the AEP Spectral ruleset was built for 3.0.x. Must test for false positives on 3.1 constructs before enabling CI enforcement.
-- Determine scope: lint only greenfield specs in `src/api/v1alpha1/`, or also the canonical specs in `dcm/schemas/openapi/`?
-- Decide if this goes in dcm-examples only, or also in the dcm architecture repo for the canonical specs.
-
-**Status:** Future — pending OpenAPI 3.1 compatibility verification.
-
