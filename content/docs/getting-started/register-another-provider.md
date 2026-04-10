@@ -12,8 +12,9 @@ Start another instance of the KubeVirt service provider with a different name an
 
 ```bash
 podman-compose --profile kubevirt run --name another-kubevirt-provider -d --no-deps \
-  -e KUBEVIRT_NAMESPACE=omachace-east \
-  -e KUBEVIRT_PROVIDER_NAME=another-kubevirt-provider \
+  -e KUBERNETES_NAMESPACE=omachace-east \
+  -e PROVIDER_NAME=another-kubevirt-provider \
+  -e PROVIDER_ENDPOINT="http://another-kubevirt-provider:8081/api/v1alpha1/vms" \
   -e PROVIDER_ID=c9243c71-5ae0-4ee2-8a28-a83b3cb38d99 \
   kubevirt-service-provider
 ```

@@ -11,7 +11,7 @@ DCM (Data Center Management) is a control plane for managing infrastructure serv
 ```mermaid
 graph TD
     User["User (CLI / API)"]
-    GW["API Gateway<br/>(KrakenD :9080)"]
+    GW["API Gateway<br/>(Traefik :9080)"]
 
     subgraph Managers
         CM["Catalog Manager"]

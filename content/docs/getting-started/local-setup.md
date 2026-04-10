@@ -30,12 +30,12 @@ The `kubevirt-service-provider` is behind a compose profile and does not start b
 To include it, set the required environment variables and activate the `kubevirt` profile:
 
 ```bash
-export KUBERNETES_NAMESPACE=vms
-export KUBERNETES_KUBECONFIG="/path/to/kubeconfig"
+export KUBEVIRT_NAMESPACE=vms
+export KUBEVIRT_KUBECONFIG="/path/to/kubeconfig"
 podman-compose --profile kubevirt up -d
 ```
 
-> **Note:** The namespace set in `KUBERNETES_NAMESPACE` must already exist in your Kubernetes cluster.
+> **Note:** The namespace set in `KUBEVIRT_NAMESPACE` must already exist in your Kubernetes cluster.
 
 ## Verifying the Deployment
 
