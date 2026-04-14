@@ -4,4 +4,4 @@ type: docs
 weight: 5
 ---
 
-{{< remoteMD "https://raw.githubusercontent.com/dcm-project/enhancements/main/enhancements/service-type-definitions/service-type-definitions.md" >}}
+{{< remoteMD url="service-type-definitions/service-type-definitions.md" base="enhancementsBaseURL" >}}

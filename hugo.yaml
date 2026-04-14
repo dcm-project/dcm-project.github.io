@@ -49,6 +49,7 @@ menu:
 
 params:
   description: Data Center Management - Documentation, ADRs, and resources
+  enhancementsBaseURL: "https://raw.githubusercontent.com/dcm-project/enhancements/main/enhancements"
 
   navbar:
     displayTitle: true

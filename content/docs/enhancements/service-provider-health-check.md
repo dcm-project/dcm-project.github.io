@@ -4,4 +4,4 @@ type: docs
 weight: 9
 ---
 
-{{< remoteMD "https://raw.githubusercontent.com/dcm-project/enhancements/main/enhancements/service-provider-health-check/service-provider-health-check.md" >}}
+{{< remoteMD url="service-provider-health-check/service-provider-health-check.md" base="enhancementsBaseURL" >}}

@@ -1,4 +1,7 @@
-{{ $url := .Get 0 }}
+{{ $url := .Get "url" }}
+{{ with .Get "base" }}
+  {{ $url = printf "%s/%s" (index site.Params .) $url }}
+{{ end }}
 {{ $resource := resources.GetRemote $url }}
 {{ if $resource }}
   {{ $content := $resource.Content }}
