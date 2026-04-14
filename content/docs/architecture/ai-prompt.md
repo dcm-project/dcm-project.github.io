@@ -68,7 +68,7 @@ Effective at the core mission · Easy to use · Easy to implement · Easy to ext
 **Last Updated:** 2026-03  
 **Status:** Architecture complete — 0 unresolved questions — Ready for implementation
 
-**Note on section structure:** This prompt was built cumulatively across multiple design sessions. Sections 0–57 establish the architecture. Sections 58+ record subsequent additions and refinements. Capability counts, path counts, and domain counts in earlier sections reflect the state at the time that section was written. The authoritative current counts are: **331 capabilities across 39 domains · 58 data model docs · 15 specifications · 74 consumer API paths · 61 admin API paths · 109 event payloads across 23 domains · 6 provider types · 2 policy evaluation modes · 9 control plane services · 125 prompt sections.** When earlier sections conflict with later sections, the later section is authoritative. **Infrastructure (doc 51):** 6 provider types: service_provider, information_provider, meta_provider, auth_provider, peer_dcm, process_provider. Credentials and notifications are service_provider resource types. 2 policy evaluation modes: Internal (DCM evaluates via OPA) and External (external provider evaluates). Four data domains (Intent, Requested, Realized, Discovered) in a single PostgreSQL-compatible database. One required infrastructure: PostgreSQL-compatible DB. Authentication (local accounts + JWT), secrets (envelope encryption), and event routing (LISTEN/NOTIFY) are handled internally. OIDC IdP, Vault, Kafka, Redis, Git are optional deployment enhancements. 9 control plane services.
+**Note on section structure:** This prompt was built cumulatively across multiple design sessions. Sections 0–57 establish the architecture. Sections 58+ record subsequent additions and refinements. Capability counts, path counts, and domain counts in earlier sections reflect the state at the time that section was written. The authoritative current counts are: **331 capabilities across 39 domains · 58 data model docs · 15 specifications · 16 ADRs · 74 consumer API paths · 61 admin API paths · 109 event payloads across 23 domains · 6 provider types · 2 policy evaluation modes · 9 control plane services · 104 prompt sections.** When earlier sections conflict with later sections, the later section is authoritative. **Infrastructure (doc 51):** 6 provider types: service_provider, information_provider, meta_provider, auth_provider, peer_dcm, process_provider. Credentials and notifications are service_provider resource types. 2 policy evaluation modes: Internal (DCM evaluates via OPA) and External (external provider evaluates). Four data domains (Intent, Requested, Realized, Discovered) in a single PostgreSQL-compatible database. One required infrastructure: PostgreSQL-compatible DB. Authentication (local accounts + JWT), secrets (envelope encryption), and event routing (LISTEN/NOTIFY) are handled internally. OIDC IdP, Vault, Kafka, Redis, Git are optional deployment enhancements. 9 control plane services.
 
 ---
 
@@ -5770,3 +5770,105 @@ When working on this project, apply these instructions in addition to the number
 236. **Policy Block Resolution** (doc B §18.8) — When a policy blocks a request and no automatic resolution exists, DCM does NOT silently enter an override queue. The request enters POLICY_BLOCKED status and the consumer is notified with actionable guidance: what blocked the request, why, compliant values to fix it, and four resolution options (modify request to be compliant, request override, cancel request, escalate to platform admin). Resolution guidance includes per-field suggestions derived from the blocking policy's constraint output. Consumer acts via `POST /api/v1/requests/{id}:resolve`. Only the "request override" option triggers the override approval flow (§18.9). This is the consumer-facing experience — §18.9 is the admin-facing approval mechanism.
 
 237. **Override approval is one resolution option, not the default** — The pipeline flow is: POLICY_EVALUATION → POLICY_BLOCKED (consumer notified with options) → consumer chooses action → if modify: re-enters pipeline from assembly → if request_override: PENDING_OVERRIDE → approval flow → if cancel: CANCELLED → if escalate: platform admin notified. Two separate timeouts: block timeout (how long before auto-cancel) and override timeout (how long approvers have). Both profile-governed.
+
+## SECTION 103 — APRIL 2026 SESSION: ADRs, WALKTHROUGH, PATTERN CATALOG, REQUIREMENTS (2026-04)
+
+### 103.1 Architecture Decision Records (Rewritten)
+
+16 ADRs in `architecture/adr/`, rewritten to answer "why does this exist?" not "how did we implement it?":
+
+| ADR | Title | One-Line |
+|-----|-------|---------|
+| 001 | Why DCM Exists | Unified management plane for on-prem — governance layer above provisioning tools |
+| 002 | Three Foundational Abstractions | Everything is Data, Provider, or Policy |
+| 003 | Four Lifecycle States | Intent → Requested → Realized → Discovered, immutable, linked by entity_uuid |
+| 004 | Service Catalog & Consumer UX | Four-level hierarchy; consumers declare what, not how |
+| 005 | Provider Abstraction | 6 types with naturalization/denaturalization; any platform, same interface |
+| 006 | Policy Engine | Policy-as-code on every request; 8 types; multi-pass convergence |
+| 007 | Placement Engine | Multi-stage scoring: sovereignty pre-filter → capability → capacity → policy |
+| 008 | Dependency Resolution | Type-level deps → automatic sub-requests; binding fields inject runtime values |
+| 009 | API Gateway & Control Plane | Single entry point; 9 services; deterministic pipeline |
+| 010 | Audit & Tamper Evidence | Merkle tree (RFC 9162); configurable granularity; provable integrity |
+| 011 | Sovereignty & Data Residency | First-class enforcement on every lifecycle op; dual-approval for overrides |
+| 012 | Data Assembly & Layering | Organizational data merges with consumer requests; field-level provenance |
+| 013 | Override & Exception Governance | 5 mechanisms from planned exceptions to dual-approval |
+| 014 | Multi-Tenancy & Isolation | PostgreSQL RLS at database layer |
+| 015 | Minimal Infrastructure | PostgreSQL only required dep; Internal/External delegation for everything else |
+| 016 | Application Definition Language | **OPEN** — How should consumers define multi-resource apps? 4 options under evaluation |
+
+ADR-016 is the key open design question raised by the engineering team (Ondra/machacekondra). Options: API-only, YAML manifests, external DSL (Bicep/CEL), API composition. Comparison to Radius and KRO included. Decision pending team discussion.
+
+### 103.2 End-to-End Walkthrough
+
+`architecture/WALKTHROUGH.md` — 581 lines, 11 stages tracing a VM provision including IP dependency resolution:
+
+1. Consumer submits intent (6 fields)
+2. Layer assembly (5 layers merge → 10+ fields with provenance)
+3. Policy evaluation (GateKeeper, Validation, Transformation — 4 policies)
+4. Dependency resolution (VM requires Network.IPAddress → sub-request created)
+5. IP policy evaluation (sovereignty, subnet isolation, pool selection — 4 policies)
+6. IP realization (InfoBlox IPAM allocates 10.1.45.23)
+7. Dependency injection + VM placement (IP injected, providers scored)
+8. VM dispatch (naturalization to OpenStack Nova with pre-allocated IP)
+9. VM callback (denaturalization, realized state)
+10. Discovery (both VM and IP independently polled, drift comparison)
+11. Audit trail (17 Merkle leaves across 2 entities)
+
+### 103.3 Deployment Pattern Catalog
+
+Patterns are compound Resource Type Specifications — reusable, provider-agnostic blueprints that define collections of resources with dependencies and binding fields. The Pattern Catalog is NOT a new architectural component — it is a curated view of the Resource Type Registry filtered to compound types. All existing DCM machinery (Meta Provider, dependency graphs, binding fields, placement) executes patterns.
+
+Example patterns: Standard Web Application (6 constituents), Secure Data Pipeline, Developer Sandbox, Regulated Database Service, Edge Compute Node.
+
+Pattern interaction with DCM features: each constituent independently policy-evaluated, independently placed, independently discoverable for drift, independently auditable. Decommission reverses dependency order. Rehydration rebuilds in dependency order with current policies.
+
+### 103.4 Platform Requirements Document
+
+`dcm-platform-requirements.md` — 700 lines following enterprise requirements template:
+- 5 personas (Consumer, Platform Engineer, Operator, Policy Owner, Administrator)
+- 31 use cases in summary table, 23 with detailed descriptions
+- Organized by lifecycle: Day 0 (5 UCs), Day 1 (5 UCs), Day 2 (4 UCs), Governance (2 UCs), Platform Ops (3 UCs), Federation (1 UC), Integration (1 UC), Pattern Catalog (1 UC + full overlay)
+- Architecture principles, success outcomes, priority summary (16 P0, 9 P1, 6 P2)
+- 4 open design questions documented
+
+### 103.5 PR Reviews
+
+**PR #50 (selrahal — Nova OpenAPI spec):** Architecture covers via Naturalization/Denaturalization. Nova spec belongs in dcm-examples. OpenStack Nova provider added with registration YAML, deployment manifest, and Go service.
+
+**PR #18 (Fale — Interoperability API + object design RFC):** Superseded by current architecture. Conventions conflict with team's established patterns (camelCase vs snake_case, YAML vs JSON, K8s structure vs flat REST, OpenAPI 3.0.4 vs 3.1.0). Spectral AEP linter worth adopting after 3.1 compatibility testing. Added as DISCUSSION-TOPICS item 7.
+
+### 103.6 Escalation Routing Fix
+
+Doc B §18.8 updated: policy block escalation routes to the responsible policy domain owner (sovereignty admin, security admin, cost admin) — not generic "platform admin." Routing configurable per policy domain and profile. Fixed in doc B, walkthrough, HTML presentation, and requirements document.
+
+### 103.7 Documentation Review Strategy
+
+Engineering team feedback incorporated. Key decisions:
+- ADRs rewritten outward-facing per Ondra's feedback ("why does this exist, not how we implemented it")
+- NotebookLM recommended over raw AI prompt for reproducible onboarding (Piotr's point)
+- Domain-split PRs with reviewer assignments (Gabriel's point)
+- Use cases drive architecture and priorities (Piotr and Ygal's point)
+- Reading guide (proposal 1), session changelogs (proposal 7) still needed
+
+### 103.8 Authoritative Counts Update
+
+| Metric | Value |
+|--------|-------|
+| Data model docs | 58 |
+| Specifications | 15 |
+| ADRs | 16 (+ README) |
+| OpenAPI schemas | 4 |
+| Capabilities | 331 across 39 domains |
+| SQL tables | 18 |
+| Consumer API paths | 74 |
+| Admin API paths | 61 |
+| Event payloads | 109 across 23 domains |
+| Provider types | 6 |
+| Policy evaluation modes | 2 |
+| Control plane services | 9 |
+| Required infrastructure | 1 (PostgreSQL) |
+| Test invariants | 60 |
+| Use cases (Jira) | 30 epics, 249 stories |
+| Use cases (requirements doc) | 31 total, 23 detailed |
+| Prompt sections | 104 |
+
