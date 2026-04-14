@@ -272,7 +272,7 @@ Service Providers (the most common type — realize infrastructure resources) ha
 
 ---
 
-## 10. Meta Provider — Extended Tabs
+## 10. compound service definition — Extended Tabs
 
 ### 10.1 Compound Service Status
 
@@ -282,7 +282,7 @@ Service Providers (the most common type — realize infrastructure resources) ha
 
 ### 10.2 Constituent Provider Health
 
-- Health of each provider this Meta Provider depends on
+- Health of each provider this compound service definition depends on
 - Impact analysis: if Provider X degrades, which compound services are affected
 
 ---

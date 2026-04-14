@@ -708,7 +708,7 @@ data: {"status":"COMPLETED","at":"2026-04-01T02:03:12Z"}
 | `approval_recorded` | A reviewer votes | votes_recorded, quorum_required, quorum_reached |
 | `heartbeat` | Every 30s (keep-alive) | ts |
 
-**Constituent status** (for compound/Meta Provider requests):
+**Constituent status** (for compound/compound service definition requests):
 ```json
 {
   "constituent_status": [

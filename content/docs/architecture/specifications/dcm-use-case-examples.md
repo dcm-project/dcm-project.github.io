@@ -33,7 +33,7 @@ Providers:
   ceph-prod           UUID: pvd-cph-001    Storage Provider — Realized State snapshots
   rabbitmq-prod       UUID: pvd-rmq-001    Message Bus Provider
   servicenow-prod     UUID: pvd-sn-001     ITSM Provider — ServiceNow
-  webapp-meta         UUID: pvd-wam-001    Meta Provider — ApplicationStack.WebApp
+  webapp-meta         UUID: pvd-wam-001    compound service definition — ApplicationStack.WebApp
 
 Data Centers / Zones:
   dc-west-1 / zone-a    Primary production zone
@@ -1308,17 +1308,17 @@ Response:
 
 ---
 
-## 2.9 Meta Provider — Compound WebApp Provisioning
+## 2.9 compound service definition — Compound WebApp Provisioning
 
-`webapp-meta` is a Meta Provider that composes a VM + IP + Firewall Rule + DNS Record into a single `ApplicationStack.WebApp` catalog item. The consumer requests one thing; DCM provisions four.
+`webapp-meta` is a compound service definition that composes a VM + IP + Firewall Rule + DNS Record into a single `ApplicationStack.WebApp` catalog item. The consumer requests one thing; DCM provisions four.
 
-**Compound service definition (registered by Meta Provider):**
+**Compound service definition (registered by compound service definition):**
 
 ```yaml
-meta_provider_registration:
+compound service_registration:
   uuid: pvd-wam-001
   name: webapp-meta
-  display_name: Web Application Stack (Meta Provider)
+  display_name: Web Application Stack (compound service definition)
 
   resource_types_composed:
     - fqn: ApplicationStack.WebApp
@@ -1577,14 +1577,14 @@ X-Client-Cert: <mTLS cert>
 
 ---
 
-## 3.3 Meta Provider Onboarding
+## 3.3 compound service definition Onboarding
 
 ```yaml
 POST /api/v1/admin/providers/register
 Authorization: Bearer reg-tok-meta-001
 
 {
-  "provider_type": "meta_provider",
+  "provider_type": "compound service",
   "name": "Web Application Stack",
   "handle": "providers/meta/webapp-stack",
   "version": "2.0.0",
@@ -1623,7 +1623,7 @@ Authorization: Bearer reg-tok-meta-001
 }
 
 # Validation:
-# V1: meta_provider enabled in profile ✓
+# V1: compound service enabled in profile ✓
 # V2: All constituent resource_types registered in Registry ✓
 # V3: No circular dependencies in constituent graph ✓
 # V4: Decomposition policy handle resolvable ✓

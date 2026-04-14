@@ -87,7 +87,7 @@ provider_type_registry_entry:
 |---|-----------------|-----------------|------------|
 | 1 | `service_provider` | reviewed | all profiles |
 | 2 | `information_provider` | reviewed | all profiles |
-| 3 | `meta_provider` | verified | standard+ |
+| 3 | `compound service` | verified | standard+ |
 | 4 | `(prescribed infrastructure)` | verified | all profiles |
 | 5 | `(optional infrastructure)` | reviewed | dev+ (external endpoints: standard+) |
 | 6 | `external_policy_evaluation` (Mode 1-2) | reviewed | all profiles |
@@ -655,10 +655,10 @@ service_provider_capabilities:
   encryption_at_rest: AES-256
 ```
 
-### 5.9 Meta Provider Capabilities
+### 5.9 compound service definition Capabilities
 
 ```yaml
-meta_provider_capabilities:
+compound service_capabilities:
   constituent_provider_types:
     - service_provider
     - information_provider

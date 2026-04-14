@@ -15,7 +15,7 @@ Any structured artifact with a type, UUID, lifecycle state, fields, data classif
 Any external component DCM calls or that calls DCM. All providers implement the **unified base contract** (registration, health, sovereignty, accreditation, governance matrix enforcement, zero trust) plus a **typed capability extension** that declares what operations they expose.
 
 **Twelve provider types (all implement the same base contract):**
-Service Provider (realize resources) · Information Provider (serve external data) · Storage Provider (persist DCM state) · Meta Provider (compose providers) · Policy Provider (evaluate policies externally) · Credential Provider (manage secrets) · Auth Provider (authenticate identities) · Notification Provider (deliver notifications) · Message Bus Provider (async event streaming) · Registry Provider (serve resource type registry) · Peer DCM (federation — another DCM instance IS a typed provider) · ITSM Provider (bidirectional ITSM integration)
+Service Provider (realize resources) · Information Provider (serve external data) · Storage Provider (persist DCM state) · Policy Provider (evaluate policies externally) · Credential Provider (manage secrets) · Auth Provider (authenticate identities) · Notification Provider (deliver notifications) · Message Bus Provider (async event streaming) · Registry Provider (serve resource type registry) · Peer DCM (federation — another DCM instance IS a typed provider) · ITSM Provider (bidirectional ITSM integration)
 
 **Adding a new provider type** = implement base contract + define capability extension. No core changes.
 
@@ -68,7 +68,7 @@ Effective at the core mission · Easy to use · Easy to implement · Easy to ext
 **Last Updated:** 2026-03  
 **Status:** Architecture complete — 0 unresolved questions — Ready for implementation
 
-**Note on section structure:** This prompt was built cumulatively across multiple design sessions. Sections 0–57 establish the architecture. Sections 58+ record subsequent additions and refinements. Capability counts, path counts, and domain counts in earlier sections reflect the state at the time that section was written. The authoritative current counts are: **331 capabilities across 39 domains · 58 data model docs · 15 specifications · 16 ADRs · 74 consumer API paths · 61 admin API paths · 109 event payloads across 23 domains · 6 provider types · 2 policy evaluation modes · 9 control plane services · 104 prompt sections.** When earlier sections conflict with later sections, the later section is authoritative. **Infrastructure (doc 51):** 6 provider types: service_provider, information_provider, meta_provider, auth_provider, peer_dcm, process_provider. Credentials and notifications are service_provider resource types. 2 policy evaluation modes: Internal (DCM evaluates via OPA) and External (external provider evaluates). Four data domains (Intent, Requested, Realized, Discovered) in a single PostgreSQL-compatible database. One required infrastructure: PostgreSQL-compatible DB. Authentication (local accounts + JWT), secrets (envelope encryption), and event routing (LISTEN/NOTIFY) are handled internally. OIDC IdP, Vault, Kafka, Redis, Git are optional deployment enhancements. 9 control plane services.
+**Note on section structure:** This prompt was built cumulatively across multiple design sessions. Sections 0–57 establish the architecture. Sections 58+ record subsequent additions and refinements. Capability counts, path counts, and domain counts in earlier sections reflect the state at the time that section was written. The authoritative current counts are: **331 capabilities across 39 domains · 58 data model docs · 15 specifications · 16 ADRs · 74 consumer API paths · 61 admin API paths · 109 event payloads across 23 domains · 5 provider types · 2 policy evaluation modes · 9 control plane services · 104 prompt sections.** When earlier sections conflict with later sections, the later section is authoritative. **Infrastructure (doc 51):** 5 provider types: service_provider, information_provider, auth_provider, peer_dcm, process_provider. Credentials and notifications are service_provider resource types. 2 policy evaluation modes: Internal (DCM evaluates via OPA) and External (external provider evaluates). Four data domains (Intent, Requested, Realized, Discovered) in a single PostgreSQL-compatible database. One required infrastructure: PostgreSQL-compatible DB. Authentication (local accounts + JWT), secrets (envelope encryption), and event routing (LISTEN/NOTIFY) are handled internally. OIDC IdP, Vault, Kafka, Redis, Git are optional deployment enhancements. 9 control plane services.
 
 ---
 
@@ -4284,7 +4284,9 @@ SMX-001 through SMX-008 in Capabilities Matrix Domain 21. Total: 167 capabilitie
 
 ## SECTION 62 — META PROVIDER COMPOSABILITY MODEL (doc 30)
 
-### What a Meta Provider Is
+### What a compound service definition Is (formerly "Meta Provider")
+
+> **Architecture update (April 2026):** "Meta Provider" is no longer a separate provider type. The concept is now **Compound Resource Type Specifications** — a Data concept in the Resource Type Registry, orchestrated by the Control Plane. Individual constituents are fulfilled by standard Service Providers. References to "Meta Provider" in earlier sections are historical. The authoritative model is 5 provider types: service_provider, information_provider, auth_provider, peer_dcm, process_provider.
 A **compound Service Provider** that uses other providers in the DCM catalog to fulfill a higher-order service. Its primary contribution is a **compound service definition** declaring constituent resource types, dependencies, and delivery requirements so DCM can place, sequence, and govern the constituents. The Meta Provider is NOT an orchestrator — it is a compound service definition plus a standard Service Provider for its own resource types.
 
 ### Key Principle
@@ -5743,7 +5745,7 @@ When working on this project, apply these instructions in addition to the number
 
 223. **Doc 31 rewritten** as "Credential Management" (979→154 lines) — Internal secrets via PostgreSQL envelope encryption (default). External via Vault-compatible API (optional). Consumer-facing credentials handled by service_provider with Credential.* resource types.
 
-224. **Doc A §7 rewritten** as 6 provider types (556→387 lines) — Removed Storage, Policy, Credential, Notification, Message Bus, Registry, ITSM as separate types. Added Process Provider (ephemeral workflow execution). Service Provider description updated to cover Credential.*/Notification.*/ITSM.* resource types.
+224. **Doc A §7 rewritten** as 5 provider types (556→387 lines) — Removed Storage, Policy, Credential, Notification, Message Bus, Registry, ITSM as separate types. Added Process Provider (ephemeral workflow execution). Service Provider description updated to cover Credential.*/Notification.*/ITSM.* resource types.
 
 225. **Doc 14 §4 rewritten** — "Policy Providers" (4 modes) → "Policy Evaluation Modes" (Internal/External). BBQ-001–009 governance preserved for External mode. Mode numbering removed.
 
@@ -5761,7 +5763,7 @@ When working on this project, apply these instructions in addition to the number
 
 232. **Policy Override Model** (doc B §18) — Five override mechanisms organized by severity: Override Policy (planned exceptions, full lifecycle, cannot target hard policies), Exception Grant (pre-authorized time-bounded waiver with compensating controls, dual-approval for hard), Manual Override (immediate single-request authorization, dual-approval for hard), Dual-Approval Escalation (required modifier for hard policy overrides — two individuals from different roles), Compensating Control Substitution (satisfy policy intent through different mechanisms without actually overriding). Every override produces a Merkle tree audit leaf. Profile-governed: fsi/sovereign require dual-approval on ALL overrides.
 
-233. **Test Framework Specification** (doc 52) — Automated self-reflecting test framework for data model and architecture validation. Generate→Execute→Verify→Analyze→Enhance loop. Machine-readable architecture summary (YAML) covering all fundamentals: 4 data domains, 6 provider types, 10 lifecycle operations, 8 policy types, 5 override mechanisms, 3 audit granularity levels. 56 named invariants across 7 categories: MATCH (7), EVAL (8), OVRD (9), LSCOPE (4), DATA (3), MRKL (6), RLS (3), PROV (7). Edge case categories: policy interaction (7 scenarios), provider (5), data integrity (5), lifecycle (5). Framework outputs enhancement proposals when gaps are discovered.
+233. **Test Framework Specification** (doc 52) — Automated self-reflecting test framework for data model and architecture validation. Generate→Execute→Verify→Analyze→Enhance loop. Machine-readable architecture summary (YAML) covering all fundamentals: 4 data domains, 5 provider types, 10 lifecycle operations, 8 policy types, 5 override mechanisms, 3 audit granularity levels. 56 named invariants across 7 categories: MATCH (7), EVAL (8), OVRD (9), LSCOPE (4), DATA (3), MRKL (6), RLS (3), PROV (7). Edge case categories: policy interaction (7 scenarios), provider (5), data integrity (5), lifecycle (5). Framework outputs enhancement proposals when gaps are discovered.
 
 234. **Override Approval Flow** (doc B §18.8) — When a policy blocks a request and no automatic resolution exists (no active override policy, exception grant, or compensating control), the request enters PENDING_OVERRIDE status. DCM publishes `override.required` event. Notification routing delivers to eligible approvers via internal (LISTEN/NOTIFY → Consumer Portal) and external (webhook to ServiceNow/Jira/Slack) channels. Approver(s) act via Admin API (`POST /api/v1/admin/overrides/{request_uuid}/approve`). For dual-approval: first approval recorded, second notification sent, pipeline held until both arrive or timeout. On approval: pipeline resumes from blocked stage with override injected into Evaluation Context. On timeout: request fails with OVERRIDE_TIMEOUT. Timeout is profile-governed (minimal/dev: PT24H, standard/prod: PT4H, fsi/sovereign: PT1H). `override_requests` table (18th SQL table) stores the complete approval record.
 
@@ -5850,7 +5852,26 @@ Engineering team feedback incorporated. Key decisions:
 - Use cases drive architecture and priorities (Piotr and Ygal's point)
 - Reading guide (proposal 1), session changelogs (proposal 7) still needed
 
-### 103.8 Authoritative Counts Update
+### 103.8 Meta Provider Removal
+
+**Decision:** `meta_provider` removed as a provider type (6 → 5 types). Compound service composition is a **Data** concept (Compound Resource Type Specifications in the Resource Type Registry) orchestrated by the **Control Plane** (Request Processor, Request Orchestrator). Individual constituents are fulfilled by standard **Service Providers**.
+
+**What changed:**
+- Provider type count: 6 → 5 (service_provider, information_provider, auth_provider, peer_dcm, process_provider)
+- Doc 30 retitled: "Meta Provider Model" → "Compound Resource Type Specifications"
+- `provided_by: self` → `provided_by: <provider_uuid>` (a named service provider)
+- Pattern Catalog uses compound specs, not a meta provider type
+- SQL CHECK constraint updated (meta_provider removed from provider_type enum)
+- All ADRs, walkthrough, requirements, pattern overlay, examples repo updated
+- Historical sections in AI prompt retain "Meta Provider" references with architectural note
+
+**What didn't change:**
+- The compound Resource Type Specification YAML format — identical
+- Consumer experience — still requests a catalog item, gets a composed application
+- Dependency graphs, binding fields, compensation — all still work identically
+- Platform engineer authoring — still defines compound specs the same way
+
+### 103.9 Authoritative Counts Update
 
 | Metric | Value |
 |--------|-------|
@@ -5863,7 +5884,7 @@ Engineering team feedback incorporated. Key decisions:
 | Consumer API paths | 74 |
 | Admin API paths | 61 |
 | Event payloads | 109 across 23 domains |
-| Provider types | 6 |
+| Provider types | 5 |
 | Policy evaluation modes | 2 |
 | Control plane services | 9 |
 | Required infrastructure | 1 (PostgreSQL) |

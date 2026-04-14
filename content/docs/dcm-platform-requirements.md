@@ -48,7 +48,7 @@ A developer or application owner who requests and manages infrastructure resourc
 
 ## Platform Engineer
 
-Defines the organizational infrastructure standards that DCM enforces. Authors resource type specifications, data layers (datacenter configs, environment defaults, tenant overrides), policies, and meta provider compositions (compound services like three-tier applications).
+Defines the organizational infrastructure standards that DCM enforces. Authors resource type specifications, data layers (datacenter configs, environment defaults, tenant overrides), policies, and compound resource type specifications (three-tier applications, data pipelines).
 
 - **Key activities:** Define resource types and catalog items, author data layers, write and test policies (shadow mode), create compound service definitions, manage the resource type registry
 
@@ -175,9 +175,9 @@ A consumer developer browses the service catalog, selects "Virtual Machine — S
 
 ### UC-011: Provision a Three-Tier Application
 
-A consumer requests a "Web Application — Standard" catalog item. This is a compound service backed by a meta provider that decomposes into four constituent resources: network port, database VM, application server VM, and load balancer.
+A consumer requests a "Web Application — Standard" catalog item. This is a compound service backed by a compound resource type specification that decomposes into four constituent resources: network port, database VM, application server VM, and load balancer.
 
-The meta provider's resource type spec declares the dependency graph and binding fields:
+The compound resource type spec declares the dependency graph and binding fields:
 - Network port has no dependencies — provisioned first
 - Database depends on network port — IP address injected from port
 - Application server depends on database — connection string and credentials injected
@@ -212,7 +212,7 @@ A consumer sees an estimated cost for their resource request before submitting. 
 
 After submitting a request, the consumer monitors progress through pipeline stages: SUBMITTED → ASSEMBLING → POLICY_EVALUATION → PLACEMENT → DISPATCHED → REALIZING → OPERATIONAL. For compound services, each constituent's status is tracked independently.
 
-**Success criteria:** Real-time status updates via Server-Sent Events (SSE) or polling. Constituent-level tracking for meta provider requests. Failed stages show clear error with remediation guidance.
+**Success criteria:** Real-time status updates via Server-Sent Events (SSE) or polling. Constituent-level tracking for compound service requests. Failed stages show clear error with remediation guidance.
 
 ---
 
@@ -436,7 +436,7 @@ A deployment pattern is a reusable, provider-agnostic blueprint that defines a c
 └──────────────────────────────────────────────────────┘
 ```
 
-**The Pattern Catalog is not a new architectural component.** It is a curated view of the Resource Type Registry filtered to compound resource types. DCM already has all the machinery — the Meta Provider model, dependency graphs, binding fields, and constituent dispatch. The Pattern Catalog adds the curation and consumer experience layer.
+**The Pattern Catalog is not a new architectural component.** It is a curated view of the Resource Type Registry filtered to compound resource types. DCM already has all the machinery — the compound service definition model, dependency graphs, binding fields, and constituent dispatch. The Pattern Catalog adds the curation and consumer experience layer.
 
 ### How a Pattern Maps to DCM Constructs
 
@@ -446,7 +446,7 @@ A deployment pattern is a reusable, provider-agnostic blueprint that defines a c
 | The constituents | Resource Type references with dependency declarations | `constituents[]` in the compound spec |
 | How pieces connect | Binding fields — runtime values from one constituent injected into another | `binding_fields[]` on dependent constituents |
 | What the consumer fills in | Parameterized fields exposed at the pattern level | `fields_from_parent[]` mapping pattern params to constituent fields |
-| Who provides each piece | `provided_by: external` (DCM places) or `provided_by: self` (meta provider handles) | Per-constituent declaration |
+| Who provides each piece | `provided_by: external` (DCM places) or `provided_by: self` (compound service definition handles) | Per-constituent declaration |
 | What happens on failure | Lifecycle policy on the compound spec | `on_constituent_failure: rollback_all` or `continue_degraded` or `notify` |
 | Operational policies | Standard DCM policies scoped to constituent resource types | Policy match on resource_type per constituent |
 

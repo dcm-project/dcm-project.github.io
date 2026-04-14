@@ -10,7 +10,7 @@ Short, reviewable summaries of the major architectural decisions in DCM. Each AD
 | [002](002-three-abstractions.md) | Three Foundational Abstractions | Everything in DCM is Data, Provider, or Policy — no exceptions |
 | [003](003-four-lifecycle-states.md) | Four Lifecycle States | Intent → Requested → Realized → Discovered — immutable states linked by entity_uuid |
 | [004](004-service-catalog-consumer-experience.md) | Service Catalog & Consumer UX | Four-level hierarchy from resource types to catalog items; consumers declare what, not how |
-| [005](005-provider-abstraction.md) | Provider Abstraction | 6 provider types with naturalization/denaturalization; any platform, same interface |
+| [005](005-provider-abstraction.md) | Provider Abstraction | 5 provider types with naturalization/denaturalization; any platform, same interface |
 | [006](006-policy-engine.md) | Policy Engine | Policy-as-code on every request; 8 policy types from gatekeeping to orchestration flow |
 | [007](007-placement-engine.md) | Placement Engine | Multi-stage scoring: sovereignty pre-filter → capability → capacity → policy scoring |
 | [008](008-dependency-resolution.md) | Dependency Resolution | Type-level dependencies trigger automatic sub-requests; binding fields inject runtime values |

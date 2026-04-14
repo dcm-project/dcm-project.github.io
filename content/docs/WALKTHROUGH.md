@@ -576,6 +576,6 @@ Any auditor can:
 - **To understand providers:** Doc A (Provider Contract) — start with §1-5
 - **To understand dependencies:** Doc 07 (Service Dependencies) — type-level deps, payload passing, resolution order
 - **To understand audit:** Doc 16 (Universal Audit) — start with §1-3, then §8 for Merkle tree
-- **To see the three-tier app example:** Doc 04 §8 (Meta Provider with binding fields)
+- **To see the three-tier app example:** Doc 04 §8 (compound resource type specification with binding fields)
 - **To see the IP allocation example:** Doc 04 §4 (IP Address Allocation with pool model)
 - **To see all ADRs:** [Architecture Decision Records](adr/README.md)

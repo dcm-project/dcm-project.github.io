@@ -171,7 +171,7 @@ entity:
 
 **Ownership scope:** When a Tenant owns a `Platform.KubernetesCluster` entity, that Tenant owns everything within the cluster boundary — including cluster-scoped resources (ClusterRoles, StorageClasses, PersistentVolumes, CRDs registered for that cluster). The cluster entity is the ownership boundary. DCM treats the cluster as an opaque resource from a Tenant ownership perspective — the Tenant gets the cluster; what's inside it belongs to them.
 
-**The Meta Provider pattern:** A Cluster-as-a-Service catalog item typically composes multiple constituent resources:
+**The compound service definition pattern:** A Cluster-as-a-Service catalog item typically composes multiple constituent resources:
 ```yaml
 Platform.KubernetesCluster → constituent providers:
   - Compute resources (control plane + worker nodes)
@@ -181,7 +181,7 @@ Platform.KubernetesCluster → constituent providers:
   - Credential issuance (kubeconfig via Credential Provider)
 ```
 
-This is a Meta Provider — the cluster catalog item orchestrates all constituents and presents a single entity to the Tenant.
+This is a compound service definition — the cluster catalog item orchestrates all constituents and presents a single entity to the Tenant.
 
 **Sovereignty and accreditation:** Cluster placement follows the standard Placement Engine model. Sovereignty constraints declared by the Tenant apply to cluster placement — a GDPR-scoped Tenant requesting a cluster gets a cluster placed in an EU sovereignty zone. The CAPI provider (or managed K8s Service Provider) must hold appropriate accreditations.
 

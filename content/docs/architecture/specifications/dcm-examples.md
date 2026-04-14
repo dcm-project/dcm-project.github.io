@@ -215,7 +215,7 @@ Consumer response:
 
 ---
 
-## 1.4 Compound Service — Meta Provider with Dependency Ordering
+## 1.4 Compound Service — compound service definition with Dependency Ordering
 
 A web application stack provisioned as a single catalog item: VM + IP + DNS + LoadBalancer.
 
@@ -241,7 +241,7 @@ ordered := true
 ### Execution
 
 ```
-Meta Provider receives compound dispatch payload:
+compound service definition receives compound dispatch payload:
   component.ip:  { resource_type: Network.IPAddress, depends_on: [] }
   component.vm:  { resource_type: Compute.VirtualMachine, depends_on: [] }
   component.dns: { resource_type: DNS.Record, depends_on: [ip, vm], required: partial }
@@ -1275,16 +1275,16 @@ At expires_at: cred-456 → expired, credential.expired event
 
 ---
 
-## 6.4 Meta Provider — Three-Tier Web Application Stack
+## 6.4 compound service definition — Three-Tier Web Application Stack
 
-A Meta Provider composes multiple atomic service providers into a single catalog
+A compound service definition composes multiple atomic service providers into a single catalog
 item. The consumer requests one thing; DCM orchestrates the constituent parts.
 
-**Meta Provider registration (compound service):**
+**compound service definition registration (compound service):**
 
 ```yaml
-meta_provider_registration:
-  provider_type: meta_provider
+compound service_registration:
+  provider_type: compound service
   display_name: "Three-Tier Web App Stack"
   resource_types_composed:
     - fqn: ApplicationStack.WebApp
@@ -2540,7 +2540,7 @@ resource_type_specification:
   description: >
     A complete web application stack: load balancer, application VMs, and
     database — provisioned and lifecycle-managed as a single compound resource.
-    Implemented by a Meta Provider that orchestrates constituent atomic resources.
+    Implemented by a compound service definition that orchestrates constituent atomic resources.
 
   universal_fields:
 
@@ -3105,7 +3105,7 @@ Entity vm-abc123 → status: OPERATIONAL
 
 ## 9.6 Consumer Request — WebApp as a Service
 
-The WebApp catalog item is backed by a Meta Provider that orchestrates VM, LoadBalancer,
+The WebApp catalog item is backed by a compound service definition that orchestrates VM, LoadBalancer,
 and Database constituent resources — all provisioned as one consumer action.
 
 **Consumer submits:**
@@ -3126,10 +3126,10 @@ POST /api/v1/requests
 }
 ```
 
-**What the Meta Provider orchestrates (transparent to consumer):**
+**What the compound service definition orchestrates (transparent to consumer):**
 
 ```
-Meta Provider decomposes the request into constituent requests:
+compound service definition decomposes the request into constituent requests:
 
   Constituent 1: Compute.VirtualMachine × 3 (web tier)
     os_image: os-img-rhel-9-4          // from platform OS image reference layer

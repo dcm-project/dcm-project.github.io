@@ -56,7 +56,7 @@ The key property: **no single provider owns the pattern.** The PostgreSQL DB mig
 └─────────────────────────────────────────────────────────┘
 ```
 
-**The Pattern Catalog is not a new architectural component.** It is a curated view of the Resource Type Registry filtered to compound resource types. DCM already has all the machinery to execute patterns — the Meta Provider model, dependency graphs, binding fields, and constituent dispatch. What the Pattern Catalog adds is the **curation and consumer experience layer** on top of that machinery.
+**The Pattern Catalog is not a new architectural component.** It is a curated view of the Resource Type Registry filtered to compound resource types. DCM already has all the machinery to execute patterns — the compound service model, dependency graphs, binding fields, and constituent dispatch. What the Pattern Catalog adds is the **curation and consumer experience layer** on top of that machinery.
 
 ---
 
@@ -70,7 +70,7 @@ A single deployment pattern maps to these existing DCM concepts:
 | The constituents | Resource Type references with dependency declarations | `constituents[]` in the compound spec |
 | How pieces connect | Binding fields — runtime values from one constituent injected into another | `binding_fields[]` on dependent constituents |
 | What the consumer fills in | Parameterized fields exposed at the pattern level | `fields_from_parent[]` mapping pattern params → constituent fields |
-| Who provides each piece | `provided_by: external` (DCM places) or `provided_by: self` (meta provider handles) | Per-constituent declaration |
+| Who provides each piece | `provided_by: external` (DCM places) or `provided_by: self` (compound service handles) | Per-constituent declaration |
 | What happens on failure | Lifecycle policy on the compound spec | `on_constituent_failure: rollback_all | continue_degraded | notify` |
 | Operational policies | Standard DCM policies scoped to the pattern's resource type | Policy match on `resource_type = ApplicationStack.WebApp` |
 

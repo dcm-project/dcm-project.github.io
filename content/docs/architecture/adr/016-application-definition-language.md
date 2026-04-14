@@ -9,11 +9,11 @@
 DCM currently has two consumer interfaces:
 
 1. **Single resource** — A JSON payload to the Consumer API: `POST /api/v1/requests { "catalog_item_uuid": "...", "fields": {...} }`
-2. **Compound service** — A Meta Provider resource type spec that defines constituent resources, dependencies, and binding fields in YAML
+2. **Compound service** — A compound resource type spec that defines constituent resources, dependencies, and binding fields in YAML
 
-The single-resource API works well for atomic resources. The compound service definition (Meta Provider model) works for platform engineers who define reusable application templates. But there is a gap:
+The single-resource API works well for atomic resources. The compound service definition (compound service model) works for platform engineers who define reusable application templates. But there is a gap:
 
-**How does a consumer define a custom application?** Not a pre-defined catalog item, but an ad-hoc composition: "I need a database, two app servers, and a load balancer, and here's how they connect." Today, this requires a platform engineer to create a Meta Provider resource type spec first.
+**How does a consumer define a custom application?** Not a pre-defined catalog item, but an ad-hoc composition: "I need a database, two app servers, and a load balancer, and here's how they connect." Today, this requires a platform engineer to create a compound resource type spec first.
 
 Comparable projects have made different choices:
 - **Radius** uses Bicep (a DSL) for application definitions, with Recipes (Terraform/Bicep templates) for infrastructure implementation
@@ -25,13 +25,13 @@ Comparable projects have made different choices:
 What is DCM's application definition language? Options to evaluate:
 
 ### Option A: API-Only (Current State)
-Consumers submit JSON payloads. Compound services require pre-defined Meta Provider resource type specs. Platform engineers author specs; consumers consume them.
+Consumers submit JSON payloads. Compound services require pre-defined compound resource type specs. Platform engineers author specs; consumers consume them.
 
 **Pros:** Simple, API-first, no custom language to learn  
 **Cons:** No self-service composition. Every new application pattern requires a platform engineer.
 
 ### Option B: YAML Application Manifests
-A YAML document defining resources, dependencies, and binding fields — similar to the Meta Provider spec but authored by consumers, not platform engineers.
+A YAML document defining resources, dependencies, and binding fields — similar to the compound resource type spec but authored by consumers, not platform engineers.
 
 ```yaml
 apiVersion: dcm.io/v1
@@ -104,7 +104,7 @@ This decision needs team input. The author's preliminary assessment:
 
 **Option C (external DSL) is least aligned** — it introduces a dependency on an external project's language and tooling, which conflicts with DCM's technology-agnostic principle.
 
-**Regardless of choice, the Meta Provider resource type spec remains the implementation mechanism.** The application definition language is a consumer-facing UX that ultimately produces a Meta Provider spec (or equivalent) for execution.
+**Regardless of choice, the compound resource type spec remains the implementation mechanism.** The application definition language is a consumer-facing UX that ultimately produces a compound resource type spec (or equivalent) for execution.
 
 ## Actions Required
 

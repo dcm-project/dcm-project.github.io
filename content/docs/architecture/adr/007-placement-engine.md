@@ -22,7 +22,7 @@ The Placement Engine selects providers through a multi-stage scoring process:
 
 5. **Selection** — Highest-scoring provider wins. Ties broken by configurable rules.
 
-For compound services (Meta Provider compositions), placement runs per-constituent — the database may land on a different provider than the app server, each scored independently but subject to the same sovereignty constraints.
+For compound services (compound resource type specifications), placement runs per-constituent — the database may land on a different provider than the app server, each scored independently but subject to the same sovereignty constraints.
 
 ## Consequences
 

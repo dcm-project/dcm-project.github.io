@@ -42,7 +42,7 @@ The prompt works with any LLM that supports large context windows (128K+ tokens)
 > → Full flow: POLICY_BLOCKED state, consumer guidance, resolution options
 
 ### Finding specific details
-> "What are the 6 provider types and when would I use each?"  
+> "What are the 5 provider types and when would I use each?"  
 > → Table with type, capability, data direction, and example
 
 > "What SQL tables exist and what's in each one?"  

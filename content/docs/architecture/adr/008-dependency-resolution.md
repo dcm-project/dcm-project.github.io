@@ -22,7 +22,7 @@ Dependencies are declared at two levels:
 3. When a dependency is realized, its output values are injected into dependent resources via dependency payload passing (with full provenance tracking)
 4. Dependent resources are dispatched after their dependencies are satisfied
 
-For compound services, the Meta Provider's resource type spec declares the full dependency graph with binding fields.
+For compound services, the compound resource type spec declares the full dependency graph with binding fields.
 
 ## Consequences
 

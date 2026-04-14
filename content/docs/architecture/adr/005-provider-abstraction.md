@@ -12,7 +12,7 @@ DCM must interact with many external systems: hypervisors, container platforms, 
 
 A **Provider** is any external system DCM interacts with through a defined contract. All providers share a base contract (registration, health check, sovereignty declaration, accreditation, zero trust authentication). What varies is the capability — what operations the provider exposes and what data flows in which direction.
 
-Six provider types:
+Five provider types:
 
 | Type | What it does | Example |
 |------|-------------|---------|

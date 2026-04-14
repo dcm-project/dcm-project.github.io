@@ -62,7 +62,7 @@ The major decisions that need ADRs (roughly 15):
 
 1. One required infrastructure (PostgreSQL only)
 2. Internal auth/secrets/events with optional external delegation
-3. 6 provider types (why these 6, what was consolidated)
+3. 5 provider types (why these 5, what was consolidated)
 4. 2 policy evaluation modes (Internal/External)
 5. Evaluation Context with multi-pass convergence
 6. Constraint Type Registry and Policy Templates
