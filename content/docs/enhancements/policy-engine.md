@@ -4,4 +4,4 @@ type: docs
 weight: 12
 ---
 
-{{< remoteMD "https://raw.githubusercontent.com/dcm-project/enhancements/main/enhancements/policy-engine/policy-engine.md" >}}
+{{< remoteMD url="policy-engine/policy-engine.md" base="enhancementsBaseURL" >}}
