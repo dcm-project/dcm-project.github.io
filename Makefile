@@ -1,6 +1,13 @@
 .PHONY: build serve clean check-spell
 
-SPELLCHECK ?= npx cspell
+# Use cspell when installed; otherwise npx. Set SPELLCHECK when invoking make to override.
+ifeq ($(SPELLCHECK),)
+  ifeq ($(shell command -v cspell 2>/dev/null),)
+    SPELLCHECK := npx cspell
+  else
+    SPELLCHECK := cspell
+  endif
+endif
 FILE ?= **/*.md
 
 build:
@@ -14,4 +21,3 @@ clean:
 
 check-spell:
 	$(SPELLCHECK) "$(FILE)"
-
