@@ -4,7 +4,7 @@ type: docs
 weight: 2
 ---
 
-Providers are infrastructure endpoints registered by service provider instances. Each provider represents a backend system — such as a KubeVirt-enabled Kubernets cluster — that can host virtual machines or other resources managed through DCM.
+Providers are infrastructure endpoints registered by service provider instances. Each provider represents a backend system — such as a KubeVirt-enabled Kubernetes cluster — that can host virtual machines or other resources managed through DCM.
 
 Providers are **read-only** in the CLI. They are created automatically when a service provider instance connects to DCM and registers its available infrastructure.
 

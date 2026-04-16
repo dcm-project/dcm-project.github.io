@@ -52,7 +52,7 @@ rego_code: |
   }
 ```
 
-> **Note:** This REGO code assumes it can access the `service-provider-manager` to get the list of provider. Then, it filters only the `ready` ones, sorts alphabetically and returns the first one
+> **Note:** This REGO code assumes it can access the `service-provider-manager` to get the list of providers. Then, it filters only the `ready` ones, sorts alphabetically and returns the first one
 
 ### Field Reference
 
@@ -62,10 +62,10 @@ rego_code: |
 | `policy_type` | The scope of policy (e.g., `GLOBAL`). |
 | `priority` | Evaluation order. Lower numbers are evaluated first. |
 | `enabled` | Whether the policy is active (`true` or `false`). |
-| `rego_code` | The Rego source code. Must define a `main` rule with `rejected`, and either `rejected_reason` or `selected_provider` fields. |
+| `rego_code` | The Rego source code. Must define a `main` rule with `rejected`, and either `rejection_reason` or `selected_provider` fields. |
 | `label_selector` | `key:value` pairs used to match between the policy and the `metadata.labels` field of the provisioned resource |
 
-> **Note:** `label_selector` may also use the `service_type` key to match based on the resource's `service-type`
+> **Note:** `label_selector` may also use the `service_type` key to match based on the resource's `service_type`
 
 ### Rego Rule Structure
 
@@ -95,7 +95,7 @@ The `main` rule must return an object with the following fields:
 | `patch` | map | No | A dictionary of values to set or override in the request payload. |
 | `constraints` | map | No | Field constraints for subsequent policies, following [JSON Schema (draft 2020-12)](https://json-schema.org/draft/2020-12/json-schema-validation). Supports `const` (immutable), numeric constraints (`minimum`, `maximum`, `multipleOf`), string patterns (`pattern`, `minLength`, `maxLength`), enumerations (`enum`), array constraints (`minItems`, `maxItems`), and conditional logic (`if`/`then`/`else`). |
 
-> **Note:** While no single policy is required to set the `selected_provider` field, the combination of all processed polices must set one; otherwise, placement will fail.
+> **Note:** While no single policy is required to set the `selected_provider` field, the combination of all processed policies must set one; otherwise, placement will fail.
 
 ### Create Command
 

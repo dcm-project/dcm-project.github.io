@@ -47,7 +47,7 @@ spec:
 |-------|---------|
 | `display_name` | An optional human-readable name shown in listings and the UI. |
 | `spec.catalog_item_id` | References the UID of an existing catalog item to deploy from. |
-| `spec.user_values` | Sets of overrides for fields allowed by the catalog item's `fields` array. Only fields with `editable_fields: true` can be customized here. |
+| `spec.user_values` | Sets of overrides for fields allowed by the catalog item's `fields` array. Only fields with `editable: true` can be customized here. |
 | `spec.user_values[].path` | Path corresponding to the `path` key in the `catalog_item`'s `fields` item |
 
 > **Note:** Any values provided in `user_values` that are not permitted by the catalog item's `validation_schema` will be rejected. Check the catalog item's `editable_fields` to see which fields you can override.
@@ -164,7 +164,7 @@ Rehydration refreshes an instance by running the provisioning process again. Thi
 - The underlying resource needs to be recreated or updated.
 - Placement policies have changed and you want the instance to be re-evaluated against the current configuration.
 
-> **Note:** Rehydration will first provision the new resource before trying to delete the old one. Make sure to update and references (e.g. DNS) if needed
+> **Note:** Rehydration will first provision the new resource before trying to delete the old one. Make sure to update any references (e.g. DNS) if needed
 
 ## Deleting an Instance
 

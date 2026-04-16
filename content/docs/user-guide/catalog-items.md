@@ -70,7 +70,7 @@ spec:
 | `api_version` | Ties the catalog item to a specific schema version (e.g., `v1alpha1`). |
 | `display_name` | A human-readable name shown in listings and the UI. |
 | `spec.service_type` | Corresponding service type |
-| `spec.fields` | List of fields with const or users values |
+| `spec.fields` | List of fields with const or user values |
 | `spec.fields[].path` | Path of the field within the `service_type` specification |
 | `spec.fields[].display_name` |  A human-readable name shown in listings and the UI |
 | `spec.fields[].editable` | Specify whether the user may edit the value |
