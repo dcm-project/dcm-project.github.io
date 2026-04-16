@@ -299,7 +299,7 @@ Policy Engine evaluates drift record:
 Notifications dispatched:
   Owner: "Critical unsanctioned change on vm-0a1b2c3d: memory_gb 8→16"
   Platform Admin: same (urgency: critical)
-  SRE on-call: same (via PagerDuty Notification Provider)
+  SRE on-call: same (via PagerDuty notification service)
 
 If consumer submits: REVERT
 → New request submitted from Realized State (memory_gb: 8)
@@ -760,7 +760,7 @@ OPA response:
 DCM Policy Engine reads result → allow → pipeline continues.
 ```
 
-## 2.4 Notification Provider — Relationship Graph Audience
+## 2.4 notification service — Relationship Graph Audience
 
 ```
 Event: entity.decommissioning (VLAN-100 entering DECOMMISSIONING state)
@@ -1059,11 +1059,11 @@ Response 202: { "registration_uuid": "reg-001", "status": "VALIDATING",
 
 # Section 6 — Provider Type Examples
 
-## 6.1 Storage Provider — State Store Write and Read
+## 6.1 data store — State Store Write and Read
 
-A Storage Provider persists and streams DCM internal state. This example shows
+A data store persists and streams DCM internal state. This example shows
 the full lifecycle: DCM writing a Requested State record to a PostgreSQL-backed
-Storage Provider, followed by the Request Orchestrator reading it back.
+data store, followed by the Request Orchestrator reading it back.
 
 **Provider registration excerpt:**
 
@@ -1202,9 +1202,9 @@ DCM response:
 
 ---
 
-## 6.3 Credential Provider — SSH Key Issuance After VM Realization
+## 6.3 credential management service — SSH Key Issuance After VM Realization
 
-After a VM is realized, the Credential Provider issues an SSH key pair to the
+After a VM is realized, the credential management service issues an SSH key pair to the
 requesting consumer — scoped to that specific entity.
 
 **Flow:**
@@ -1233,7 +1233,7 @@ requesting consumer — scoped to that specific entity.
        "ttl": "P90D"
      }
 
-5. Credential Provider (HashiCorp Vault) response:
+5. credential management service (HashiCorp Vault) response:
      {
        "credential_uuid": "cred-456",
        "public_key": "ssh-ed25519 AAAA...",
@@ -1259,7 +1259,7 @@ requesting consumer — scoped to that specific entity.
 **Rotation at P45D (50% of lifetime):**
 
 ```
-Credential Provider fires: credential.rotation_due
+credential management service fires: credential.rotation_due
   credential_uuid: cred-456
   entity_uuid: vm-abc123
   days_until_expiry: 45
@@ -1368,9 +1368,9 @@ Consumer entity: ApplicationStack.WebApp
 
 ---
 
-## 6.5 ITSM Provider — ServiceNow Change Request Lifecycle
+## 6.5 ITSM integration — ServiceNow Change Request Lifecycle
 
-An ITSM Provider creates and manages change tickets in ServiceNow as part of
+An ITSM integration creates and manages change tickets in ServiceNow as part of
 DCM request lifecycle gates. The ITSM ticket becomes the approval gate.
 
 **Provider registration:**
@@ -1404,7 +1404,7 @@ itsm_provider_registration:
      change_type: standard
      risk_level: medium
 
-3. DCM → ITSM Provider: create_change_request
+3. DCM → ITSM integration: create_change_request
      POST https://corp.service-now.com/api/dcm/v1/changes
      {
        "short_description": "DCM: Provision Compute.VirtualMachine",
@@ -1434,17 +1434,17 @@ itsm_provider_registration:
    }
 
 6. DCM resumes request dispatch → VM provisioned
-   ITSM Provider: update_change_request → state: Implement
+   ITSM integration: update_change_request → state: Implement
 
-7. VM realized → ITSM Provider: close_change_request
+7. VM realized → ITSM integration: close_change_request
      { "state": "Closed Complete", "close_notes": "DCM: entity vm-xyz OPERATIONAL" }
 ```
 
 ---
 
-## 6.6 Message Bus Provider — External System Event Bridge
+## 6.6 event routing service — External System Event Bridge
 
-A Message Bus Provider bridges DCM events to external messaging infrastructure.
+A event routing service bridges DCM events to external messaging infrastructure.
 This example shows DCM publishing entity lifecycle events to an Apache Kafka topic.
 
 **Provider registration:**
@@ -1479,7 +1479,7 @@ DCM internal: entity.lifecycle_changed event fires
   to_state: OPERATIONAL
   tenant_uuid: t1t2...
 
-Message Bus Provider receives event, publishes to Kafka:
+event routing service receives event, publishes to Kafka:
   Topic: dcm.infrastructure.lifecycle
   Key: vm-abc123
   Value: {
@@ -1503,10 +1503,10 @@ External consumer (monitoring pipeline) processes message:
 
 ```
 Kafka publish fails (broker unreachable):
-  Message Bus Provider: retry with exponential backoff (3 attempts)
+  event routing service: retry with exponential backoff (3 attempts)
   After threshold: publish to dcm.dlq with failure metadata
   Fire: message_bus.delivery_failed (urgency: medium) → Platform Admin
-  DCM: event stored in Message Bus Provider's local queue for replay
+  DCM: event stored in event routing service's local queue for replay
 ```
 
 ---

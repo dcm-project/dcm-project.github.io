@@ -5,7 +5,7 @@
 
 **Document Status:** 🔄 In Progress
 **Document Type:** Specification — Provider Management Interface
-**Related Documents:** [Unified Provider Contract](../data-model/A-provider-contract.md) | [OIS Specification](dcm-operator-interface-spec.md) | [Registration Specification](dcm-registration-spec.md) | [Admin GUI Specification](dcm-admin-gui-spec.md) | [Credential Provider Model](../data-model/31-credential-provider-model.md)
+**Related Documents:** [Unified Provider Contract](../data-model/A-provider-contract.md) | [OIS Specification](dcm-operator-interface-spec.md) | [Registration Specification](dcm-registration-spec.md) | [Admin GUI Specification](dcm-admin-gui-spec.md) | [credential management service Model](../data-model/31-credential-provider-model.md)
 
 > **Status:** Draft — Ready for implementation feedback
 >
@@ -129,7 +129,7 @@ Service Providers (the most common type — realize infrastructure resources) ha
 
 ---
 
-## 4. Credential Provider — Extended Tabs
+## 4. credential management service — Extended Tabs
 
 ### 4.1 Credential Inventory
 
@@ -196,7 +196,7 @@ Service Providers (the most common type — realize infrastructure resources) ha
 
 ---
 
-## 6. Policy Provider — Extended Tabs
+## 6. External Policy Evaluator — Extended Tabs
 
 ### 6.1 Policy Inventory
 
@@ -239,7 +239,7 @@ Service Providers (the most common type — realize infrastructure resources) ha
 
 ---
 
-## 8. Storage Provider — Extended Tabs
+## 8. data store — Extended Tabs
 
 ### 8.1 Store Health
 
@@ -254,16 +254,16 @@ Service Providers (the most common type — realize infrastructure resources) ha
 
 ---
 
-## 9. Notification and Message Bus Providers — Extended Tabs
+## 9. Notification and event routing services — Extended Tabs
 
-### 9.1 Notification Provider
+### 9.1 notification service
 
 - Delivery channel status: email, Slack, PagerDuty, etc.
 - Delivery success rate (last 24h)
 - Failed deliveries with retry status
 - Audience routing test: send a test notification to a specific audience
 
-### 9.2 Message Bus Provider
+### 9.2 event routing service
 
 - Broker connectivity status
 - Topic / stream inventory: DCM topics and consumer group lag
@@ -287,9 +287,9 @@ Service Providers (the most common type — realize infrastructure resources) ha
 
 ---
 
-## 11. Registry Provider and Peer DCM — Extended Tabs
+## 11. Resource Type Registry and Peer DCM — Extended Tabs
 
-### 11.1 Registry Provider
+### 11.1 Resource Type Registry
 
 - Resource type registry sync status: last sync, version, record count
 - Type registration submissions pending review

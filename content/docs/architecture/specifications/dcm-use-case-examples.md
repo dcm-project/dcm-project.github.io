@@ -28,11 +28,11 @@ Actors:
 Providers:
   vmware-prod         UUID: pvd-vm-001     Service Provider — Compute.VirtualMachine
   netbox-prod         UUID: pvd-net-001    Information Provider — Network.IPAddress
-  vault-prod          UUID: pvd-vlt-001    Credential Provider
+  vault-prod          UUID: pvd-vlt-001    credential management service
   freeipa-prod        UUID: pvd-ipa-001    Auth Provider — FreeIPA/LDAP
-  ceph-prod           UUID: pvd-cph-001    Storage Provider — Realized State snapshots
-  rabbitmq-prod       UUID: pvd-rmq-001    Message Bus Provider
-  servicenow-prod     UUID: pvd-sn-001     ITSM Provider — ServiceNow
+  ceph-prod           UUID: pvd-cph-001    data store — Realized State snapshots
+  rabbitmq-prod       UUID: pvd-rmq-001    event routing service
+  servicenow-prod     UUID: pvd-sn-001     ITSM integration — ServiceNow
   webapp-meta         UUID: pvd-wam-001    compound service definition — ApplicationStack.WebApp
 
 Data Centers / Zones:
@@ -1089,7 +1089,7 @@ auth_provider_registration:
 
   protocol: ldap
   endpoint: ldaps://ipa.corp.example:636
-  bind_credential_uuid: crd-ipa-bind-001   # stored in Credential Provider
+  bind_credential_uuid: crd-ipa-bind-001   # stored in credential management service
 
   group_mapping:
     # FreeIPA groups → DCM roles
@@ -1121,7 +1121,7 @@ auth_provider_registration:
 
 ---
 
-## 2.6 Storage Provider — Ceph Realized State Snapshots
+## 2.6 data store — Ceph Realized State Snapshots
 
 **Registration:**
 
@@ -1164,7 +1164,7 @@ storage_write_request:
 
 ---
 
-## 2.7 Message Bus Provider — RabbitMQ Event Routing
+## 2.7 event routing service — RabbitMQ Event Routing
 
 **Registration:**
 
@@ -1209,13 +1209,13 @@ publish:
     from_status: authorized
     to_status: revoked
 
-# 2. Notification Provider subscribes and routes to appropriate channels
+# 2. notification service subscribes and routes to appropriate channels
 subscribe:
   queue: dcm.notifications.critical
   binding: "#.critical"            # all critical urgency events
-  handler: service_provider    # Notification Provider consumes and routes
+  handler: service_provider    # notification service consumes and routes
 
-# 3. ITSM Provider subscribes to provider events
+# 3. ITSM integration subscribes to provider events
 subscribe:
   queue: dcm.itsm.provider-events
   binding: "provider.#"            # all provider domain events
@@ -1224,7 +1224,7 @@ subscribe:
 
 ---
 
-## 2.8 Credential Provider — Vault Secret Fetch at Dispatch Time
+## 2.8 credential management service — Vault Secret Fetch at Dispatch Time
 
 **Registration:**
 
@@ -1232,7 +1232,7 @@ subscribe:
 service_provider_registration:
   uuid: pvd-vlt-001
   name: vault-prod
-  display_name: HashiCorp Vault — Credential Provider
+  display_name: HashiCorp Vault — credential management service
   version: "1.0.0"
   endpoint: https://vault.corp.example:8200
 
@@ -1262,7 +1262,7 @@ credential_fetch_request:
   requesting_component: request_payload_processor
   purpose: auth_provider_bind
 
-# DCM calls Credential Provider:
+# DCM calls credential management service:
 # GET vault.corp.example:8200/v1/secret/data/dcm/providers/auth/freeipa-bind
 # Vault authenticates DCM via AppRole, returns:
 # { "data": { "password": "s3cr3t-b1nd-p4ss" } }
@@ -1382,7 +1382,7 @@ POST /api/v1/requests
 
 ---
 
-## 2.10 ITSM Provider — ServiceNow Incident on Provider Health Change
+## 2.10 ITSM integration — ServiceNow Incident on Provider Health Change
 
 **Setup:** `servicenow-prod` is registered and configured to create incidents on provider health events.
 
@@ -1429,7 +1429,7 @@ event:
     failure_count: 3
     detail: "Health endpoint unreachable: connection timeout"
 
-# ITSM Provider receives via Message Bus
+# ITSM integration receives via Message Bus
 # Creates ServiceNow incident:
 
 servicenow_api_call:
@@ -1696,10 +1696,10 @@ PATCH /api/v1/admin/policies/compliance/pci/card-data-network-isolation
 
 ---
 
-## 4.2 OPA Bundle Delivery to Policy Provider
+## 4.2 OPA Bundle Delivery to External Policy Evaluator
 
 ```yaml
-# OPA sidecar (Policy Provider) registered:
+# OPA sidecar (External Policy Evaluator) registered:
 external_policy_evaluation_registration:
   uuid: pvd-opa-001
   name: opa-compliance-sidecar

@@ -33,7 +33,7 @@
 - **Action required:** Discussion with Kessel development team to validate assumptions before any implementation work begins
 - Key questions: API stability, sovereign/air-gapped deployment model, SpiceDB schema extensibility, resource type registry extensibility, HA/DR patterns
 - **Do not implement until alignment confirmed** — document is for discussion only
-- Two integration paths evaluated: Kessel Relations as Auth Provider (checks 1-2 of five-check model), Kessel Inventory as Discovered State Storage Provider
+- Two integration paths evaluated: Kessel Relations as Auth Provider (checks 1-2 of five-check model), Kessel Inventory as Discovered State data store
 - 10 blocking items identified in doc 44 Section 10
 
 ### 4. Governance Questions
@@ -99,7 +99,7 @@
 **Priority:** P2  
 **Status:** 🟢 Resolved
 **Resolved:** 2026-03
-**Resolution:** Notification Model (doc 23) supersedes standalone webhooks. Webhooks are one delivery channel within Notification Providers. Full event taxonomy in doc 33 (Event Catalog). See AI Prompt Sections 14, 25, 48.  
+**Resolution:** Notification Model (doc 23) supersedes standalone webhooks. Webhooks are one delivery channel within the notification model. Full event taxonomy in doc 33 (Event Catalog). See AI Prompt Sections 14, 25, 48.  
 **Raised:** 2026-03  
 
 #### Description

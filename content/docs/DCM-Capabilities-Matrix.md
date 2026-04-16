@@ -547,12 +547,12 @@
 
 | ID | Capability | Consumer | Service Provider | Platform/Admin | Depends On |
 |----|-----------|---------|---------|---------------|-----------|
-| ITSM-001 | ITSM Provider Registration | — | Register as ITSM Provider with declared capabilities (supported_actions, itsm_system, field_mapping_ref, cmdb_ci_type_map); implement standard OIS health check | Register ITSM Providers; review and approve ITSM Provider registrations; configure inbound webhook authentication | PRV-001, CPX-001 |
+| ITSM-001 | ITSM integration Registration | — | Register as ITSM integration with declared capabilities (supported_actions, itsm_system, field_mapping_ref, cmdb_ci_type_map); implement standard OIS health check | Register ITSM integrations; review and approve ITSM integration registrations; configure inbound webhook authentication | PRV-001, CPX-001 |
 | ITSM-002 | Outbound ITSM Record Creation | View ITSM references on resource entities (change request, incident, CMDB CI links with deep links to ITSM system) | Receive action requests from DCM; create/update records in ITSM system; return record ID for storage on entity | Configure ITSM Policies (create_change_request, create_incident, update_cmdb_ci); configure block_until_created for compliance gates | ITSM-001, POL-001 |
 | ITSM-003 | Inbound ITSM Approval Routing | — | Verify HMAC signature on inbound webhook; forward ITSM approval decisions to DCM Admin API approval vote endpoint | Configure inbound webhook secret (secrets management); monitor approval routing from ITSM systems (ServiceNow CAB, Jira workflow) | ITSM-001, CPX-001, ATM-001 |
 | ITSM-004 | ITSM Policy Authoring | — | — | Author ITSM Action policies with template expressions; configure shadow validation; configure on_failure behavior; use block_until_created for pipeline gates (with mandatory timeout per ITSM-005) | ITSM-001, POL-001 |
 | ITSM-005 | CMDB Synchronization | View CMDB CI reference on resource entities; CI auto-created on realization, auto-retired on decommission | Receive create_cmdb_ci and retire_cmdb_ci actions; maintain dcm_entity_uuid correlation on CMDB CI records | Configure CMDB CI type mapping per resource type; monitor CMDB sync failures | ITSM-001, ITSM-002 |
-| ITSM-006 | ITSM Field Mapping Declaration | — | — | Declare field mappings between DCM entity fields and ITSM CI types in ITSM Provider config; validate against Resource Type Specs | ITSM-001 |
+| ITSM-006 | ITSM Field Mapping Declaration | — | — | Declare field mappings between DCM entity fields and ITSM CI types in ITSM integration config; validate against Resource Type Specs | ITSM-001 |
 | ITSM-007 | ITSM Policy Template Expression Validation | — | — | Validate template expressions in ITSM Policy action_payload at policy activation; reject unresolvable expressions | ITSM-001, POL-003 |
 
 ---

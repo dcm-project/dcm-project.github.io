@@ -526,7 +526,7 @@ References are stored as business data fields on the entity — they follow the 
 
 ### 8.2 ITSM Event Webhook Integration
 
-DCM fires lifecycle events to the Message Bus. An ITSM Notification Provider subscribes to these events and creates/updates ITSM records accordingly:
+DCM fires lifecycle events to the Message Bus. An ITSM notification service subscribes to these events and creates/updates ITSM records accordingly:
 
 | DCM Event | ITSM Action (configurable) |
 |-----------|---------------------------|
@@ -537,7 +537,7 @@ DCM fires lifecycle events to the Message Bus. An ITSM Notification Provider sub
 | `drift.detected` (significant/critical) | Create Incident in ITSM |
 | `entity.decommissioned` | Retire CMDB CI; close related Change Requests |
 
-This is implemented as a **Notification Provider** registered in DCM — a webhook consumer that translates DCM events to ITSM API calls. No changes to DCM core are needed.
+This is implemented as a **notification service** registered in DCM — a webhook consumer that translates DCM events to ITSM API calls. No changes to DCM core are needed.
 
 ### 8.3 ITSM Ticket as Approval Mechanism
 
@@ -547,7 +547,7 @@ For organizations that require ITSM change board approval, DCM's `authorized` ti
 [Request reaches authorized tier → approval required]
   │
   ▼ DCM fires request.requires_approval
-  │   Notification Provider creates Change Request in ServiceNow
+  │   notification service creates Change Request in ServiceNow
   │
   ▼ Change Board reviews in ServiceNow (existing process unchanged)
   │   Approval decision → ServiceNow calls DCM Admin API:
@@ -586,7 +586,7 @@ ITSM References
 
 DCM entities are the **system of record** for realized state. The CMDB is a **consumer** of DCM data, not a producer. CMDB sync flows one way: DCM → CMDB.
 
-The sync is implemented via the Notification Provider subscription to `entity.*` events. A CMDB sync Notification Provider maps DCM entity fields to CMDB CI attributes and calls the CMDB API on every state change.
+The sync is implemented via the notification service subscription to `entity.*` events. A CMDB sync notification service maps DCM entity fields to CMDB CI attributes and calls the CMDB API on every state change.
 
 **CMDB field mapping** is declared in the provider registration — it is not hardcoded. Different CMDB systems (ServiceNow CMDB, iTop, Device42) use the same event subscription pattern with different field mapping configurations.
 

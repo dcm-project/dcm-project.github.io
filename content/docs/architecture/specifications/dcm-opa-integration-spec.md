@@ -11,7 +11,7 @@
 >
 > This specification has been promoted from Work in Progress to Draft status. All questions resolved. All 7 policy types validated with working Rego examples. OPA/Rego confirmed as complete reference implementation. It is ready for implementation feedback but has not yet been formally reviewed for final release.
 >
-> This specification defines the OPA integration contract for DCM Policy Providers. It is published to share design direction and invite feedback. Do not build production integrations against this specification until it reaches draft status.
+> This specification defines the OPA integration contract for DCM External Policy Evaluators. It is published to share design direction and invite feedback. Do not build production integrations against this specification until it reaches draft status.
 
 **Version:** 0.1.0-draft
 **Status:** Draft — Ready for implementation feedback

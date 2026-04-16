@@ -22,7 +22,7 @@ info:
 
     - **Layer 2 — Provider Callback Credential:** Every call requires an `Authorization: Bearer`
       header containing the provider's active callback credential. This credential is a
-      `dcm_interaction` type credential issued by DCM's Credential Provider at activation time.
+      `dcm_interaction` type credential issued by DCM's credential management system at activation time.
       It is scoped to the specific `provider_uuid` and a set of allowed operations. It is
       short-lived (profile-governed: PT15M for fsi/sovereign, PT1H for standard) and must be
       rotated before expiry. DCM initiates rotation automatically.
@@ -375,7 +375,7 @@ components:
       description: |
         Short-lived provider interaction credential issued by DCM at registration time.
         Scoped to the specific provider UUID. Must be rotated before expiry. Rotation
-        is managed via the Credential Provider integration declared at registration.
+        is managed via the credential management system integration declared at registration.
 
   parameters:
 
@@ -567,7 +567,7 @@ components:
           items: { type: string }
         credential_ref:
           type: string
-          description: Reference to the provider interaction credential (retrieve via Credential Provider)
+          description: Reference to the provider interaction credential (retrieve via credential management system)
         credential_expires_at:
           type: string
           format: date-time

@@ -96,7 +96,7 @@ provider_type_registry_entry:
 | 9 | `auth_provider` | verified | all profiles |
 | 10 | `service_provider` | reviewed | all profiles |
 
-Note: Internal and External Policy Providers are treated as a separate registry entry from Mode 1-2 due to the elevated trust requirements.
+Note: Internal and External External Policy Evaluators are treated as a separate registry entry from Mode 1-2 due to the elevated trust requirements.
 
 ---
 
@@ -491,7 +491,7 @@ information_provider_capabilities:
     cache_invalidation_webhook: /invalidate
 ```
 
-### 5.3 Storage Provider Capabilities
+### 5.3 data store Capabilities
 
 ```yaml
 (prescribed infrastructure)_capabilities:
@@ -526,7 +526,7 @@ information_provider_capabilities:
     tamper_evident: true
 ```
 
-### 5.4 Policy Provider Capabilities
+### 5.4 External Policy Evaluator Capabilities
 
 ```yaml
 external_policy_evaluation_capabilities:
@@ -584,7 +584,7 @@ auth_provider_capabilities:
   builtin: false                       # true for DCM's built-in auth provider
 ```
 
-### 5.6 Notification Provider Capabilities
+### 5.6 notification service Capabilities
 
 ```yaml
 service_provider_capabilities:
@@ -615,7 +615,7 @@ service_provider_capabilities:
   sovereignty_aware_delivery: true    # checks endpoint jurisdiction before delivery
 ```
 
-### 5.7 Credential Provider Capabilities
+### 5.7 credential management service Capabilities
 
 ```yaml
 service_provider_capabilities:
@@ -639,7 +639,7 @@ service_provider_capabilities:
   dynamic_secrets: true               # generate credentials on demand
 ```
 
-### 5.8 Message Bus Provider Capabilities
+### 5.8 event routing service Capabilities
 
 ```yaml
 (optional infrastructure)_capabilities:

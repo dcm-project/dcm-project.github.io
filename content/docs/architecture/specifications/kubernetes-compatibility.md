@@ -166,7 +166,7 @@ entity:
     kubernetes_version: "1.29"
     node_count: 3
     api_endpoint: "https://cluster-01.eu-west.example.com"
-    kubeconfig_ref: <credential-provider-ref>  # via Credential Provider
+    kubeconfig_ref: <credential-provider-ref>  # via credential management service
 ```
 
 **Ownership scope:** When a Tenant owns a `Platform.KubernetesCluster` entity, that Tenant owns everything within the cluster boundary — including cluster-scoped resources (ClusterRoles, StorageClasses, PersistentVolumes, CRDs registered for that cluster). The cluster entity is the ownership boundary. DCM treats the cluster as an opaque resource from a Tenant ownership perspective — the Tenant gets the cluster; what's inside it belongs to them.
@@ -178,7 +178,7 @@ Platform.KubernetesCluster → constituent providers:
   - Network resources (load balancer, ingress)
   - Storage resources (CSI driver + storage class)
   - DNS records (cluster API endpoint)
-  - Credential issuance (kubeconfig via Credential Provider)
+  - Credential issuance (kubeconfig via credential management service)
 ```
 
 This is a compound service definition — the cluster catalog item orchestrates all constituents and presents a single entity to the Tenant.

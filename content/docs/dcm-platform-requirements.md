@@ -340,21 +340,21 @@ An organization runs two DCM instances: DCM-EMEA (EU datacenters) and DCM-APAC (
 
 ### UC-090: ITSM Integration (ServiceNow Change Management)
 
-An organization requires that all infrastructure provisioning creates change records in ServiceNow, updates are tracked through CMDB configuration items, and decommission retires the CI. DCM integrates with ServiceNow as an **ITSM Provider** — a bidirectional integration that enriches DCM entities with ITSM metadata without making ServiceNow a required dependency.
+An organization requires that all infrastructure provisioning creates change records in ServiceNow, updates are tracked through CMDB configuration items, and decommission retires the CI. DCM integrates with ServiceNow via a **process_provider** — a bidirectional integration that enriches DCM entities with ITSM metadata without making ServiceNow a required dependency.
 
 **Design principle:** DCM replaces the infrastructure ticket as the provisioning mechanism. ITSM integration is additive — it enriches, it does not gate (unless explicitly configured to do so).
 
 **Outbound flow (DCM → ServiceNow):**
 
-1. **ITSM Policy evaluates** — An ITSM Action policy (the 8th policy type) fires on DCM lifecycle events. It is a side-effect policy: it triggers ITSM actions but does not block the pipeline by default.
+1. **ITSM Policy evaluates** — An ITSM Action policy fires on DCM lifecycle events. It is a side-effect policy: it triggers ITSM actions but does not block the pipeline by default.
 
-2. **On `request.dispatched`** — The ITSM Provider creates a ServiceNow change request (CHG record) containing the request details, requesting actor, tenant, resource type, and placement decision. The CHG number is stored on the DCM entity as `business_data.itsm_references[].external_id`.
+2. **On `request.dispatched`** — The ITSM integration creates a ServiceNow change request (CHG record) containing the request details, requesting actor, tenant, resource type, and placement decision. The CHG number is stored on the DCM entity as `business_data.itsm_references[].external_id`.
 
-3. **On `entity.realized`** — The ITSM Provider updates the change request to "Implemented" and creates or updates a CMDB Configuration Item (CI) with the realized resource's details (IP address, provider, datacenter, ownership).
+3. **On `entity.realized`** — The ITSM integration updates the change request to "Implemented" and creates or updates a CMDB Configuration Item (CI) with the realized resource's details (IP address, provider, datacenter, ownership).
 
-4. **On `entity.updated`** — The ITSM Provider updates the CMDB CI and creates a new change task linked to the parent CHG.
+4. **On `entity.updated`** — The ITSM integration updates the CMDB CI and creates a new change task linked to the parent CHG.
 
-5. **On `entity.decommissioned`** — The ITSM Provider closes the change request, retires the CMDB CI, and updates the CI's lifecycle status.
+5. **On `entity.decommissioned`** — The ITSM integration closes the change request, retires the CMDB CI, and updates the CI's lifecycle status.
 
 **Inbound flow (ServiceNow → DCM):**
 
