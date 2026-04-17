@@ -61,10 +61,10 @@ All commands support three output formats via the `-o` flag:
 - **`json`** — Structured JSON output, useful for scripting and automation.
 - **`yaml`** — YAML output.
 
-For example, to get the CLI version as JSON:
+For example, to list providers as JSON:
 
 ```bash
-dcm version -o json
+dcm sp provider list -o json
 ```
 
 ## Shell Completion
