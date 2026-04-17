@@ -61,12 +61,15 @@ Example JSON output:
 
 ```json
 {
-  "id": "3f8a1b2c-4d5e-6f7a-8b9c-0d1e2f3a4b5c",
-  "name": "kubevirt-cluster-01",
+  "create_time": "2026-04-15T18:37:45.550963Z",
+  "endpoint": "http://kubevirt-service-provider-main:8081/api/v1alpha1/vms",
+  "health_status": "ready",
+  "status": "registered",
+  "id": "9a0d35e0-4ed5-4728-a78e-c6ad61cdaab4",
+  "name": "kubevirt-main",
+  "schema_version": "v1alpha1",
   "service_type": "vm",
-  "status": "REGISTERED",
-  "health": "HEALTHY",
-  "create_time": "2026-01-15T08:30:00Z"
+  "update_time": "2026-04-17T12:12:51.214419Z"
 }
 ```
 
@@ -74,8 +77,8 @@ Example JSON output:
 
 Each provider exposes two key fields:
 
-- **STATUS** — Reflects the provider's registration state within DCM. A status of `REGISTERED` means the provider has been successfully registered and is recognized by the system.
-- **HEALTH** — Reflects the result of the provider's last health check. A health value of `HEALTHY` indicates that the provider is reachable and operating normally.
+- **STATUS** — Reflects the provider's registration state within DCM. A status of `registered` means the provider has been successfully registered and is recognized by the system.
+- **HEALTH** — Reflects the result of the provider's last health check. A health value of `ready` indicates that the provider is reachable and operating normally.
 
 These fields are updated automatically as service provider instances report to DCM.
 
