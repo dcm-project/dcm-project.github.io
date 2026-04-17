@@ -50,7 +50,7 @@ spec:
 | `spec.user_values` | Sets of overrides for fields allowed by the catalog item's `fields` array. Only fields with `editable: true` can be customized here. |
 | `spec.user_values[].path` | Path corresponding to the `path` key in the `catalog_item`'s `fields` item |
 
-> **Note:** Any values provided in `user_values` that are not permitted by the catalog item's `validation_schema` will be rejected. Check the catalog item's `editable_fields` to see which fields you can override.
+> **Note:** Each value provided in `user_values` will be validated against its corresponding item in the catalog item's `fields` list. If the `field` is not editable (`editable=false`) or the `value` does not pass the `validation_schema` the request will be rejected.
 
 ### Verifying the Instance
 
