@@ -232,8 +232,7 @@ During instance placement, DCM evaluates all **enabled** policies that match the
 Policies are sorted by **level** first, then by **priority** within each level:
 
 1. **Global** policies run first.
-2. **Tenant** policies run second.
-3. **User** policies run last.
+2. **User** policies run last.
 
 Within each level, policies are sorted by `priority` in ascending order (lower number = evaluated first).
 
