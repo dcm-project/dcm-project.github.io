@@ -52,7 +52,7 @@ rego_code: |
   }
 ```
 
-> **Note:** This REGO code assumes it can access the `service-provider-manager` to get the list of providers. Then, it filters only the `ready` ones, sorts alphabetically and returns the first one
+> **Note:** This Rego code assumes it can access the `service-provider-manager` to get the list of providers. Then, it filters only the `ready` ones, sorts alphabetically and returns the first one
 
 ### Field Reference
 

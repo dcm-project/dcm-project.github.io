@@ -72,7 +72,7 @@ spec:
 | `spec.service_type` | Corresponding service type |
 | `spec.fields` | List of fields with const or user values |
 | `spec.fields[].path` | Path of the field within the `service_type` specification |
-| `spec.fields[].display_name` |  A human-readable name shown in listings and the UI |
+| `spec.fields[].display_name` | A human-readable name shown in listings and the UI |
 | `spec.fields[].editable` | Specify whether the user may edit the value |
 | `spec.fields[].default` | Default value for the field. When `editable` is `false` this becomes the actual value |
 | `spec.fields[].validation_schema` | JSON Schema rules to validate input. See: https://json-schema.org/ |

@@ -8,7 +8,7 @@ Service types define the kinds of services that DCM can manage. Each service typ
 
 Service types define the schema that [catalog items](../catalog-items/) must conform to, ensuring that resources are created with valid configurations.
 
-> **Note:** Currently, service types cannot be created or modified through the CLI. They are pre-registered by the Catalog Manager
+> **Note:** Currently, service types cannot be created or modified through the CLI. They are pre-registered by the Catalog Manager.
 
 ## Listing Service Types
 
