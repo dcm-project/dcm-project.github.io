@@ -50,7 +50,7 @@ spec:
 | `spec.user_values` | Sets of overrides for fields allowed by the catalog item's `fields` array. Only fields with `editable: true` can be customized here. |
 | `spec.user_values[].path` | Path corresponding to the `path` key in the `catalog_item`'s `fields` item |
 
-> **Note:** Each value provided in `user_values` will be validated against its corresponding item in the catalog item's `fields` list. If the `field` is not editable (`editable=false`) or the `value` does not pass the `validation_schema` the request will be rejected. After validation, these values become part of the resource spec evaluated by placement [policies](../policies/), accessible as `input.spec.*` in Rego code (e.g., `input.spec.metadata.labels.env` for the label shown above). Only fields declared in the catalog item are included; see [How `input.spec` is Constructed](../policies/#how-inputspec-is-constructed) for details.
+> **Note:** Each value provided in `user_values` will be validated against its corresponding item in the catalog item's `fields` list. If the `field` is not editable (`editable=false`) or the `value` does not pass the `validation_schema`, the request will be rejected. After validation, these values become part of the resource spec evaluated by placement [policies](../policies/), accessible as `input.spec.*` in Rego code (e.g., `input.spec.metadata.labels.env` for the label shown above). Only fields declared in the catalog item are included; see [How `input.spec` is Constructed](../policies/#how-inputspec-is-constructed) for details.
 
 ### Verifying the Instance
 
