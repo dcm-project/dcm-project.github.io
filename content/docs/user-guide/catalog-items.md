@@ -77,6 +77,17 @@ spec:
 | `spec.fields[].default` | Default value for the field. When `editable` is `false` this becomes the actual value |
 | `spec.fields[].validation_schema` | JSON Schema rules to validate input. See: https://json-schema.org/ |
 
+### Fields and Policy Evaluation
+
+Catalog item fields define the governance boundary for placement policies. When DCM builds the resource spec that policies evaluate, it includes **only** two sources:
+
+1. **Field defaults** declared in the catalog item
+2. **user_values** overrides provided at instance creation
+
+Anything not declared as a catalog item field is invisible to the policy engine, even if set elsewhere on the instance request. This means labels must be exposed through fields with `metadata.labels.*` paths for policies to inspect them. For example, a field with `path: metadata.labels.region` makes the region label available to Rego policies as `input.spec.metadata.labels.region`.
+
+See [Policies](../policies/) for details on how `input.spec` is constructed and how to write policies that use label values.
+
 ### Verifying the Catalog Item
 
 After creating a catalog item, confirm it was registered successfully:

@@ -82,6 +82,62 @@ The `input` object includes:
 | `provider` | The currently selected service provider (empty string initially, populated as policies are evaluated). |
 | `service_provider_constraints` | The accumulated service-provider constraints from prior policies. |
 
+##### How `input.spec` is Constructed
+
+The `input.spec` object is built from exactly two sources:
+
+1. **Catalog item field defaults** — the `default` values declared in the catalog item's `fields` array
+2. **Instance user_values** — overrides provided when the instance is created
+
+No other data reaches the policy engine. Arbitrary metadata or fields that are not declared in the [catalog item](../catalog-items/) are **not** included in `input.spec`. The catalog item acts as a governance boundary: if a field is not declared, policies cannot see it.
+
+This means labels must be declared as catalog item fields (using `metadata.labels.*` paths) for policies to inspect them. See [Fields and Policy Evaluation](../catalog-items/#fields-and-policy-evaluation) for more on declaring fields.
+
+##### Example: Policy Using Instance Labels
+
+The following end-to-end example shows how a `region` label flows from a catalog item field declaration through an instance and into a Rego policy.
+
+**1. Catalog item field** — declares `metadata.labels.region` with allowed values:
+
+```yaml
+fields:
+  - path: metadata.labels.region
+    display_name: "Deployment Region"
+    editable: true
+    validation_schema:
+      type: string
+      enum:
+        - region-a
+        - region-b
+```
+
+**2. Instance user_values** — sets the region at deployment time:
+
+```yaml
+user_values:
+  - path: metadata.labels.region
+    value: region-a
+```
+
+**3. Rego policy** — reads the label from `input.spec` and selects a provider:
+
+```rego
+package region.placement
+
+import rego.v1
+
+main := {"rejected": true, "rejection_reason": "region label is required"} if {
+    not input.spec.metadata.labels.region
+}
+
+main := {"rejected": false, "selected_provider": provider} if {
+    region := input.spec.metadata.labels.region
+    provider := sprintf("provider-%s", [region])
+}
+```
+
+> **Note:** If `metadata.labels.region` were not declared as a catalog item field, `input.spec.metadata.labels.region` would be undefined and the policy would have no value to evaluate.
+
 #### Output
 
 The `main` rule must return an object with the following fields:
