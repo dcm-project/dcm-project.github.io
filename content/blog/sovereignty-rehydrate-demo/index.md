@@ -174,7 +174,9 @@ Here, the policy has already ruled Region B out.
 ### 3. Rehydrate
 
 Rehydration replays the stored intent against current provider health and
-policy. Run it from the CLI:
+policy. In the DCM UI, open **Instances**, find your Pet Clinic instance, and
+click **Rehydrate** (the circular arrows in the actions column). You can also
+run it from the CLI:
 
 ```shell
 dcm catalog instance rehydrate <instance-uid>
@@ -218,10 +220,10 @@ The best way to get a feel for the flow is our
 Click through the DCM UI at your own pace: explore the providers, create the
 policy, deploy Pet Clinic, and watch where the app lands.
 
-The walkthrough covers most of the scenario in the browser. Two steps still
-need a terminal today: simulating the datacenter failure and running
-`dcm catalog instance rehydrate` (the UI button is not wired yet). The guide
-flags both when you reach them.
+The walkthrough covers almost the entire scenario in the browser, including
+rehydration from the **Instances** tab. The step that still needs a
+terminal today is simulating the datacenter failure.
+The guide flags that when you reach it.
 
 Want to reproduce the full lab on your own hardware? You will need the DCM
 stack, three workload clusters with region-tagged providers, and the Pet Clinic
