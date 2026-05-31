@@ -23,6 +23,8 @@ All tabs share the following interaction patterns:
 
 The Providers tab lists all infrastructure providers registered with DCM. Providers are created automatically when service provider instances connect and register their available infrastructure.
 
+![Providers tab showing a table of registered providers with columns for display name, name, endpoint, service type, operations, status, and actions](/images/ui/providers-tab.png)
+
 ### Columns
 
 | Column | Description |
@@ -47,6 +49,8 @@ For CLI equivalent operations, see [Providers](../providers/).
 ## Policies
 
 The Policies tab lists all OPA Rego policies configured in DCM.
+
+![Policies tab showing a table of OPA Rego policies with columns for display name, type, priority, enabled status, description, and actions](/images/ui/policies-tab.png)
 
 ### Columns
 
@@ -74,6 +78,8 @@ For CLI equivalent operations, see [Policies](../policies/).
 
 The Service Types tab is a read-only view of all service type schemas registered in DCM. Service types define the structure and available fields for catalog items. They are created automatically when service provider instances register with DCM.
 
+![Service Types tab showing a read-only table of service type schemas with columns for service type, API version, path, and created date](/images/ui/service-types-tab.png)
+
 ### Columns
 
 | Column | Description |
@@ -92,6 +98,8 @@ For CLI equivalent operations, see [Service Types](../service-types/).
 ## Catalog Items
 
 The Catalog Items tab lists all catalog items in DCM. Create and edit operations open a **side drawer** on the right side of the screen rather than a modal dialog.
+
+![Catalog Items tab showing a table of catalog items with columns for display name, API version, service type, fields count, created date, and actions](/images/ui/catalog-items-tab.png)
 
 ### Columns
 
@@ -118,6 +126,8 @@ For CLI equivalent operations and a full field reference, see [Catalog Items](..
 
 The Instances tab lists all provisioned catalog item instances.
 
+![Instances tab showing a table of provisioned catalog item instances with columns for display name, catalog item, resource ID, API version, created date, and actions](/images/ui/instances-tab.png)
+
 ### Columns
 
 | Column | Description |
@@ -140,6 +150,8 @@ For CLI equivalent operations, see [Catalog Item Instances](../catalog-item-inst
 ## Resources
 
 The Resources tab is a read-only view of all service type instances provisioned through DCM — the actual infrastructure resources created on providers when catalog item instances are deployed.
+
+![Resources tab showing a read-only table of provisioned resources with columns for ID, service type, provider, status, and created date](/images/ui/resources-tab.png)
 
 ### Columns
 
