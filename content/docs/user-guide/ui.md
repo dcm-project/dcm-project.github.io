@@ -6,7 +6,25 @@ weight: 8
 
 The DCM UI is a [Backstage](https://backstage.io/) plugin that provides a web interface for managing DCM resources. It offers the same resource management capabilities as the CLI, presented as interactive data tables with inline search, pagination, and action buttons.
 
-To access it, navigate to **Administration → Data Center** in the Backstage sidebar, or go directly to `/dcm`.
+## Accessing the Backstage UI
+
+To open the Backstage UI, first determine the URL for your deployment.
+
+**On a cluster (OpenShift):**
+
+Run the following command, replacing `<dcm-namespace>` with the namespace where DCM is deployed:
+
+```bash
+oc get routes -n <dcm-namespace>
+```
+
+Copy the URL from the `HOST/PORT` column and open it in your browser.
+
+**Local setup:**
+
+If running DCM locally, Backstage is typically available at `http://localhost:3000`.
+
+Once you have the Backstage URL open, navigate to **Administration → Data Center** in the Backstage sidebar, or go directly to `<backstage-url>/dcm`.
 
 The Data Center page is organized into six tabs, one for each core DCM resource type.
 
