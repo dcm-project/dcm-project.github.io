@@ -225,8 +225,13 @@ rehydration from the **Instances** tab. The step that still needs a
 terminal today is simulating the datacenter failure.
 The guide flags that when you reach it.
 
-Want to reproduce the full lab on your own hardware? You will need the DCM
-stack, three workload clusters with region-tagged providers, and the Pet Clinic
-catalog item configured with a deployment region field. If you are new to DCM,
-start with the walkthrough above and come back to the lab setup when you are
-ready to go deeper.
+Want to reproduce the full lab on your own hardware? You will need the
+[DCM stack](/docs/getting-started/local-setup/), [three workload clusters with
+region-tagged providers](https://github.com/dcm-project/api-gateway/blob/main/RUN.md#running-with-service-providers)
+(see [`SP_REGION`](https://github.com/dcm-project/k8s-container-service-provider#provider-identity)
+for region metadata), and the [Pet Clinic catalog
+item](https://github.com/dcm-project/api-gateway/blob/main/docs/three-tier-app-kind.md)
+configured with a [deployment region
+field](/docs/user-guide/catalog-items/#fields-and-policy-evaluation). If you are
+new to DCM, start with the walkthrough above and come back to the lab setup when
+you are ready to go deeper.
