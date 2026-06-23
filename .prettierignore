@@ -1,0 +1,6 @@
+# Hugo homepage and section stubs (shortcodes, inline HTML)
+content/_index.md
+content/about/_index.md
+
+# RemoteMD wrappers; canonical source is in the enhancements repo
+content/docs/enhancements/

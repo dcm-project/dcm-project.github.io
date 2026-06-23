@@ -1,4 +1,4 @@
-.PHONY: build serve clean check-spell
+.PHONY: build serve clean check-spell format
 
 # Use cspell when installed; otherwise npx. Set SPELLCHECK when invoking make to override.
 ifeq ($(SPELLCHECK),)
@@ -8,7 +8,10 @@ ifeq ($(SPELLCHECK),)
     SPELLCHECK := cspell
   endif
 endif
+PRETTIER ?= npx prettier
 FILE ?= **/*.md
+# Prose docs only; see .prettierignore for paths under these trees to skip.
+FORMAT_FILES ?= content/docs/**/*.md content/blog/**/*.md
 
 build:
 	hugo --gc --minify
@@ -21,3 +24,6 @@ clean:
 
 check-spell:
 	$(SPELLCHECK) "$(FILE)"
+
+format:
+	$(PRETTIER) --write --prose-wrap always --print-width 80 $(FORMAT_FILES)
