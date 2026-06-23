@@ -14,15 +14,15 @@ Learn how to set up and run DCM on your local machine.
 
 ## Quick Start
 
-Clone the [api-gateway](https://github.com/dcm-project/api-gateway) repository and start all core services (gateway, postgres, nats, opa, and all managers):
+Clone the [control-plane](https://github.com/dcm-project/control-plane) repository and start the core platform (postgres, nats, control-plane, and dcm-ui):
 
 ```bash
-git clone https://github.com/dcm-project/api-gateway.git
-cd api-gateway
+git clone https://github.com/dcm-project/control-plane.git
+cd control-plane/deploy
 podman-compose up -d
 ```
 
-The API gateway will be available at `http://localhost:9080`.
+The API gateway will be available at `http://localhost:8080`.
 
 ## Running with the KubeVirt Service Provider
 
@@ -30,12 +30,12 @@ The `kubevirt-service-provider` is behind a compose profile and does not start b
 To include it, set the required environment variables and activate the `kubevirt` profile:
 
 ```bash
-export KUBEVIRT_NAMESPACE=vms
+export KUBERNETES_NAMESPACE=vms
 export KUBEVIRT_KUBECONFIG="/path/to/kubeconfig"
 podman-compose --profile kubevirt up -d
 ```
 
-> **Note:** The namespace set in `KUBEVIRT_NAMESPACE` must already exist in your Kubernetes cluster.
+> **Note:** The namespace set in `KUBERNETES_NAMESPACE` must already exist in your Kubernetes cluster.
 
 ## Verifying the Deployment
 
@@ -45,19 +45,16 @@ Check that all services are running:
 podman-compose ps
 ```
 
-Check health endpoints through the gateway:
+Check the health endpoint:
 
 ```bash
-curl http://localhost:9080/api/v1alpha1/health/providers
-curl http://localhost:9080/api/v1alpha1/health/catalog
-curl http://localhost:9080/api/v1alpha1/health/policies
-curl http://localhost:9080/api/v1alpha1/health/placement
+curl http://localhost:8080/api/v1alpha1/health
 ```
 
 If you deployed with the KubeVirt provider, you can also list the registered providers:
 
 ```bash
-curl http://localhost:9080/api/v1alpha1/providers
+curl http://localhost:8080/api/v1alpha1/providers
 ```
 
 ## Setting Up the CLI
@@ -76,7 +73,7 @@ The binary will be available at `bin/dcm`. You can move it to a directory in you
 sudo cp bin/dcm /usr/local/bin/
 ```
 
-By default, the CLI connects to the API gateway at `http://localhost:9080`. You can verify it's working with:
+By default, the CLI connects to the control plane at `http://localhost:8080`. You can verify it's working with:
 
 ```bash
 dcm version

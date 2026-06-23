@@ -4,7 +4,7 @@ type: docs
 weight: 1
 ---
 
-The DCM CLI (`dcm`) connects to the DCM API gateway to manage resources. It can be configured through command-line flags, environment variables, or a configuration file.
+The DCM CLI (`dcm`) connects to the DCM control plane to manage resources. It can be configured through command-line flags, environment variables, or a configuration file.
 
 For installation instructions, see [Setting Up the CLI](../../getting-started/local-setup/#setting-up-the-cli).
 
@@ -13,7 +13,7 @@ For installation instructions, see [Setting Up the CLI](../../getting-started/lo
 The CLI reads its configuration from `~/.dcm/config.yaml` by default. Here is an example with all available fields:
 
 ```yaml
-api-gateway-url: http://localhost:9080
+control-plane-url: http://localhost:8080
 output-format: table
 timeout: 30
 tls-ca-cert: ""
@@ -37,14 +37,14 @@ The following flags are available on all commands:
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
-| `--api-gateway-url` | | `http://localhost:9080` | URL of the DCM API gateway |
+| `--control-plane-url` | | `http://localhost:8080` | URL of the DCM control plane |
 | `--output` | `-o` | `table` | Output format (`table`, `json`, `yaml`) |
 | `--timeout` | | `30` | Request timeout in seconds |
 | `--config` | | `~/.dcm/config.yaml` | Path to configuration file |
 
 ## TLS Configuration
 
-To connect to a TLS-secured API gateway, use the following flags:
+To connect to a TLS-secured control plane, use the following flags:
 
 | Flag | Description |
 |------|-------------|

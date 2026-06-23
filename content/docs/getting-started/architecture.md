@@ -11,9 +11,8 @@ DCM (Data Center Management) is a control plane for managing infrastructure serv
 ```mermaid
 graph TD
     User["User (CLI / API)"]
-    GW["API Gateway<br/>(Traefik :9080)"]
 
-    subgraph Managers
+    subgraph CP["Control Plane (:8080)"]
         CM["Catalog Manager"]
         PM["Policy Manager"]
         PLM["Placement Manager"]
@@ -23,7 +22,6 @@ graph TD
     subgraph Infrastructure
         PG["PostgreSQL"]
         NATS["NATS"]
-        OPA["OPA"]
     end
 
     subgraph Providers
@@ -31,17 +29,13 @@ graph TD
         SP2["KubeVirt SP 2"]
     end
 
-    User --> GW
-    GW --> CM
-    GW --> PM
-    GW --> SPM
+    User --> CP
 
     CM --> PG
     PM --> PG
     PLM --> PG
     SPM --> PG
 
-    PM --> OPA
     PLM --> PM
     PLM --> SPM
     CM --> PLM
@@ -57,14 +51,13 @@ graph TD
 
 | Component | Role |
 |---|---|
-| **API Gateway** | Single entry point for all API requests. Routes to the appropriate manager based on URL path. |
+| **Control Plane** | Single process that exposes all DCM APIs on `:8080`. Hosts the catalog, policy, placement, and service provider managers in one binary. |
 | **Catalog Manager** | Manages service types, catalog items, and catalog item instances. Triggers placement when an instance is created. |
-| **Policy Manager** | Stores placement policies (Rego) and evaluates them via OPA. |
+| **Policy Manager** | Stores placement policies (Rego) and evaluates them via an embedded OPA engine. |
 | **Placement Manager** | Selects a service provider for a new instance by evaluating policies against available providers. |
 | **Service Provider Manager** | Tracks registered service providers and their health status. |
-| **PostgreSQL** | Persistent storage for all managers. |
+| **PostgreSQL** | Persistent storage for the control plane. |
 | **NATS** | Message bus for communication between the Service Provider Manager and service providers. |
-| **OPA** | Evaluates Rego policies for placement decisions. |
 | **Service Providers** | External systems (e.g., KubeVirt) that create and manage the actual resources (VMs, containers, etc.). |
 
 ## Request Flow
@@ -74,7 +67,7 @@ When a user creates a catalog item instance, the following happens:
 ```mermaid
 sequenceDiagram
     participant User
-    participant GW as API Gateway
+    participant CP as Control Plane
     participant CM as Catalog Manager
     participant PLM as Placement Manager
     participant PM as Policy Manager
@@ -82,8 +75,8 @@ sequenceDiagram
     participant SPM as SP Manager
     participant SP as KubeVirt SP
 
-    User->>GW: Create catalog item instance
-    GW->>CM: POST /catalog-item-instances
+    User->>CP: Create catalog item instance
+    CP->>CM: POST /catalog-item-instances
     CM->>PLM: Request placement
     PLM->>PM: Evaluate policies
     PM->>OPA: Evaluate Rego

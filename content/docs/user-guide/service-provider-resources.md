@@ -4,9 +4,9 @@ type: docs
 weight: 7
 ---
 
-Service provider resources are the actual infrastructure resources — such as virtual machines, containers, or other services — created on [providers](../providers/) when [catalog item instances](../catalog-item-instances/) are provisioned. For example, when you deploy a catalog item instance for a VM on a KubeVirt provider, the service provider manager creates a KubeVirt VirtualMachine resource. That underlying resource is the SP resource.
+Service provider resources are the actual infrastructure resources — such as virtual machines, containers, or other services — created on [providers](../providers/) when [catalog item instances](../catalog-item-instances/) are provisioned. For example, when you deploy a catalog item instance for a VM on a KubeVirt provider, the control plane creates a KubeVirt VirtualMachine resource. That underlying resource is the SP resource.
 
-SP resources are managed entirely by the service provider manager and are **read-only** in the CLI. Each SP resource is linked to a specific catalog item instance and the provider where it was provisioned.
+SP resources are managed entirely by the control plane and are **read-only** in the CLI. Each SP resource is linked to a specific catalog item instance and the provider where it was provisioned.
 
 > **Note:** You cannot create, update, or delete SP resources directly. They are created and cleaned up automatically as part of the catalog item instance lifecycle.
 
@@ -130,10 +130,10 @@ dcm sp resource get r-3b5d7f90-c1e3-4a26-98b0-d4f6a8c2e0a1 --show-deleted
 
 SP resources follow the lifecycle of the catalog item instances they belong to:
 
-1. **Creation** — When a catalog item instance is provisioned, the service provider manager automatically creates the corresponding SP resource on the selected provider.
+1. **Creation** — When a catalog item instance is provisioned, the control plane automatically creates the corresponding SP resource on the selected provider.
 2. **Active state** — The STATUS field reflects the current state of the resource on the provider (e.g., PENDING while being created, READY when fully provisioned).
 3. **Rehydration** - When a catalog item instance is rehydrated, a new resource will be created and upon success, the old one will be scheduled for deletion.
-4. **Deletion** — When a catalog item instance is deleted, the corresponding SP resource is cleaned up by the service provider manager.
+4. **Deletion** — When a catalog item instance is deleted, the corresponding SP resource is cleaned up by the control plane.
 5. **Viewing deleted resources** — Deleted resources are hidden by default but can still be viewed using the `--show-deleted` flag, which adds a DELETION STATUS column to the output.
 
 > **Note:** Deleted items will show while they are scheduled for deletion. Once they are removed from the SP they will no longer exist

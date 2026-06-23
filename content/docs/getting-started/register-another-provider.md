@@ -28,7 +28,7 @@ The new provider will automatically register itself with the Service Provider Ma
 ## Verify Both Providers Are Registered
 
 ```bash
-curl -s http://localhost:9080/api/v1alpha1/providers | jq
+curl -s http://localhost:8080/api/v1alpha1/providers | jq
 ```
 
 You should see both `kubevirt-service-provider` and `another-kubevirt-provider` in the list.

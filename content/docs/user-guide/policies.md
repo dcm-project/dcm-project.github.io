@@ -22,7 +22,7 @@ rego_code: |
 
   import rego.v1
 
-  spm_url := "http://service-provider-manager:8080/api/v1alpha1/providers"
+  spm_url := "http://control-plane:8080/api/v1alpha1/providers"
 
   main := {"rejected": true, "rejection_reason": "spec.service_type is required"} if {
       not input.spec.service_type
@@ -52,7 +52,7 @@ rego_code: |
   }
 ```
 
-> **Note:** This Rego code assumes it can access the `service-provider-manager` to get the list of providers. Then, it filters only the `ready` ones, sorts alphabetically and returns the first one
+> **Note:** This Rego code assumes it can access the control-plane provider API to get the list of providers. Then, it filters only the `ready` ones, sorts alphabetically and returns the first one
 
 ### Field Reference
 
@@ -240,7 +240,7 @@ dcm policy get prefer-provider-a -o json
   "path": "policies/7eff7e73-4c14-4311-8673-e03916b00ece",
   "policy_type": "GLOBAL",
   "priority": 1,
-  "rego_code": "package provider.selector\n\nimport rego.v1\n\nspm_url := \"http://service-provider-manager:8080/api/v1alpha1/providers\"\n\nmain := {\"rejected\": true, \"rejection_reason\": \"spec.service_type is required\"} if {\n    not input.spec.service_type\n}\n\nmain := result if {\n    service_type := input.spec.service_type\n    response := http.send({\n        \"method\": \"GET\",\n        \"url\": sprintf(\"%s?type=%s\", [spm_url, service_type]),\n        \"headers\": {\"Accept\": \"application/json\"},\n    })\n    providers := response.body.providers\n    ready_providers := [p | some p in providers; p.health_status == \"ready\"]\n    result := _providers_result(ready_providers, service_type)\n}\n\n_providers_result(providers, service_type) := {\"rejected\": true, \"rejection_reason\": msg} if {\n    count(providers) == 0\n    msg := sprintf(\"no ready providers found for service type '%s'\", [service_type])\n}\n\n_providers_result(providers, _) := {\"rejected\": false, \"selected_provider\": provider} if {\n    count(providers) \u003e 0\n    sorted_names := sort([p.name | some p in providers])\n    provider := sorted_names[0]\n}\n",
+  "rego_code": "package provider.selector\n\nimport rego.v1\n\nspm_url := \"http://control-plane:8080/api/v1alpha1/providers\"\n\nmain := {\"rejected\": true, \"rejection_reason\": \"spec.service_type is required\"} if {\n    not input.spec.service_type\n}\n\nmain := result if {\n    service_type := input.spec.service_type\n    response := http.send({\n        \"method\": \"GET\",\n        \"url\": sprintf(\"%s?type=%s\", [spm_url, service_type]),\n        \"headers\": {\"Accept\": \"application/json\"},\n    })\n    providers := response.body.providers\n    ready_providers := [p | some p in providers; p.health_status == \"ready\"]\n    result := _providers_result(ready_providers, service_type)\n}\n\n_providers_result(providers, service_type) := {\"rejected\": true, \"rejection_reason\": msg} if {\n    count(providers) == 0\n    msg := sprintf(\"no ready providers found for service type '%s'\", [service_type])\n}\n\n_providers_result(providers, _) := {\"rejected\": false, \"selected_provider\": provider} if {\n    count(providers) \u003e 0\n    sorted_names := sort([p.name | some p in providers])\n    provider := sorted_names[0]\n}\n",
   "update_time": "2026-04-15T18:38:13.990296Z"
 }
 ```
