@@ -73,16 +73,13 @@ sequenceDiagram
     participant CM as Catalog Manager
     participant PLM as Placement Manager
     participant PM as Policy Manager
-    participant OPA
     participant SPM as SP Manager
     participant SP as KubeVirt SP
 
     User->>CP: Create catalog item instance
     CP->>CM: POST /catalog-item-instances
     CM->>PLM: Request placement
-    PLM->>PM: Evaluate policies
-    PM->>OPA: Evaluate Rego
-    OPA-->>PM: Placement decision
+    PLM->>PM: Evaluate policies (embedded OPA)
     PM-->>PLM: Placement decision
     PLM->>SPM: Create resource on provider
     SPM->>SP: Create VM
@@ -92,6 +89,6 @@ sequenceDiagram
 1. The **Catalog Manager** receives the request and asks the **Placement
    Manager** to find a suitable provider.
 2. The **Placement Manager** evaluates placement policies through the **Policy
-   Manager** and **OPA**.
+   Manager**, which uses an embedded OPA engine to evaluate Rego.
 3. Once a provider is selected, the resource is created on that provider through
    the **Service Provider Manager**.

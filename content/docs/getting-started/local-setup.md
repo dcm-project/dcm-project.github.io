@@ -25,7 +25,8 @@ cd control-plane/deploy
 podman-compose up -d
 ```
 
-The API gateway will be available at `http://localhost:8080`.
+The control-plane API is available at `http://localhost:8080`. The DCM UI is at
+`http://localhost:7007`.
 
 ## Running with the KubeVirt Service Provider
 
