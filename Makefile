@@ -1,4 +1,4 @@
-.PHONY: build serve clean check-spell format
+.PHONY: build serve clean check-spell format check-format
 
 # Use cspell when installed; otherwise npx. Set SPELLCHECK when invoking make to override.
 ifeq ($(SPELLCHECK),)
@@ -27,3 +27,6 @@ check-spell:
 
 format:
 	$(PRETTIER) --write --prose-wrap always --print-width 80 $(FORMAT_FILES)
+
+check-format:
+	$(PRETTIER) --check --prose-wrap always --print-width 80 $(FORMAT_FILES)
