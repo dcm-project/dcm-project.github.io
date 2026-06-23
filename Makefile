@@ -12,6 +12,7 @@ PRETTIER ?= npx prettier
 FILE ?= **/*.md
 # Prose docs only; see .prettierignore for paths under these trees to skip.
 FORMAT_FILES ?= content/docs/**/*.md content/blog/**/*.md
+PRETTIER_FLAGS ?= --prose-wrap always --print-width 80
 
 build:
 	hugo --gc --minify
@@ -26,7 +27,7 @@ check-spell:
 	$(SPELLCHECK) "$(FILE)"
 
 format:
-	$(PRETTIER) --write --prose-wrap always --print-width 80 $(FORMAT_FILES)
+	$(PRETTIER) $(PRETTIER_FLAGS) --write $(FORMAT_FILES)
 
 check-format:
-	$(PRETTIER) --check --prose-wrap always --print-width 80 $(FORMAT_FILES)
+	$(PRETTIER) $(PRETTIER_FLAGS) --check $(FORMAT_FILES)
