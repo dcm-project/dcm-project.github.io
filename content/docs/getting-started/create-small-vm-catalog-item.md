@@ -4,7 +4,8 @@ type: docs
 weight: 3
 ---
 
-This guide walks you through creating a catalog item for a small virtual machine using the DCM CLI.
+This guide walks you through creating a catalog item for a small virtual machine
+using the DCM CLI.
 
 ## Prerequisites
 
@@ -13,7 +14,8 @@ This guide walks you through creating a catalog item for a small virtual machine
 
 ## Define the Catalog Item
 
-For a detailed explanation of the catalog item schema, see the [Catalog Item Schema](../../enhancements/catalog-item-schema/) enhancement.
+For a detailed explanation of the catalog item schema, see the
+[Catalog Item Schema](../../enhancements/catalog-item-schema/) enhancement.
 
 Create a file called `small-vm.yaml` with the following content:
 
@@ -57,6 +59,7 @@ spec:
 ```
 
 This defines a small VM catalog item with:
+
 - **Metadata** — editable by users, for setting VM name and labels
 - **2 vCPUs** — editable by users, between 1 and 4
 - **2 GB memory** — fixed, not editable by users

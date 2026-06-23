@@ -20,7 +20,8 @@ For example, to check the control-plane logs:
 podman-compose logs control-plane
 ```
 
-Available service names: `control-plane`, `postgres`, `nats`, `dcm-ui`, `kubevirt-service-provider`.
+Available service names: `control-plane`, `postgres`, `nats`, `dcm-ui`,
+`kubevirt-service-provider`.
 
 ### Follow Logs in Real Time
 

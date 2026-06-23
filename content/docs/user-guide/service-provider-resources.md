@@ -4,11 +4,21 @@ type: docs
 weight: 7
 ---
 
-Service provider resources are the actual infrastructure resources — such as virtual machines, containers, or other services — created on [providers](../providers/) when [catalog item instances](../catalog-item-instances/) are provisioned. For example, when you deploy a catalog item instance for a VM on a KubeVirt provider, the control plane creates a KubeVirt VirtualMachine resource. That underlying resource is the SP resource.
+Service provider resources are the actual infrastructure resources — such as
+virtual machines, containers, or other services — created on
+[providers](../providers/) when
+[catalog item instances](../catalog-item-instances/) are provisioned. For
+example, when you deploy a catalog item instance for a VM on a KubeVirt
+provider, the control plane creates a KubeVirt VirtualMachine resource. That
+underlying resource is the SP resource.
 
-SP resources are managed entirely by the control plane and are **read-only** in the CLI. Each SP resource is linked to a specific catalog item instance and the provider where it was provisioned.
+SP resources are managed entirely by the control plane and are **read-only** in
+the CLI. Each SP resource is linked to a specific catalog item instance and the
+provider where it was provisioned.
 
-> **Note:** You cannot create, update, or delete SP resources directly. They are created and cleaned up automatically as part of the catalog item instance lifecycle.
+> **Note:** You cannot create, update, or delete SP resources directly. They are
+> created and cleaned up automatically as part of the catalog item instance
+> lifecycle.
 
 ## Listing Resources
 
@@ -37,7 +47,8 @@ dcm sp resource list --provider kubevirt-provider-1
 
 ### Showing Deleted Resources
 
-By default, deleted resources are hidden. Use `--show-deleted` to include them in the output. This adds a DELETION STATUS column:
+By default, deleted resources are hidden. Use `--show-deleted` to include them
+in the output. This adds a DELETION STATUS column:
 
 ```bash
 dcm sp resource list --show-deleted
@@ -54,7 +65,8 @@ r-9e1a3c5d-7f20-4b68-a0c2-e4d6f8b1a3c5  container-provider-1   PENDING          
 
 ### Pagination
 
-For environments with many resources, use pagination flags to control the output:
+For environments with many resources, use pagination flags to control the
+output:
 
 ```bash
 dcm sp resource list --page-size 10
@@ -130,19 +142,31 @@ dcm sp resource get r-3b5d7f90-c1e3-4a26-98b0-d4f6a8c2e0a1 --show-deleted
 
 SP resources follow the lifecycle of the catalog item instances they belong to:
 
-1. **Creation** — When a catalog item instance is provisioned, the control plane automatically creates the corresponding SP resource on the selected provider.
-2. **Active state** — The STATUS field reflects the current state of the resource on the provider (e.g., PENDING while being created, READY when fully provisioned).
-3. **Rehydration** - When a catalog item instance is rehydrated, a new resource will be created and upon success, the old one will be scheduled for deletion.
-4. **Deletion** — When a catalog item instance is deleted, the corresponding SP resource is cleaned up by the control plane.
-5. **Viewing deleted resources** — Deleted resources are hidden by default but can still be viewed using the `--show-deleted` flag, which adds a DELETION STATUS column to the output.
+1. **Creation** — When a catalog item instance is provisioned, the control plane
+   automatically creates the corresponding SP resource on the selected provider.
+2. **Active state** — The STATUS field reflects the current state of the
+   resource on the provider (e.g., PENDING while being created, READY when fully
+   provisioned).
+3. **Rehydration** - When a catalog item instance is rehydrated, a new resource
+   will be created and upon success, the old one will be scheduled for deletion.
+4. **Deletion** — When a catalog item instance is deleted, the corresponding SP
+   resource is cleaned up by the control plane.
+5. **Viewing deleted resources** — Deleted resources are hidden by default but
+   can still be viewed using the `--show-deleted` flag, which adds a DELETION
+   STATUS column to the output.
 
-> **Note:** Deleted items will show while they are scheduled for deletion. Once they are removed from the SP they will no longer exist
+> **Note:** Deleted items will show while they are scheduled for deletion. Once
+> they are removed from the SP they will no longer exist
 
 ## Relationship to Catalog Item Instances
 
-Each [catalog item instance](../catalog-item-instances/) results in one SP resource on the provider selected during placement. The `resource_id` field on a catalog item instance links directly to the corresponding SP resource's ID.
+Each [catalog item instance](../catalog-item-instances/) results in one SP
+resource on the provider selected during placement. The `resource_id` field on a
+catalog item instance links directly to the corresponding SP resource's ID.
 
-For example, if a catalog item instance has `resource_id: r-7a9c2e41-b3d5-4f68-80a1-e2c4d6f8a0b2`, you can inspect the underlying provider resource with:
+For example, if a catalog item instance has
+`resource_id: r-7a9c2e41-b3d5-4f68-80a1-e2c4d6f8a0b2`, you can inspect the
+underlying provider resource with:
 
 ```bash
 dcm sp resource get r-7a9c2e41-b3d5-4f68-80a1-e2c4d6f8a0b2

@@ -4,11 +4,16 @@ type: docs
 weight: 4
 ---
 
-Catalog items are reusable templates that define a deployable resource. Each catalog item references a [service type](../service-types/) and may specify whether a resource configuration is editable while setting a preset, a default value and/or a validation schema for the user values — for example, CPU, memory, and storage for a virtual machine.
+Catalog items are reusable templates that define a deployable resource. Each
+catalog item references a [service type](../service-types/) and may specify
+whether a resource configuration is editable while setting a preset, a default
+value and/or a validation schema for the user values — for example, CPU, memory,
+and storage for a virtual machine.
 
 ## Creating a Catalog Item
 
-To create a catalog item, define its configuration in a YAML or JSON file and pass it to the CLI:
+To create a catalog item, define its configuration in a YAML or JSON file and
+pass it to the CLI:
 
 ```bash
 dcm catalog item create --from-file item.yaml
@@ -65,28 +70,35 @@ spec:
 
 ### Key Sections
 
-| Section | Purpose |
-|---------|---------|
-| `api_version` | Ties the catalog item to a specific schema version (e.g., `v1alpha1`). |
-| `display_name` | A human-readable name shown in listings and the UI. |
-| `spec.service_type` | Corresponding service type |
-| `spec.fields` | List of fields with const or user values |
-| `spec.fields[].path` | Path of the field within the `service_type` specification |
-| `spec.fields[].display_name` | A human-readable name shown in listings and the UI |
-| `spec.fields[].editable` | Specify whether the user may edit the value |
-| `spec.fields[].default` | Default value for the field. When `editable` is `false` this becomes the actual value |
-| `spec.fields[].validation_schema` | JSON Schema rules to validate input. See: https://json-schema.org/ |
+| Section                           | Purpose                                                                               |
+| --------------------------------- | ------------------------------------------------------------------------------------- |
+| `api_version`                     | Ties the catalog item to a specific schema version (e.g., `v1alpha1`).                |
+| `display_name`                    | A human-readable name shown in listings and the UI.                                   |
+| `spec.service_type`               | Corresponding service type                                                            |
+| `spec.fields`                     | List of fields with const or user values                                              |
+| `spec.fields[].path`              | Path of the field within the `service_type` specification                             |
+| `spec.fields[].display_name`      | A human-readable name shown in listings and the UI                                    |
+| `spec.fields[].editable`          | Specify whether the user may edit the value                                           |
+| `spec.fields[].default`           | Default value for the field. When `editable` is `false` this becomes the actual value |
+| `spec.fields[].validation_schema` | JSON Schema rules to validate input. See: https://json-schema.org/                    |
 
 ### Fields and Policy Evaluation
 
-Catalog item fields define the governance boundary for placement policies. When DCM builds the resource spec that policies evaluate, it includes **only** two sources:
+Catalog item fields define the governance boundary for placement policies. When
+DCM builds the resource spec that policies evaluate, it includes **only** two
+sources:
 
 1. **Field defaults** declared in the catalog item
 2. **user_values** overrides provided at instance creation
 
-Anything not declared as a catalog item field is invisible to the policy engine, even if set elsewhere on the instance request. This means labels must be exposed through fields with `metadata.labels.*` paths for policies to inspect them. For example, a field with `path: metadata.labels.region` makes the region label available to Rego policies as `input.spec.metadata.labels.region`.
+Anything not declared as a catalog item field is invisible to the policy engine,
+even if set elsewhere on the instance request. This means labels must be exposed
+through fields with `metadata.labels.*` paths for policies to inspect them. For
+example, a field with `path: metadata.labels.region` makes the region label
+available to Rego policies as `input.spec.metadata.labels.region`.
 
-See [Policies](../policies/) for details on how `input.spec` is constructed and how to write policies that use label values.
+See [Policies](../policies/) for details on how `input.spec` is constructed and
+how to write policies that use label values.
 
 ### Verifying the Catalog Item
 
@@ -198,11 +210,7 @@ Example JSON output:
         "editable": true,
         "path": "guest_os.type",
         "validation_schema": {
-          "enum": [
-            "fedora",
-            "centos",
-            "ubuntu"
-          ],
+          "enum": ["fedora", "centos", "ubuntu"],
           "type": "string"
         }
       }
@@ -222,8 +230,10 @@ To remove a catalog item:
 dcm catalog item delete f4a8b3c1-d2e5-6789-abcd-ef0123456789
 ```
 
-> **Note:** Deleting a catalog item with instances that were already created from it will fail. Remove all existing instances before deleting the item.
+> **Note:** Deleting a catalog item with instances that were already created
+> from it will fail. Remove all existing instances before deleting the item.
 
 ---
 
-For a step-by-step walkthrough, see [Create Small VM Catalog Item](../../getting-started/create-small-vm-catalog-item/).
+For a step-by-step walkthrough, see
+[Create Small VM Catalog Item](../../getting-started/create-small-vm-catalog-item/).

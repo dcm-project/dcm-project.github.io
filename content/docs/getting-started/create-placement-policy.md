@@ -4,7 +4,11 @@ type: docs
 weight: 4
 ---
 
-Placement policies control how DCM decides which service provider should handle a catalog item instance. Policies are written in [Rego](https://www.openpolicyagent.org/docs/latest/policy-language/), the policy language used by Open Policy Agent (OPA). Each policy can accept or reject a placement request and optionally select a specific provider.
+Placement policies control how DCM decides which service provider should handle
+a catalog item instance. Policies are written in
+[Rego](https://www.openpolicyagent.org/docs/latest/policy-language/), the policy
+language used by Open Policy Agent (OPA). Each policy can accept or reject a
+placement request and optionally select a specific provider.
 
 Policies have a `priority` — lower values are evaluated first.
 
@@ -26,6 +30,7 @@ rego_code: |
 ```
 
 This policy:
+
 - Has the highest priority (`1`)
 - Always selects `kubevirt-service-provider` as the target service provider
 - Never rejects a request (`rejected: false`)

@@ -4,11 +4,16 @@ type: docs
 weight: 6
 ---
 
-In DCM, service providers self-register by calling the Service Provider Manager API. When you started the KubeVirt service provider in the [Local Setup](../local-setup/), it automatically registered itself. In this guide, you'll register a second provider manually and create a policy that randomly selects between the two.
+In DCM, service providers self-register by calling the Service Provider Manager
+API. When you started the KubeVirt service provider in the
+[Local Setup](../local-setup/), it automatically registered itself. In this
+guide, you'll register a second provider manually and create a policy that
+randomly selects between the two.
 
 ## Register a Second Provider
 
-Start another instance of the KubeVirt service provider with a different name and namespace:
+Start another instance of the KubeVirt service provider with a different name
+and namespace:
 
 ```bash
 podman-compose --profile kubevirt run --name another-kubevirt-provider -d --no-deps \
@@ -19,11 +24,16 @@ podman-compose --profile kubevirt run --name another-kubevirt-provider -d --no-d
   kubevirt-service-provider
 ```
 
-> **Note:** The `PROVIDER_ID` must be provided to ensure idempotent registration. The Service Provider Manager validates that no existing provider with the same name or ID is already registered with conflicting values.
+> **Note:** The `PROVIDER_ID` must be provided to ensure idempotent
+> registration. The Service Provider Manager validates that no existing provider
+> with the same name or ID is already registered with conflicting values.
 
-> **Note:** The `KUBEVIRT_PROVIDER_NAME` must be specified so it matches the container's DNS hostname within the compose network. Other services use this name to reach the provider's endpoint.
+> **Note:** The `KUBEVIRT_PROVIDER_NAME` must be specified so it matches the
+> container's DNS hostname within the compose network. Other services use this
+> name to reach the provider's endpoint.
 
-The new provider will automatically register itself with the Service Provider Manager.
+The new provider will automatically register itself with the Service Provider
+Manager.
 
 ## Verify Both Providers Are Registered
 
@@ -31,11 +41,13 @@ The new provider will automatically register itself with the Service Provider Ma
 curl -s http://localhost:8080/api/v1alpha1/providers | jq
 ```
 
-You should see both `kubevirt-service-provider` and `another-kubevirt-provider` in the list.
+You should see both `kubevirt-service-provider` and `another-kubevirt-provider`
+in the list.
 
 ## Create a Random Selection Policy
 
-Now create a policy that randomly selects between the two providers. Create a file called `random-provider-policy.yaml`:
+Now create a policy that randomly selects between the two providers. Create a
+file called `random-provider-policy.yaml`:
 
 ```yaml
 display_name: random-provider-selection
@@ -57,11 +69,16 @@ rego_code: |
 ```
 
 This Rego policy:
-- Defines the two available providers: `kubevirt-service-provider` and `another-kubevirt-provider`
+
+- Defines the two available providers: `kubevirt-service-provider` and
+  `another-kubevirt-provider`
 - Randomly picks one using `rand.intn`
 - Returns the selected provider's name
 
-> **Note:** If you previously created the `kubevirt-provider` policy from [Create Placement Policy](../create-placement-policy/), delete it first so the new policy takes effect:
+> **Note:** If you previously created the `kubevirt-provider` policy from
+> [Create Placement Policy](../create-placement-policy/), delete it first so the
+> new policy takes effect:
+>
 > ```bash
 > dcm policy delete <POLICY_ID>
 > ```
@@ -80,7 +97,8 @@ dcm policy list
 
 ## Test the Random Selection
 
-Create two VM instances using the `my-vm.yaml` from [Create Instance of Small VM Catalog Item](../create-small-vm-instance/):
+Create two VM instances using the `my-vm.yaml` from
+[Create Instance of Small VM Catalog Item](../create-small-vm-instance/):
 
 ```bash
 dcm catalog instance create --from-file my-vm.yaml
@@ -101,4 +119,5 @@ ID                                    PROVIDER                   STATUS      CRE
 57aae98f-443d-4444-95dd-bc1e9ddc9406  another-kubevirt-provider  Scheduling  2026-03-26T08:42:44.87697Z
 ```
 
-Each instance was placed on a different provider, confirming the random selection policy is working.
+Each instance was placed on a different provider, confirming the random
+selection policy is working.

@@ -4,9 +4,14 @@ type: docs
 weight: 2
 ---
 
-Providers are infrastructure endpoints registered by service provider instances. Each provider represents a backend system — such as a KubeVirt-enabled Kubernetes cluster — that can host virtual machines or other resources managed through DCM.
+Providers are infrastructure endpoints registered by service provider instances.
+Each provider represents a backend system — such as a KubeVirt-enabled
+Kubernetes cluster — that can host virtual machines or other resources managed
+through DCM.
 
-Providers are **read-only** in the CLI. They are created automatically when a service provider instance connects to DCM and registers its available infrastructure.
+Providers are **read-only** in the CLI. They are created automatically when a
+service provider instance connects to DCM and registers its available
+infrastructure.
 
 ## Listing Providers
 
@@ -34,10 +39,12 @@ dcm sp provider list --type vm
 
 ### Pagination
 
-For environments with many providers, use pagination flags to control the output:
+For environments with many providers, use pagination flags to control the
+output:
 
 - `--page-size` — Maximum number of providers to return per page (int32).
-- `--page-token` — Token for retrieving the next page of results (returned in the previous response).
+- `--page-token` — Token for retrieving the next page of results (returned in
+  the previous response).
 
 ```bash
 dcm sp provider list --page-size 10
@@ -45,7 +52,8 @@ dcm sp provider list --page-size 10
 
 ## Getting Provider Details
 
-Use `dcm sp provider get` to retrieve detailed information about a single provider:
+Use `dcm sp provider get` to retrieve detailed information about a single
+provider:
 
 ```bash
 dcm sp provider get 3f8a1b2c-4d5e-6f7a-8b9c-0d1e2f3a4b5c
@@ -77,9 +85,16 @@ Example JSON output:
 
 Each provider exposes two key fields:
 
-- **STATUS** — Reflects the provider's registration state within DCM. A status of `registered` means the provider has been successfully registered and is recognized by the system.
-- **HEALTH** — Reflects the result of the provider's last health check. A health value of `ready` indicates that the provider is reachable and operating normally.
+- **STATUS** — Reflects the provider's registration state within DCM. A status
+  of `registered` means the provider has been successfully registered and is
+  recognized by the system.
+- **HEALTH** — Reflects the result of the provider's last health check. A health
+  value of `ready` indicates that the provider is reachable and operating
+  normally.
 
-These fields are updated automatically as service provider instances report to DCM.
+These fields are updated automatically as service provider instances report to
+DCM.
 
-> **Note:** See [Register Another Provider](../../getting-started/register-another-provider/) for a walkthrough of adding a new provider.
+> **Note:** See
+> [Register Another Provider](../../getting-started/register-another-provider/)
+> for a walkthrough of adding a new provider.
