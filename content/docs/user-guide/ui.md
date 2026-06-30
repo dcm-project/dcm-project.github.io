@@ -27,7 +27,7 @@ Copy the URL from the `HOST/PORT` column and open it in your browser.
 **Local setup:**
 
 If running DCM locally, Backstage is typically available at
-`http://localhost:3000`.
+`http://localhost:7007`.
 
 Once you have the Backstage URL open, navigate to **Administration → Data
 Center** in the Backstage sidebar, or go directly to `<backstage-url>/dcm`.
