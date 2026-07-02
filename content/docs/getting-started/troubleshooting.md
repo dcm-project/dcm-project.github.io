@@ -14,20 +14,21 @@ To view logs for a specific service:
 podman-compose logs <service-name>
 ```
 
-For example, to check the API gateway logs:
+For example, to check the control-plane logs:
 
 ```bash
-podman-compose logs gateway
+podman-compose logs control-plane
 ```
 
-Available service names: `gateway`, `postgres`, `nats`, `opa`, `service-provider-manager`, `catalog-manager`, `policy-manager`, `placement-manager`, `kubevirt-service-provider`.
+Available service names: `control-plane`, `postgres`, `nats`, `dcm-ui`,
+`kubevirt-service-provider`.
 
 ### Follow Logs in Real Time
 
 Use the `-f` flag to stream logs as they are produced:
 
 ```bash
-podman-compose logs -f gateway
+podman-compose logs -f control-plane
 ```
 
 ### Limit Log Output
@@ -35,7 +36,7 @@ podman-compose logs -f gateway
 To show only the last N lines:
 
 ```bash
-podman-compose logs --tail 50 gateway
+podman-compose logs --tail 50 control-plane
 ```
 
 ## Checking Container Status

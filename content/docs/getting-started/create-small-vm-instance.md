@@ -4,13 +4,16 @@ type: docs
 weight: 5
 ---
 
-This guide walks you through deploying a virtual machine on a KubeVirt service provider by creating a catalog item instance using the DCM CLI.
+This guide walks you through deploying a virtual machine on a KubeVirt service
+provider by creating a catalog item instance using the DCM CLI.
 
 ## Prerequisites
 
-- DCM services running with the KubeVirt profile (see [Local Setup](../local-setup/))
+- DCM services running with the KubeVirt profile (see
+  [Local Setup](../local-setup/))
 - A KubeVirt service provider registered with DCM
-- The `small-vm` catalog item created (see [Create Small VM Catalog Item](../create-small-vm-catalog-item/))
+- The `small-vm` catalog item created (see
+  [Create Small VM Catalog Item](../create-small-vm-catalog-item/))
 - The `dcm` CLI installed and in your `PATH`
 
 ## Define the Catalog Item Instance
@@ -33,6 +36,7 @@ spec:
 ```
 
 This creates a VM instance based on the `small-vm` catalog item with:
+
 - **Metadata** — sets the VM name to `small-vm` with a `dev` environment label
 - **1 vCPU** — overriding the default of 2
 
@@ -56,7 +60,8 @@ dcm catalog instance get my-dev-vm -o yaml
 
 ## Check the Resource Status
 
-You can check the status of the underlying resource from the service provider resource manager:
+You can check the status of the underlying resource from the service provider
+resource manager:
 
 ```bash
 dcm sp resource get my-dev-vm

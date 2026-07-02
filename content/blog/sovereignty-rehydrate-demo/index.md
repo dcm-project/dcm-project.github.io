@@ -16,10 +16,10 @@ images:
 
 It is 2 a.m. when your on-call team gets an alert that a Region A datacenter is
 down. The application holding customer data is unreachable, customers are
-waiting, and someone in leadership is already asking for an ETA. The engineer
-on duty opens the provider list and finds a healthy datacenter in Region B at
-the top. If you are only looking at infrastructure health, that is where you
-would send the workload next.
+waiting, and someone in leadership is already asking for an ETA. The engineer on
+duty opens the provider list and finds a healthy datacenter in Region B at the
+top. If you are only looking at infrastructure health, that is where you would
+send the workload next.
 
 The workload was never supposed to leave Region A. Whether the constraint comes
 from GDPR, a data residency requirement, a customer contract, or an internal
@@ -46,10 +46,10 @@ The application still stays in Region A.
 
 We run the scenario on three datacenters split across two regions:
 
-| Region | Datacenters | Notes |
-| --- | --- | --- |
-| **Region A** | `dc-demo-2`, `dc-demo-3` | Where the app is allowed to live |
-| **Region B** | `dc-demo-1` | Healthy, but off limits for this workload |
+| Region       | Datacenters              | Notes                                     |
+| ------------ | ------------------------ | ----------------------------------------- |
+| **Region A** | `dc-demo-2`, `dc-demo-3` | Where the app is allowed to live          |
+| **Region B** | `dc-demo-1`              | Healthy, but off limits for this workload |
 
 All three start healthy. Here is the twist: **Region B sorts first.** If DCM
 only picked the first available provider, every new deployment would land there
@@ -61,8 +61,9 @@ by default. That is exactly the trap the sovereignty policy is meant to prevent.
 
 ## One policy, enforced everywhere
 
-The regional rule is a [Rego](https://www.openpolicyagent.org/docs/latest/policy-language/)
-policy you create once in the DCM UI under **Policies → Create**. Name it
+The regional rule is a
+[Rego](https://www.openpolicyagent.org/docs/latest/policy-language/) policy you
+create once in the DCM UI under **Policies → Create**. Name it
 `Sovereignty Region Policy`, set type to `GLOBAL`, priority to `1`, and paste
 the policy below.
 
@@ -84,18 +85,16 @@ Region A workload.
 
 ### First match wins (within the region)
 
-Among the survivors, the policy picks the first provider alphabetically. That
-is why the initial deploy lands on `dc-demo-2`, and why failover moves to
+Among the survivors, the policy picks the first provider alphabetically. That is
+why the initial deploy lands on `dc-demo-2`, and why failover moves to
 `dc-demo-3` when `dc-demo-2` fails.
 
-{{< callout type="warning" >}}
-**What if an entire region goes down?**
+{{< callout type="warning" >}} **What if an entire region goes down?**
 
 If no healthy provider exists in the requested region, the request is rejected
 with a clear error. DCM will not silently fail over across a regional boundary
 to "help." That is the point. A hard failure is easier to explain to a
-compliance officer than a quiet data residency violation.
-{{< /callout >}}
+compliance officer than a quiet data residency violation. {{< /callout >}}
 
 {{% details title="View the full Rego policy" closed="true" %}}
 
@@ -104,7 +103,7 @@ package provider.sovereignty
 
 import rego.v1
 
-spm_url := "http://service-provider-manager:8080/api/v1alpha1/providers"
+spm_url := "http://control-plane:8080/api/v1alpha1/providers"
 
 main := {"rejected": true, "rejection_reason": "spec.service_type is required"} if {
     not input.spec.service_type
@@ -156,18 +155,18 @@ _providers_result(providers, _, _) := {"rejected": false, "selected_provider": p
 
 ### 1. Deploy to Region A
 
-Create a **Pet Clinic** instance from the **Instances** tab and choose
-**Region A**. DCM evaluates the sovereignty policy, skips Region B, and places
-the app on `dc-demo-2`.
+Create a **Pet Clinic** instance from the **Instances** tab and choose **Region
+A**. DCM evaluates the sovereignty policy, skips Region B, and places the app on
+`dc-demo-2`.
 
 Behind the scenes, DCM stores your original request. That stored intent is the
 source of truth for everything that follows.
 
 ### 2. Simulate the outage
 
-Take `dc-demo-2` offline (`podman stop` on the provider containers). Region B
-is still healthy and still first on the list. In a typical setup, that is where
-the story ends and the compliance review begins.
+Take `dc-demo-2` offline (`podman stop` on the provider containers). Region B is
+still healthy and still first on the list. In a typical setup, that is where the
+story ends and the compliance review begins.
 
 Here, the policy has already ruled Region B out.
 
@@ -198,14 +197,14 @@ Most platforms draw a hard line between **day-one placement** and **disaster
 recovery**. Different workflows, different runbooks, different approval paths.
 DCM treats them as the same operation:
 
-| Scenario | What you do | What DCM does |
-| --- | --- | --- |
-| First deploy | Create a catalog instance | Evaluates policy, places the app |
-| Datacenter failure | Rehydrate | Re-evaluates the same policy against current health |
-| Planned migration | Rehydrate | Same code path, same policy engine |
+| Scenario           | What you do               | What DCM does                                       |
+| ------------------ | ------------------------- | --------------------------------------------------- |
+| First deploy       | Create a catalog instance | Evaluates policy, places the app                    |
+| Datacenter failure | Rehydrate                 | Re-evaluates the same policy against current health |
+| Planned migration  | Rehydrate                 | Same code path, same policy engine                  |
 
-**Initial placement, disaster recovery, and migration share one mechanism.**
-The catalog instance holds your intent. The policy engine applies your rules.
+**Initial placement, disaster recovery, and migration share one mechanism.** The
+catalog instance holds your intent. The policy engine applies your rules.
 Rehydration is replay, not a separate rebuild workflow invented for emergencies.
 
 That consistency is what makes regional sovereignty hold at 2 a.m. the same way
@@ -221,17 +220,18 @@ Click through the DCM UI at your own pace: explore the providers, create the
 policy, deploy Pet Clinic, and watch where the app lands.
 
 The walkthrough covers almost the entire scenario in the browser, including
-rehydration from the **Instances** tab. The step that still needs a
-terminal today is simulating the datacenter failure.
-The guide flags that when you reach it.
+rehydration from the **Instances** tab. The step that still needs a terminal
+today is simulating the datacenter failure. The guide flags that when you reach
+it.
 
 Want to reproduce the full lab on your own hardware? You will need the
-[DCM stack](/docs/getting-started/local-setup/), [three workload clusters with
-region-tagged providers](https://github.com/dcm-project/api-gateway/blob/main/RUN.md#running-with-service-providers)
-(see [`SP_REGION`](https://github.com/dcm-project/k8s-container-service-provider#provider-identity)
-for region metadata), and the [Pet Clinic catalog
-item](https://github.com/dcm-project/api-gateway/blob/main/docs/three-tier-app-kind.md)
-configured with a [deployment region
-field](/docs/user-guide/catalog-items/#fields-and-policy-evaluation). If you are
-new to DCM, start with the walkthrough above and come back to the lab setup when
-you are ready to go deeper.
+[DCM stack](/docs/getting-started/local-setup/),
+[three workload clusters with region-tagged providers](https://github.com/dcm-project/control-plane/blob/main/deploy/RUN.md#running-with-service-providers)
+(see
+[`SP_REGION`](https://github.com/dcm-project/k8s-container-service-provider#provider-identity)
+for region metadata), and the
+[Pet Clinic catalog item](https://github.com/dcm-project/control-plane/blob/main/deploy/docs/three-tier-app-kind.md)
+configured with a
+[deployment region field](/docs/user-guide/catalog-items/#fields-and-policy-evaluation).
+If you are new to DCM, start with the walkthrough above and come back to the lab
+setup when you are ready to go deeper.
