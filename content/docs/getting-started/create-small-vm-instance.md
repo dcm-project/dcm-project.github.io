@@ -26,14 +26,20 @@ display_name: "My Dev VM"
 spec:
   catalog_item_id: small-vm
   user_values:
-    - path: metadata
+    - resource: main
+      path: metadata
       value:
         name: "small-vm"
         labels:
           env: "dev"
-    - path: vcpu.count
+    - resource: main
+      path: vcpu.count
       value: 1
 ```
+
+Each `user_values` entry specifies which **resource** (by name) it applies to.
+For single-resource catalog items like `small-vm`, this is the name of the sole
+resource (`main`).
 
 This creates a VM instance based on the `small-vm` catalog item with:
 

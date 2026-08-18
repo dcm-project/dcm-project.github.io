@@ -23,42 +23,46 @@ Create a file called `small-vm.yaml` with the following content:
 api_version: v1alpha1
 display_name: "Small VM"
 spec:
-  service_type: vm
-  fields:
-    - path: metadata
-      editable: true
-    - path: vcpu.count
-      display_name: "CPU Count"
-      editable: true
-      default: 2
-      validation_schema:
-        type: integer
-        minimum: 1
-        maximum: 4
-    - path: memory.size
-      display_name: "Memory (GB)"
-      editable: false
-      default: "2GB"
-    - path: storage.disks
-      display_name: "Storage (GB)"
-      editable: false
-      default:
-        - name: boot
-          capacity: "20GB"
-      validation_schema:
-        type: array
-    - path: guest_os.type
-      display_name: "Guest OS"
-      editable: true
-      default: "rhel-10"
-      validation_schema:
-        type: string
-        enum:
-          - rhel-9
-          - rhel-10
+  resources:
+    - name: main
+      service_type: vm
+      fields:
+        - path: metadata
+          editable: true
+        - path: vcpu.count
+          display_name: "CPU Count"
+          editable: true
+          default: 2
+          validation_schema:
+            type: integer
+            minimum: 1
+            maximum: 4
+        - path: memory.size
+          display_name: "Memory (GB)"
+          editable: false
+          default: "2GB"
+        - path: storage.disks
+          display_name: "Storage (GB)"
+          editable: false
+          default:
+            - name: boot
+              capacity: "20GB"
+          validation_schema:
+            type: array
+        - path: guest_os.type
+          display_name: "Guest OS"
+          editable: true
+          default: "rhel-10"
+          validation_schema:
+            type: string
+            enum:
+              - rhel-9
+              - rhel-10
 ```
 
-This defines a small VM catalog item with:
+A catalog item declares one or more **resources** — each with a name, service
+type, and field configurations. This single-resource catalog item defines a VM
+(`main`) with:
 
 - **Metadata** — editable by users, for setting VM name and labels
 - **2 vCPUs** — editable by users, between 1 and 4
