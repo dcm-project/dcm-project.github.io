@@ -15,6 +15,10 @@ words:
   - kubevirt
   - hextra
   - hyperscaler
+  - JWKS
+  - Keycloak
+  - keyring
+  - OIDC
   - rgba
   - vcpu
   - omachace

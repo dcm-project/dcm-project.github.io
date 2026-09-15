@@ -20,5 +20,7 @@ Get up and running with DCM.
   Deploy a VM by creating an instance of the catalog item.
 - **[Register Another Provider](register-another-provider/)** — Register a
   second service provider and create a random selection policy.
+- **[Authentication](authentication/)** — Enable auth, log in with the CLI or
+  UI, and call the API with bearer tokens.
 - **[Troubleshooting](troubleshooting/)** — Diagnose issues using container logs
   and status checks.

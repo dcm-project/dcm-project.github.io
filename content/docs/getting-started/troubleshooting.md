@@ -54,3 +54,23 @@ If a service is unhealthy or not responding:
 ```bash
 podman-compose restart <service-name>
 ```
+
+## Authentication
+
+If API calls or the CLI return `401 Unauthorized`, see
+[Authentication](authentication/) for enabling auth, obtaining tokens, and
+issuer configuration.
+
+Common checks:
+
+- Control plane has `AUTH_DISABLED=false` and `AUTH_ISSUER_URL` set.
+- CLI: run `dcm login` or set `DCM_TOKEN` / `--token`.
+- Token audience includes `dcm-api` (or your configured `AUTH_JWT_AUDIENCE`).
+- Keycloak (or your IdP) is running and reachable from the control plane.
+
+When auth is enabled, unauthenticated `curl` calls to protected endpoints fail
+by design. The health endpoint remains open:
+
+```bash
+curl http://localhost:8080/api/v1alpha1/health
+```

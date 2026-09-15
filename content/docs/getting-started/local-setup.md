@@ -28,6 +28,9 @@ podman-compose up -d
 The control-plane API is available at `http://localhost:8080`. The DCM UI is at
 `http://localhost:7007`.
 
+Authentication is **disabled by default** on this stack. To require login and
+JWT bearer tokens, see [Authentication](authentication/).
+
 ## Running with the KubeVirt Service Provider
 
 The `kubevirt-service-provider` is behind a compose profile and does not start
@@ -58,11 +61,14 @@ curl http://localhost:8080/api/v1alpha1/health
 ```
 
 If you deployed with the KubeVirt provider, you can also list the registered
-providers:
+providers (when authentication is disabled):
 
 ```bash
 curl http://localhost:8080/api/v1alpha1/providers
 ```
+
+When authentication is enabled, add `Authorization: Bearer <token>` to API
+calls. See [Authentication](authentication/#authenticating-api-requests).
 
 ## Setting Up the CLI
 

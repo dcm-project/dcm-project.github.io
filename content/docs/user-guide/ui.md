@@ -35,6 +35,18 @@ Center** in the Backstage sidebar, or go directly to `<backstage-url>/dcm`.
 The Data Center page is organized into six tabs, one for each core DCM resource
 type.
 
+## Authentication
+
+When the control plane requires JWT authentication, sign in to Backstage (or Red
+Hat Developer Hub) using the identity provider your platform operator
+configured. The DCM plugin sends bearer tokens to the control plane on your
+behalf.
+
+The default local compose UI does not configure Backstage SSO. For auth-enabled
+local stacks, use the CLI (`dcm login`) or API tokens for control-plane access,
+and configure Backstage authentication separately for browser login. See
+[Authentication](../getting-started/authentication/#web-ui-backstage).
+
 ## Common patterns
 
 All tabs share the following interaction patterns:

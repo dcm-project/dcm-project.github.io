@@ -12,6 +12,8 @@ Learn how to manage DCM resources using the CLI or the web UI.
 
 - **[CLI Configuration](cli-configuration/)** — Configure the CLI, global flags,
   output formats, and shell completion.
+- **[Authentication](../getting-started/authentication/)** — Log in, use bearer
+  tokens, and work with auth-enabled control planes.
 - **[Providers](providers/)** — View registered service providers and their
   health status.
 - **[Service Types](service-types/)** — Browse available service type
