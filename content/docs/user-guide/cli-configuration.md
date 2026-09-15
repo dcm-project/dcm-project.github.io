@@ -62,6 +62,10 @@ bearer token on each request. Use one of the following approaches:
 Run `dcm login` after setting the issuer URL. The command runs the OIDC device
 authorization flow in your browser and stores tokens locally.
 
+For the reference compose stack, map the hostname `keycloak` on your host before
+login (see
+[Local compose: host access to Keycloak](../getting-started/authentication/#local-compose-host-access-to-keycloak)).
+
 ```bash
 dcm login --issuer-url http://keycloak:8080/realms/dcm \
   --control-plane-url http://localhost:8080

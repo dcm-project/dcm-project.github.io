@@ -104,7 +104,38 @@ The DCM CLI authenticates with the OIDC **device authorization** flow:
 4. Run normal `dcm` commands; the CLI attaches a bearer token and refreshes it
    before expiry.
 
-Example for the reference Keycloak realm (issuer must match OIDC discovery):
+#### Local compose: host access to Keycloak
+
+The reference stack sets the Keycloak hostname so the issuer is
+`http://keycloak:8080/realms/dcm`. That name resolves on the compose network,
+not on your laptop by default. Before you run `dcm login` on the host, map
+`keycloak` to the Keycloak container IP (repeat after recreating the container
+if the IP changes):
+
+```bash
+KC_IP=$(podman inspect "$(podman ps -q --filter name=keycloak)" \
+  --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+grep -qE '[[:space:]]keycloak$' /etc/hosts \
+  && sudo sed -i -E "s/^[0-9.]+[[:space:]]+keycloak$/${KC_IP} keycloak/" /etc/hosts \
+  || echo "${KC_IP} keycloak" | sudo tee -a /etc/hosts
+getent hosts keycloak
+```
+
+Confirm the issuer string matches what the control plane expects:
+
+```bash
+curl -sf http://keycloak:8080/realms/dcm/.well-known/openid-configuration \
+  | jq -r .issuer
+```
+
+You should see `http://keycloak:8080/realms/dcm`. The admin UI is also at
+`http://localhost:8180`, but do not use `localhost:8180` as the issuer URL on
+stock compose: discovery still advertises `keycloak:8080`, and the control plane
+must use the same issuer as `AUTH_ISSUER_URL`.
+
+#### Example login
+
+Example for the reference Keycloak realm after host resolution is in place:
 
 ```bash
 export DCM_ISSUER_URL=http://keycloak:8080/realms/dcm
@@ -123,12 +154,6 @@ dcm logout
 
 See [CLI Configuration](../user-guide/cli-configuration/#authentication) for
 flags and environment variables.
-
-> **Local issuer hostname:** The reference stack advertises issuer
-> `http://keycloak:8080/realms/dcm`. The control plane resolves `keycloak` on
-> the compose network. On your host, map `keycloak` to the Keycloak container IP
-> (or use the same issuer URL your operator documents) so `dcm login` can reach
-> OIDC discovery and the device flow.
 
 ### Web UI (Backstage)
 
@@ -190,7 +215,7 @@ returns `403 Forbidden`.
 | Symptom                                     | Things to check                                                                                                                                     |
 | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `401 Unauthorized` on API or CLI            | Auth enabled on control plane; token present and not expired; `aud` includes `dcm-api`; issuer matches `AUTH_ISSUER_URL`.                           |
-| `dcm login` cannot reach issuer             | Issuer URL matches `.well-known/openid-configuration`; host can resolve and reach Keycloak; TLS settings if using HTTPS.                            |
+| `dcm login` cannot reach issuer             | Host maps `keycloak` (see [host access](#local-compose-host-access-to-keycloak)); issuer matches discovery; TLS if using HTTPS.                     |
 | Issuer / JWKS errors in control-plane logs  | `AUTH_ISSUER_URL` reachable from the control-plane container; Keycloak healthy (`auth` profile running).                                            |
 | CLI works but UI fails (or reverse)         | Backstage SSO and control plane must trust the same IdP and audience; plugin backend URL points at the control plane.                               |
 | `403 Forbidden` with valid token            | Actor suspended or deactivated; wait up to `AUTH_CACHE_TTL` after status changes.                                                                   |
