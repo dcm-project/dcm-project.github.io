@@ -16,20 +16,25 @@ By default, local deployments run with authentication **disabled**
 (`AUTH_DISABLED=true`). Any client that can reach the API can call protected
 endpoints without credentials. This keeps getting-started tutorials simple.
 
-For shared or production environments, operators enable authentication so every
-API request is tied to an identity. The control plane validates JSON Web Tokens
-(JWTs) issued by an OpenID Connect (OIDC) identity provider. The reference local
-stack uses [Keycloak](https://www.keycloak.org/) with a pre-imported `dcm`
-realm.
+For shared or production environments, operators **should** enable
+authentication so every API request is tied to an identity. The control plane
+validates JSON Web Tokens (JWTs) issued by an OpenID Connect (OIDC) identity
+provider. The reference local stack uses [Keycloak](https://www.keycloak.org/)
+with a pre-imported `dcm` realm.
 
 The `/api/v1alpha1/health` endpoint stays **unauthenticated** whether or not
 auth is enabled.
 
-> **Service providers:** Service providers do not send authentication headers to
-> the control plane yet. Enabling auth on the control plane can break
-> service-provider registration and instance workflows until service-provider
-> authentication is available. Use auth for CLI, UI, and direct API access
-> first, or keep auth disabled while exercising full SP flows locally.
+> **Service providers:** Service providers reach the control plane through the
+> environment agent, not direct HTTP calls. End-to-end authentication for the
+> agent and service providers is still in progress (for example
+> [environment-agent#38](https://github.com/dcm-project/environment-agent/pull/38)
+> and
+> [environment-agent#35](https://github.com/dcm-project/environment-agent/pull/35)).
+> Enabling auth on the control plane can still affect SP registration and
+> instance workflows until that chain is complete. Use auth for CLI, UI, and
+> direct API access first, or keep auth disabled while exercising full SP flows
+> locally.
 
 ## How authentication works
 
@@ -42,12 +47,14 @@ auth is enabled.
    (just-in-time provisioning). No manual database setup is required for new
    Keycloak users in the `dcm` realm.
 
-Tokens must include the audience expected by the control plane (default
-`dcm-api` via `AUTH_JWT_AUDIENCE`).
+Tokens must include the `aud` claim the control plane expects. The default
+audience is `dcm-api`; operators can change it with `AUTH_JWT_AUDIENCE`.
 
 An optional **proxy-header** path accepts `X-Forwarded-User` and
 `X-Forwarded-Preferred-Username` when `X-Auth-Proxy-Secret` matches
-`AUTH_PROXY_SECRET`. Most users rely on JWT bearer tokens instead.
+`AUTH_PROXY_SECRET`. See
+[Authentication middleware](https://github.com/dcm-project/enhancements/blob/main/enhancements/authentication/authentication.md#2-authentication-middleware)
+in the authentication enhancement. Most users rely on JWT bearer tokens instead.
 
 ## Prerequisites for authenticated deployments
 
@@ -89,8 +96,10 @@ described in the
 | `AUTH_CACHE_TTL`    | How long resolved actors are cached (default `60s`).                                |
 | `DCM_ADMIN_SUBJECT` | Keycloak subject UUID for the seed admin actor (required when auth is enabled).     |
 
-Copy secrets and toggles from `deploy/.env.example` into `deploy/.env`. Do not
-commit real production secrets to documentation or source control.
+Copy secrets and toggles from `deploy/.env.example` into `deploy/.env`.
+
+> **Warning:** Do not commit real production secrets to documentation or source
+> control.
 
 ## Authenticated user workflows
 
@@ -138,8 +147,8 @@ must use the same issuer as `AUTH_ISSUER_URL`.
 Example for the reference Keycloak realm after host resolution is in place:
 
 ```bash
-export DCM_ISSUER_URL=http://keycloak:8080/realms/dcm
-dcm login --control-plane-url http://localhost:8080
+dcm login --issuer-url http://keycloak:8080/realms/dcm \
+  --control-plane-url http://localhost:8080
 dcm sp provider list
 ```
 
@@ -184,21 +193,23 @@ credentials using `issuer-url` from config.
 
 ### Static bearer token (CI and scripts)
 
-For non-interactive use, set a bearer access token directly:
+For non-interactive use, pass a bearer access token with `--token` (or set
+`DCM_TOKEN`). Point the CLI at the control plane with `--control-plane-url` when
+it is not the default `http://localhost:8080`:
 
 ```bash
-export DCM_TOKEN="<access-token>"
-export DCM_CONTROL_PLANE_URL=http://localhost:8080
-dcm sp provider list
+dcm sp provider list \
+  --token "<access-token>" \
+  --control-plane-url http://localhost:8080
 ```
 
-Or pass `--token` on a single invocation. Static tokens skip the device flow and
-do not use the token store. Obtain access tokens from your identity provider
-(for example Keycloak token endpoint with a client your operator provisioned).
+Static tokens skip the device flow and do not use the token store. Obtain access
+tokens from your identity provider (for example Keycloak token endpoint with a
+client your operator provisioned).
 
 ### Authenticating API requests
 
-Send the access token on every request except health checks:
+Send the access token on protected API requests:
 
 ```bash
 curl -s \
@@ -212,15 +223,15 @@ returns `403 Forbidden`.
 
 ## Troubleshooting
 
-| Symptom                                     | Things to check                                                                                                                                     |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `401 Unauthorized` on API or CLI            | Auth enabled on control plane; token present and not expired; `aud` includes `dcm-api`; issuer matches `AUTH_ISSUER_URL`.                           |
-| `dcm login` cannot reach issuer             | Host maps `keycloak` (see [host access](#local-compose-host-access-to-keycloak)); issuer matches discovery; TLS if using HTTPS.                     |
-| Issuer / JWKS errors in control-plane logs  | `AUTH_ISSUER_URL` reachable from the control-plane container; Keycloak healthy (`auth` profile running).                                            |
-| CLI works but UI fails (or reverse)         | Backstage SSO and control plane must trust the same IdP and audience; plugin backend URL points at the control plane.                               |
-| `403 Forbidden` with valid token            | Actor suspended or deactivated; wait up to `AUTH_CACHE_TTL` after status changes.                                                                   |
-| Service provider errors after enabling auth | Expected until SP auth exists; disable auth for SP-heavy dev or set `AUTH_DISABLED=true` on control plane for SP testing only (not for production). |
-| Device flow times out                       | Complete browser approval within the time shown; retry `dcm login`.                                                                                 |
+| Symptom                                     | Things to check                                                                                                                 |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `401 Unauthorized` on API or CLI            | Auth enabled on control plane; token present and not expired; `aud` includes `dcm-api`; issuer matches `AUTH_ISSUER_URL`.       |
+| `dcm login` cannot reach issuer             | Host maps `keycloak` (see [host access](#local-compose-host-access-to-keycloak)); issuer matches discovery; TLS if using HTTPS. |
+| Issuer / JWKS errors in control-plane logs  | `AUTH_ISSUER_URL` reachable from the control-plane container; Keycloak healthy (`auth` profile running).                        |
+| CLI works but UI fails (or reverse)         | Backstage SSO and control plane must trust the same IdP and audience; plugin backend URL points at the control plane.           |
+| `403 Forbidden` with valid token            | Actor suspended or deactivated; wait up to `AUTH_CACHE_TTL` after status changes.                                               |
+| Service provider errors after enabling auth | SP traffic uses the environment agent; auth for agent and SP paths is still landing. See SP callout in [Overview](#overview).   |
+| Device flow times out                       | Complete browser approval within the time shown; retry `dcm login`.                                                             |
 
 Verify Keycloak readiness when using compose:
 
