@@ -214,7 +214,7 @@ Send the access token on protected API requests:
 ```bash
 curl -s \
   -H "Authorization: Bearer ${DCM_TOKEN}" \
-  http://localhost:8080/api/v1alpha1/providers
+  http://localhost:8080/api/v1alpha1/catalog-items
 ```
 
 Without a valid token when auth is enabled, the API returns `401 Unauthorized`.

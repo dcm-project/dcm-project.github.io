@@ -60,11 +60,11 @@ Check the health endpoint:
 curl http://localhost:8080/api/v1alpha1/health
 ```
 
-If you deployed with the KubeVirt provider, you can also list the registered
-providers (when authentication is disabled):
+If you deployed with the KubeVirt provider, you can also list registered
+environment agents (when authentication is disabled):
 
 ```bash
-curl http://localhost:8080/api/v1alpha1/providers
+curl http://localhost:8080/api/v1alpha1/agents
 ```
 
 When authentication is enabled, add `Authorization: Bearer <token>` to API
