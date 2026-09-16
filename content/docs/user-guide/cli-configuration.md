@@ -83,7 +83,10 @@ For scripts and CI, pass a bearer access token without using the device flow:
 | `--token`       | Bearer access token for this invocation     |
 | `DCM_TOKEN`     | Same as `--token`, via environment variable |
 
-When `--token` or `DCM_TOKEN` is set, the CLI does not read the token store.
+When `--token` or `DCM_TOKEN` is set, the CLI does not read the token store. If
+both a static token and `issuer-url` are configured, the static token is used
+for API requests (`--token` and `DCM_TOKEN` follow the usual flag-over-env
+precedence). Stored login sessions and `dcm logout` still use `issuer-url`.
 
 ### Auth-related settings
 
