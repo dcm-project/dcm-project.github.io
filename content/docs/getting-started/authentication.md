@@ -47,8 +47,11 @@ auth is enabled.
    (just-in-time provisioning). No manual database setup is required for new
    Keycloak users in the `dcm` realm.
 
-Tokens must include the `aud` claim the control plane expects. The default
-audience is `dcm-api`; operators can change it with `AUTH_JWT_AUDIENCE`.
+Tokens may need an `aud` claim that matches `AUTH_JWT_AUDIENCE`. The control
+plane does **not** default this variable: if it is empty, audience validation is
+**disabled** (any client token from the issuer realm can be accepted). For
+production-like setups, set `AUTH_JWT_AUDIENCE` explicitly (the reference
+Keycloak realm uses `dcm-api` in `deploy/.env.example` when auth is enabled).
 
 An optional **proxy-header** path accepts `X-Forwarded-User` and
 `X-Forwarded-Preferred-Username` when `X-Auth-Proxy-Secret` matches
@@ -91,7 +94,7 @@ described in the
 | ------------------- | ----------------------------------------------------------------------------------- |
 | `AUTH_DISABLED`     | When `true`, auth middleware is bypassed (default for local dev).                   |
 | `AUTH_ISSUER_URL`   | OIDC issuer URL for JWT validation (for example `http://keycloak:8080/realms/dcm`). |
-| `AUTH_JWT_AUDIENCE` | Expected `aud` claim in access tokens (default `dcm-api`).                          |
+| `AUTH_JWT_AUDIENCE` | Expected `aud` claim when set; empty disables audience checks (see above).          |
 | `AUTH_PROXY_SECRET` | Shared secret for the proxy-header auth path (optional).                            |
 | `AUTH_CACHE_TTL`    | How long resolved actors are cached (default `60s`).                                |
 | `DCM_ADMIN_SUBJECT` | Keycloak subject UUID for the seed admin actor (required when auth is enabled).     |
@@ -223,15 +226,15 @@ returns `403 Forbidden`.
 
 ## Troubleshooting
 
-| Symptom                                     | Things to check                                                                                                                 |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `401 Unauthorized` on API or CLI            | Auth enabled on control plane; token present and not expired; `aud` includes `dcm-api`; issuer matches `AUTH_ISSUER_URL`.       |
-| `dcm login` cannot reach issuer             | Host maps `keycloak` (see [host access](#local-compose-host-access-to-keycloak)); issuer matches discovery; TLS if using HTTPS. |
-| Issuer / JWKS errors in control-plane logs  | `AUTH_ISSUER_URL` reachable from the control-plane container; Keycloak healthy (`auth` profile running).                        |
-| CLI works but UI fails (or reverse)         | Backstage SSO and control plane must trust the same IdP and audience; plugin backend URL points at the control plane.           |
-| `403 Forbidden` with valid token            | Actor suspended or deactivated; wait up to `AUTH_CACHE_TTL` after status changes.                                               |
-| Service provider errors after enabling auth | SP traffic uses the environment agent; auth for agent and SP paths is still landing. See SP callout in [Overview](#overview).   |
-| Device flow times out                       | Complete browser approval within the time shown; retry `dcm login`.                                                             |
+| Symptom                                     | Things to check                                                                                                                       |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `401 Unauthorized` on API or CLI            | Auth enabled; token present and not expired; issuer matches `AUTH_ISSUER_URL`; if `AUTH_JWT_AUDIENCE` is set, token `aud` must match. |
+| `dcm login` cannot reach issuer             | Host maps `keycloak` (see [host access](#local-compose-host-access-to-keycloak)); issuer matches discovery; TLS if using HTTPS.       |
+| Issuer / JWKS errors in control-plane logs  | `AUTH_ISSUER_URL` reachable from the control-plane container; Keycloak healthy (`auth` profile running).                              |
+| CLI works but UI fails (or reverse)         | Backstage SSO and control plane must trust the same IdP and audience; plugin backend URL points at the control plane.                 |
+| `403 Forbidden` with valid token            | Actor suspended or deactivated; wait up to `AUTH_CACHE_TTL` after status changes.                                                     |
+| Service provider errors after enabling auth | SP traffic uses the environment agent; auth for agent and SP paths is still landing. See SP callout in [Overview](#overview).         |
+| Device flow times out                       | Complete browser approval within the time shown; retry `dcm login`.                                                                   |
 
 Verify Keycloak readiness when using compose:
 

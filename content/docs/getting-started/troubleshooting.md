@@ -65,7 +65,8 @@ Common checks:
 
 - Control plane has `AUTH_DISABLED=false` and `AUTH_ISSUER_URL` set.
 - CLI: run `dcm login` or set `DCM_TOKEN` / `--token`.
-- Token audience includes `dcm-api` (or your configured `AUTH_JWT_AUDIENCE`).
+- If `AUTH_JWT_AUDIENCE` is set, the token `aud` claim must match; when unset,
+  audience validation is disabled on the control plane.
 - Keycloak (or your IdP) is running and reachable from the control plane.
 
 When auth is enabled, unauthenticated `curl` calls to protected endpoints fail
