@@ -152,7 +152,7 @@ Example for the reference Keycloak realm after host resolution is in place:
 ```bash
 dcm login --issuer-url http://keycloak:8080/realms/dcm \
   --control-plane-url http://localhost:8080
-dcm sp provider list
+dcm catalog item list
 ```
 
 `dcm login` saves `issuer-url` in `~/.dcm/config.yaml`. Tokens are stored in the
@@ -201,7 +201,7 @@ For non-interactive use, pass a bearer access token with `--token` (or set
 it is not the default `http://localhost:8080`:
 
 ```bash
-dcm sp provider list \
+dcm catalog item list \
   --token "<access-token>" \
   --control-plane-url http://localhost:8080
 ```

@@ -121,10 +121,10 @@ All commands support three output formats via the `-o` flag:
 - **`json`** — Structured JSON output, useful for scripting and automation.
 - **`yaml`** — YAML output.
 
-For example, to list providers as JSON:
+For example, to list catalog items as JSON:
 
 ```bash
-dcm sp provider list -o json
+dcm catalog item list -o json
 ```
 
 ## Shell Completion
