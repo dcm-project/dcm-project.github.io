@@ -26,15 +26,14 @@ The `/api/v1alpha1/health` endpoint stays **unauthenticated** whether or not
 auth is enabled.
 
 > **Service providers:** Service providers reach the control plane through the
-> environment agent, not direct HTTP calls. End-to-end authentication for the
-> agent and service providers is still in progress (for example
-> [environment-agent#38](https://github.com/dcm-project/environment-agent/pull/38)
-> and
-> [environment-agent#35](https://github.com/dcm-project/environment-agent/pull/35)).
+> environment agent, not direct HTTP calls. The agent has its own inbound
+> (protecting its API) and outbound (registering with the control plane)
+> authentication, documented separately in
+> [Environment Agent Authentication](../environment-agent-authentication/).
 > Enabling auth on the control plane can still affect SP registration and
-> instance workflows until that chain is complete. Use auth for CLI, UI, and
-> direct API access first, or keep auth disabled while exercising full SP flows
-> locally.
+> instance workflows if the agent's outbound authentication is not configured to
+> match. Use auth for CLI, UI, and direct API access first, or keep auth
+> disabled while exercising full SP flows locally.
 
 ## How authentication works
 
@@ -226,15 +225,15 @@ returns `403 Forbidden`.
 
 ## Troubleshooting
 
-| Symptom                                     | Things to check                                                                                                                       |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `401 Unauthorized` on API or CLI            | Auth enabled; token present and not expired; issuer matches `AUTH_ISSUER_URL`; if `AUTH_JWT_AUDIENCE` is set, token `aud` must match. |
-| `dcm login` cannot reach issuer             | Host maps `keycloak` (see [host access](#local-compose-host-access-to-keycloak)); issuer matches discovery; TLS if using HTTPS.       |
-| Issuer / JWKS errors in control-plane logs  | `AUTH_ISSUER_URL` reachable from the control-plane container; Keycloak healthy (`auth` profile running).                              |
-| CLI works but UI fails (or reverse)         | Backstage SSO and control plane must trust the same IdP and audience; plugin backend URL points at the control plane.                 |
-| `403 Forbidden` with valid token            | Actor suspended or deactivated; wait up to `AUTH_CACHE_TTL` after status changes.                                                     |
-| Service provider errors after enabling auth | SP traffic uses the environment agent; auth for agent and SP paths is still landing. See SP callout in [Overview](#overview).         |
-| Device flow times out                       | Complete browser approval within the time shown; retry `dcm login`.                                                                   |
+| Symptom                                     | Things to check                                                                                                                                                                                           |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `401 Unauthorized` on API or CLI            | Auth enabled; token present and not expired; issuer matches `AUTH_ISSUER_URL`; if `AUTH_JWT_AUDIENCE` is set, token `aud` must match.                                                                     |
+| `dcm login` cannot reach issuer             | Host maps `keycloak` (see [host access](#local-compose-host-access-to-keycloak)); issuer matches discovery; TLS if using HTTPS.                                                                           |
+| Issuer / JWKS errors in control-plane logs  | `AUTH_ISSUER_URL` reachable from the control-plane container; Keycloak healthy (`auth` profile running).                                                                                                  |
+| CLI works but UI fails (or reverse)         | Backstage SSO and control plane must trust the same IdP and audience; plugin backend URL points at the control plane.                                                                                     |
+| `403 Forbidden` with valid token            | Actor suspended or deactivated; wait up to `AUTH_CACHE_TTL` after status changes.                                                                                                                         |
+| Service provider workflow returns an auth error | Identify which request failed: SP-to-agent provider API calls use inbound `AGENT_AUTH_*` settings and the SP's token; agent registration and heartbeat calls use outbound `DCM_AUTH_*` settings and the control plane's `AUTH_*` settings. See [Environment Agent Authentication](../environment-agent-authentication/). |
+| Device flow times out                       | Complete browser approval within the time shown; retry `dcm login`.                                                                                                                                       |
 
 Verify Keycloak readiness when using compose:
 
