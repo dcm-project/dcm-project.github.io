@@ -84,6 +84,11 @@ curl http://localhost:8080/api/v1alpha1/agents
 When authentication is enabled, add `Authorization: Bearer <token>` to API
 calls. See [Authentication](authentication/#authenticating-api-requests).
 
+> **Note:** This is the control plane's own auth for the `/agents` endpoint. The
+> environment agent process itself has separate, independent authentication for
+> its own API and for its calls back to the control plane — see
+> [Environment Agent Authentication](environment-agent-authentication/).
+
 ## Setting Up the CLI
 
 The DCM CLI (`dcm`) lets you interact with the DCM control plane from the

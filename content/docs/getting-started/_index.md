@@ -22,5 +22,7 @@ Get up and running with DCM.
   second service provider and create a random selection policy.
 - **[Authentication](authentication/)** — Enable auth, log in with the CLI or
   UI, and call the API with bearer tokens.
+- **[Environment Agent Authentication](environment-agent-authentication/)** —
+  Protect the agent's API and authenticate its requests to the control plane.
 - **[Troubleshooting](troubleshooting/)** — Diagnose issues using container logs
   and status checks.
