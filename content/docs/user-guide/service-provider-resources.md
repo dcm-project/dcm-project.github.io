@@ -6,11 +6,10 @@ weight: 7
 
 Service provider resources are the actual infrastructure resources — such as
 virtual machines, containers, or other services — created on
-[providers](../providers/) when
-[catalog item instances](../catalog-item-instances/) are provisioned. For
-example, when you deploy a catalog item instance for a VM on a KubeVirt
-provider, the control plane creates a KubeVirt VirtualMachine resource. That
-underlying resource is the SP resource.
+[agents](../agents/) when [catalog item instances](../catalog-item-instances/)
+are provisioned. For example, when you deploy a catalog item instance for a VM
+on a KubeVirt provider, the control plane creates a KubeVirt VirtualMachine
+resource. That underlying resource is the SP resource.
 
 SP resources are managed entirely by the control plane and are **read-only** in
 the CLI. Each SP resource is linked to a specific catalog item instance and the

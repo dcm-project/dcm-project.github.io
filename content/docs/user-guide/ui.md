@@ -61,35 +61,36 @@ All tabs share the following interaction patterns:
 - **Empty state** — When no data is available, the table shows an empty state
   with a prompt to create the first resource where applicable.
 
-## Providers
+## Agents
 
-The Providers tab lists all infrastructure providers registered with DCM.
-Providers are created automatically when service provider instances connect and
-register their available infrastructure.
+The Agents tab lists all infrastructure environment agents registered with DCM.
+Agents become available when they automatically register successfully with DCM
+on startup
 
 ![Providers tab showing a table of registered providers with columns for display name, name, endpoint, service type, operations, status, and actions](/images/ui/providers-tab.png)
 
 ### Columns
 
-| Column       | Description                                                                           |
-| ------------ | ------------------------------------------------------------------------------------- |
-| Display name | Human-readable label, with the provider ID shown as a caption below.                  |
-| Name         | Unique internal name of the provider.                                                 |
-| Endpoint     | The provider's API endpoint URL, with a copy button.                                  |
-| Service type | The service type the provider supports (e.g., `vm`).                                  |
-| Operations   | Operations the provider exposes, shown as chips. Overflow is shown as a "+N" tooltip. |
-| Status       | Current health status of the provider.                                                |
-| Actions      | Edit and delete buttons.                                                              |
+| Column         | Description                                                            |
+| -------------- | ---------------------------------------------------------------------- |
+| Name           | Unique internal name of the agent.                                     |
+| Environment    | Displays the environment label for the agent (e.g., `dev`).            |
+| Service types  | The list of service type the agent supports (e.g., `vm`, `container`). |
+| Cost           | Shows the cost level of the agent (e.g., `low`)                        |
+| Topic          | Topic name associated with the agent.                                  |
+| Health         | Current health status of the agent.                                    |
+| Last heartbeat | Shows the last time a live check was recieved.                         |
 
 ### Actions
 
-- **Register provider** — Opens a dialog to register a new provider (display
-  name, name, endpoint, service type, operations).
-- **Edit** — Opens the edit dialog pre-filled with the current values.
-- **Delete** — Opens a confirmation dialog before removing the provider.
-- **Copy endpoint** — Copies the provider's API endpoint URL to the clipboard.
+- **Register agent** — Opens a dialog to register a new agent ( name,
+  environment, service types, cost, topic, health and last heartbeat). By
+  default, the agent automatically self registers with DCM when deployed. The
+  register agent button can be used as a manual alternative to automatic self
+  registration. For example, a the self registration code is remove before
+  deploying the agent.
 
-For CLI equivalent operations, see [Providers](../providers/).
+For CLI equivalent operations, see [Agents](../agents/).
 
 ## Policies
 

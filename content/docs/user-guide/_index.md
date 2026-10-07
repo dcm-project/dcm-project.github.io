@@ -14,8 +14,8 @@ Learn how to manage DCM resources using the CLI or the web UI.
   output formats, and shell completion.
 - **[Authentication](../getting-started/authentication/)** — Log in, use bearer
   tokens, and work with auth-enabled control planes.
-- **[Providers](providers/)** — View registered service providers and their
-  health status.
+- **[Agents](agents/)** — View registered environment agents and their health
+  status.
 - **[Service Types](service-types/)** — Browse available service type
   definitions.
 - **[Catalog Items](catalog-items/)** — Create and manage reusable resource

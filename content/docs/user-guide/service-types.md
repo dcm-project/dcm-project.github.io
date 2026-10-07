@@ -88,8 +88,8 @@ Service types sit at the foundation of the DCM resource model:
 
 - **Catalog items** reference a service type and must conform to its schema. See
   [Catalog Items](../catalog-items/).
-- **Providers** register with a specific service type, indicating what kinds of
-  resources they can host. See [Providers](../providers/).
+- **Agents** register with one or more service types, indicating what kinds of
+  resources they can host. See [Agents](../agents/).
 - **Catalog item instances** are ultimately deployed according to the schema
   defined by the service type. See
   [Catalog Item Instances](../catalog-item-instances/).
