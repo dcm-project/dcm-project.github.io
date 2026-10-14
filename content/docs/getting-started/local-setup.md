@@ -27,7 +27,7 @@ cp .env.example .env
 
 To use the m2 release images, add the following to your `.env` file:
 
-```bash
+```ini
 CONTROL_PLANE_VERSION=m2
 ENVIRONMENT_AGENT_VERSION=m2
 DCM_UI_VERSION=m2

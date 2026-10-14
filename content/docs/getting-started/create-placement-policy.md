@@ -35,6 +35,10 @@ This policy:
 - Always selects `local-agent` as the target agent
 - Never rejects a request (`rejected: false`)
 
+> **Note:** The `selected_agent` value must match the name the environment agent
+> registered under. The compose stack defaults to `local-agent` (`AGENT_NAME` in
+> `.env`). Verify with `curl http://localhost:8080/api/v1alpha1/agents | jq`.
+
 ## Create the Policy
 
 ```bash

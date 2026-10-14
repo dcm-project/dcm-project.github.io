@@ -96,6 +96,11 @@ a clear error. DCM will not silently fail over across a regional boundary to
 "help." That is the point. A hard failure is easier to explain to a compliance
 officer than a quiet data residency violation. {{< /callout >}}
 
+> **Setup note:** Each environment agent's `environment` field must be set to
+> its region code at registration time (for example `AGENT_ENVIRONMENT=region-a`
+> in the compose `.env`). This is the value the policy reads to enforce
+> sovereignty placement.
+
 {{% details title="View the full Rego policy" closed="true" %}}
 
 ```rego
