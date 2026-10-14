@@ -17,9 +17,9 @@ images:
 It is 2 a.m. when your on-call team gets an alert that a Region A datacenter is
 down. The application holding customer data is unreachable, customers are
 waiting, and someone in leadership is already asking for an ETA. The engineer on
-duty opens the provider list and finds a healthy datacenter in Region B at the
-top. If you are only looking at infrastructure health, that is where you would
-send the workload next.
+duty opens the agent list and finds a healthy datacenter in Region B at the top.
+If you are only looking at infrastructure health, that is where you would send
+the workload next.
 
 The workload was never supposed to leave Region A. Whether the constraint comes
 from GDPR, a data residency requirement, a customer contract, or an internal
@@ -52,8 +52,8 @@ We run the scenario on three datacenters split across two regions:
 | **Region B** | `dc-demo-1`              | Healthy, but off limits for this workload |
 
 All three start healthy. Here is the twist: **Region B sorts first.** If DCM
-only picked the first available provider, every new deployment would land there
-by default. That is exactly the trap the sovereignty policy is meant to prevent.
+only picked the first available agent, every new deployment would land there by
+default. That is exactly the trap the sovereignty policy is meant to prevent.
 
 ![Two regions: Region B with dc-demo-1 (sorts first), Region A with dc-demo-2 and dc-demo-3](setup-regions.png)
 
@@ -76,34 +76,34 @@ If the request does not specify a target region, the policy rejects it.
 Sovereignty is mandatory from day one, not something you bolt on after an audit
 finding.
 
-### Only healthy providers in the right region
+### Only healthy agents in the right region
 
-The policy asks the provider registry what is available, then filters the list.
-Providers in the wrong region drop out, even if they are healthy. Providers in
-the right region must also be `ready`. Region B never makes the shortlist for a
+The policy asks the agent registry what is available, then filters the list.
+Agents in the wrong region drop out, even if they are healthy. Agents in the
+right region must also be `ready`. Region B never makes the shortlist for a
 Region A workload.
 
 ### First match wins (within the region)
 
-Among the survivors, the policy picks the first provider alphabetically. That is
+Among the survivors, the policy picks the first agent alphabetically. That is
 why the initial deploy lands on `dc-demo-2`, and why failover moves to
 `dc-demo-3` when `dc-demo-2` fails.
 
 {{< callout type="warning" >}} **What if an entire region goes down?**
 
-If no healthy provider exists in the requested region, the request is rejected
-with a clear error. DCM will not silently fail over across a regional boundary
-to "help." That is the point. A hard failure is easier to explain to a
-compliance officer than a quiet data residency violation. {{< /callout >}}
+If no healthy agent exists in the requested region, the request is rejected with
+a clear error. DCM will not silently fail over across a regional boundary to
+"help." That is the point. A hard failure is easier to explain to a compliance
+officer than a quiet data residency violation. {{< /callout >}}
 
 {{% details title="View the full Rego policy" closed="true" %}}
 
 ```rego
-package provider.sovereignty
+package agent.sovereignty
 
 import rego.v1
 
-spm_url := "http://control-plane:8080/api/v1alpha1/providers"
+agents_url := "http://control-plane:8080/api/v1alpha1/agents"
 
 main := {"rejected": true, "rejection_reason": "spec.service_type is required"} if {
     not input.spec.service_type
@@ -120,30 +120,31 @@ main := result if {
 
     response := http.send({
         "method": "GET",
-        "url": sprintf("%s?type=%s", [spm_url, service_type]),
+        "url": agents_url,
         "headers": {"Accept": "application/json"},
     })
 
-    providers := response.body.providers
+    agents := response.body.agents
 
-    region_providers := [p |
-        some p in providers
-        p.health_status == "ready"
-        p.metadata.region_code == requested_region
+    region_agents := [a |
+        some a in agents
+        a.health_status == "ready"
+        service_type in a.service_types
+        a.environment == requested_region
     ]
 
-    result := _providers_result(region_providers, service_type, requested_region)
+    result := _agents_result(region_agents, service_type, requested_region)
 }
 
-_providers_result(providers, service_type, region) := {"rejected": true, "rejection_reason": msg} if {
-    count(providers) == 0
-    msg := sprintf("no ready providers in region '%s' for service type '%s'", [region, service_type])
+_agents_result(agents, service_type, region) := {"rejected": true, "rejection_reason": msg} if {
+    count(agents) == 0
+    msg := sprintf("no ready agents in environment '%s' for service type '%s'", [region, service_type])
 }
 
-_providers_result(providers, _, _) := {"rejected": false, "selected_provider": provider} if {
-    count(providers) > 0
-    sorted_names := sort([p.name | some p in providers])
-    provider := sorted_names[0]
+_agents_result(agents, _, _) := {"rejected": false, "selected_agent": agent} if {
+    count(agents) > 0
+    sorted_names := sort([a.name | some a in agents])
+    agent := sorted_names[0]
 }
 ```
 
@@ -164,7 +165,7 @@ source of truth for everything that follows.
 
 ### 2. Simulate the outage
 
-Take `dc-demo-2` offline (`podman stop` on the provider containers). Region B is
+Take `dc-demo-2` offline (`podman stop` on the agent containers). Region B is
 still healthy and still first on the list. In a typical setup, that is where the
 story ends and the compliance review begins.
 
@@ -216,7 +217,7 @@ it holds on a quiet Tuesday. The rules do not relax because the pager is loud.
 
 The best way to get a feel for the flow is our
 [interactive walkthrough](https://interact.redhat.com/share/yFwS2KKEs4Zvjc3USx5j).
-Click through the DCM UI at your own pace: explore the providers, create the
+Click through the DCM UI at your own pace: explore the agents, create the
 policy, deploy Pet Clinic, and watch where the app lands.
 
 The walkthrough covers almost the entire scenario in the browser, including
