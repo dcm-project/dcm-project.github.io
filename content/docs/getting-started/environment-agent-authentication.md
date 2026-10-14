@@ -36,9 +36,8 @@ token on every request. This closes the gap called out in the
 external SP registration was previously unauthenticated, with network isolation
 as the only interim mitigation.
 
-`GET /api/v1alpha1/health` is the only endpoint that stays public — the bypass
-checks both the method and the path, so `GET /health` is unauthenticated but any
-other method at that path still requires a token.
+Only `GET /api/v1alpha1/health` stays public. The bypass checks both the method
+and exact path, so `GET /health` and every other method or path require a token.
 
 ### How it works
 
@@ -72,13 +71,12 @@ This mirrors the control plane's `AUTH_DISABLED` / `AUTH_ISSUER_URL` /
 but with an `AGENT_` prefix and its own env vars — the two services are
 configured independently, even when pointed at the same Keycloak realm.
 
-> **Audience is intentionally permissive by default.** Reference Keycloak
-> clients for service accounts (used by SPs registering with the agent) don't
-> ship with an audience mapper out of the box. Rather than reject every token
-> from an unmapped client, the agent skips the audience check when
-> `AGENT_AUTH_JWT_AUDIENCE` is empty, and only enforces `aud` matching when you
-> explicitly set it. Set it once your SP clients have a matching audience
-> mapper.
+> **Set an audience before production.** When `AGENT_AUTH_JWT_AUDIENCE` is
+> empty, the agent skips audience validation: any otherwise-valid token from the
+> configured issuer is accepted, regardless of its `aud` claim. For production,
+> configure a dedicated audience and add it to tokens from every authorized SP
+> client with an audience mapper. Leave the audience empty only for local
+> development while configuring those mappers.
 
 ### Calling the agent API with a bearer token
 
@@ -163,10 +161,10 @@ an absolute, host-qualified `http(s)://` URL.
   reactively on a `401`.
 - A token fetch failure does **not** crash the agent. Registration and
   re-registration retry transient failures with exponential backoff
-  (`DCM_REGISTRATION_INITIAL_BACKOFF` /
-  `DCM_REGISTRATION_MAX_BACKOFF`). A failed heartbeat is logged and retried on
-  the next heartbeat tick, controlled by `AGENT_HEARTBEAT_INTERVAL` (30 seconds
-  by default); heartbeat failures do not use the registration backoff.
+  (`DCM_REGISTRATION_INITIAL_BACKOFF` / `DCM_REGISTRATION_MAX_BACKOFF`). A
+  failed heartbeat is logged and retried on the next heartbeat tick, controlled
+  by `AGENT_HEARTBEAT_INTERVAL` (30 seconds by default); heartbeat failures do
+  not use the registration backoff.
 - **Static tokens do not refresh.** Once the token expires, the control plane
   returns `401`, which the agent treats as non-retryable — registration halts
   until the agent is restarted with a fresh token. Use static tokens only where
@@ -174,24 +172,30 @@ an absolute, host-qualified `http(s)://` URL.
 
 ### Keycloak setup
 
-The reference Keycloak realm already includes the confidential `dcm-proxy`
-client, with service accounts enabled and a `dcm-api` audience mapper. For this
-setup, use the token endpoint and `dcm-proxy` credentials shown in the
-[control-plane `.env.example`](https://github.com/dcm-project/control-plane/blob/main/deploy/.env.example):
-set `DCM_AUTH_CLIENT_ID=dcm-proxy` and set `DCM_AUTH_CLIENT_SECRET` to the same
-secret configured for `AUTH_PROXY_SECRET`.
+The reference Keycloak realm includes the confidential `dcm-proxy` client, with
+service accounts enabled and a `dcm-api` audience mapper. The reference Compose
+and Helm setups reuse the `dcm-proxy` client secret as `AUTH_PROXY_SECRET`; the
+control plane accepts that secret in `X-Auth-Proxy-Secret` requests and trusts
+the accompanying forwarded identity headers. Someone who obtains the agent's
+environment can use the shared secret with a forged `X-Forwarded-User` value to
+act as any resolvable actor. Keep this shared-secret setup local to development.
+In production, use a dedicated Keycloak client for the agent, with a client
+secret independent from `AUTH_PROXY_SECRET`, and configure the deployment to
+inject that secret as `DCM_AUTH_CLIENT_SECRET`. The reference Helm chart
+currently sources `DCM_AUTH_CLIENT_SECRET` from the `AUTH_PROXY_SECRET` key, so
+it needs separate secret wiring before using this production setup.
 
-You can use a separate client if your deployment needs one. Enable **Client
-authentication** and **Service accounts roles**, then set the three
-`DCM_AUTH_*` variables to that client's token endpoint and credentials. The
-control plane currently requires an authenticated actor context for agent
-registration; the registration endpoint does not check for a particular
-Keycloak role.
+To configure a dedicated client, enable **Client authentication** and **Service
+accounts roles**, then set the three `DCM_AUTH_*` variables to that client's
+token endpoint and credentials. The control plane currently requires an
+authenticated actor context for agent registration; the registration endpoint
+does not check for a particular Keycloak role.
 
 > **Audience mapper for custom clients:** If the control plane enforces
-> `AUTH_JWT_AUDIENCE=dcm-api`, a new client must include `dcm-api` in its token's
-> `aud` claim. Add an audience mapper to that client. The reference `dcm-proxy`
-> client already has this mapper, so it does not need additional configuration.
+> `AUTH_JWT_AUDIENCE=dcm-api`, a new client must include `dcm-api` in its
+> token's `aud` claim. Add an audience mapper to that client. The reference
+> `dcm-proxy` client already has this mapper, so it does not need additional
+> configuration.
 
 ### Kubernetes secrets
 
@@ -206,14 +210,14 @@ envFrom:
 
 ## Troubleshooting
 
-| Symptom                                                                    | Things to check                                                                                                                                                                                              |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| SP registration returns `401` from the agent                               | Auth enabled on the agent (`AGENT_AUTH_DISABLED=false`); the SP's token is valid and not expired; issuer matches `AGENT_AUTH_ISSUER_URL`; if `AGENT_AUTH_JWT_AUDIENCE` is set, the token's `aud` must match. |
+| Symptom                                                                    | Things to check                                                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SP registration returns `401` from the agent                               | Auth enabled on the agent (`AGENT_AUTH_DISABLED=false`); the SP's token is valid and not expired; issuer matches `AGENT_AUTH_ISSUER_URL`; if `AGENT_AUTH_JWT_AUDIENCE` is set, the token's `aud` must match.                                                                       |
 | Agent registration/heartbeat to the control plane returns `401`            | Check the `DCM_AUTH_*` client credentials and token endpoint, then verify that the token issuer and (when enabled) audience match the control plane's `AUTH_*` settings. Add a `dcm-api` mapper for a custom client if required; the reference `dcm-proxy` client already has one. |
-| Agent fails to start with `AGENT_AUTH_ISSUER_URL: required...`             | `AGENT_AUTH_DISABLED=false` but no issuer was set — set `AGENT_AUTH_ISSUER_URL` or leave auth disabled.                                                                                                      |
-| Agent fails to start with a "partial client-credentials auth config" error | Only some of `DCM_AUTH_TOKEN_ENDPOINT` / `DCM_AUTH_CLIENT_ID` / `DCM_AUTH_CLIENT_SECRET` are set — set all three or none.                                                                                    |
-| Registration halts permanently after working for a while                   | Static `DCM_AUTH_TOKEN` expired (no refresh) — switch to client credentials, or restart the agent with a fresh token.                                                                                        |
-| `AGENT_AUTH_JWT_AUDIENCE` startup warning                                  | Expected when an issuer is set without an audience — informational unless you intended to enforce `aud`.                                                                                                     |
+| Agent fails to start with `AGENT_AUTH_ISSUER_URL: required...`             | `AGENT_AUTH_DISABLED=false` but no issuer was set — set `AGENT_AUTH_ISSUER_URL` or leave auth disabled.                                                                                                                                                                            |
+| Agent fails to start with a "partial client-credentials auth config" error | Only some of `DCM_AUTH_TOKEN_ENDPOINT` / `DCM_AUTH_CLIENT_ID` / `DCM_AUTH_CLIENT_SECRET` are set — set all three or none.                                                                                                                                                          |
+| Registration halts permanently after working for a while                   | Static `DCM_AUTH_TOKEN` expired (no refresh) — switch to client credentials, or restart the agent with a fresh token.                                                                                                                                                              |
+| `AGENT_AUTH_JWT_AUDIENCE` startup warning                                  | Expected when an issuer is set without an audience — informational unless you intended to enforce `aud`.                                                                                                                                                                           |
 
 For control-plane-side issuer, JWKS, and Keycloak troubleshooting, see
 [Authentication troubleshooting](../authentication/#troubleshooting).
