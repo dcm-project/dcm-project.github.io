@@ -117,19 +117,23 @@ for more on declaring fields.
 The following end-to-end example shows how a `region` label flows from a catalog
 item field declaration through an instance and into a Rego policy.
 
-**1. Catalog item field** — declares `metadata.labels.region` with allowed
-values:
+**1. Catalog item resource field** — declares `metadata.labels.region` with
+allowed values:
 
 ```yaml
-fields:
-  - path: metadata.labels.region
-    display_name: "Deployment Region"
-    editable: true
-    validation_schema:
-      type: string
-      enum:
-        - region-a
-        - region-b
+spec:
+  resources:
+    - name: main
+      service_type: vm
+      fields:
+        - path: metadata.labels.region
+          display_name: "Deployment Region"
+          editable: true
+          validation_schema:
+            type: string
+            enum:
+              - region-a
+              - region-b
 ```
 
 **2. Instance user_values** — sets the region at deployment time:
