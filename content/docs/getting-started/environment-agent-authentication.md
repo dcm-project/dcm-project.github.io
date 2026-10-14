@@ -36,14 +36,14 @@ token on every request. This closes the gap called out in the
 external SP registration was previously unauthenticated, with network isolation
 as the only interim mitigation.
 
-Only `GET /api/v1alpha1/health` stays public. The bypass checks both the method
-and exact path, so `GET /health` and every other method or path require a token.
+When auth is enabled, only `GET /api/v1alpha1/health` bypasses authentication.
+Every other request, including any other method at that path, requires a token.
 
 ### How it works
 
-1. At startup, the agent discovers OIDC metadata from the issuer. When it
-   validates a token, it fetches signing keys from the issuer's JWKS endpoint as
-   needed and caches them.
+1. At startup, the agent performs OIDC discovery to read issuer metadata,
+   including the JWKS URL. On the first token validation, it fetches signing
+   keys from that endpoint as needed and caches them.
 2. On each protected request, the agent extracts the
    `Authorization: Bearer <token>` header (case-insensitive scheme) and
    validates signature, expiry, issuer, and — if configured — audience.
@@ -59,11 +59,11 @@ and exact path, so `GET /health` and every other method or path require a token.
 
 ### Configuration
 
-| Variable                  | Purpose                                                                                                                                                                                                                |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AGENT_AUTH_DISABLED`     | When `true` (the default), auth middleware is bypassed. The agent still logs a startup `WARN` ("authentication is disabled") so the insecure default is visible in logs.                                               |
-| `AGENT_AUTH_ISSUER_URL`   | OIDC issuer URL for JWT validation (for example `http://keycloak:8080/realms/dcm`). Required when `AGENT_AUTH_DISABLED=false`; startup fails otherwise.                                                                |
-| `AGENT_AUTH_JWT_AUDIENCE` | Expected `aud` claim. Empty (the default) **disables audience validation** — any token from the issuer is accepted regardless of `aud`. The agent logs a startup `WARN` if an issuer is set but the audience is empty. |
+| Variable                  | Purpose                                                                                                                                                                                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENT_AUTH_DISABLED`     | When `true` (the default), auth middleware is bypassed. The agent still logs a startup `WARN` ("authentication is disabled") so the insecure default is visible in logs.                                                                    |
+| `AGENT_AUTH_ISSUER_URL`   | OIDC issuer URL for JWT validation (for example `http://keycloak:8080/realms/dcm`). Required when `AGENT_AUTH_DISABLED=false`; startup fails otherwise.                                                                                     |
+| `AGENT_AUTH_JWT_AUDIENCE` | Expected token audience (the `aud` claim). Empty (the default) **disables audience validation** — any token from the issuer is accepted regardless of `aud`. The agent logs a startup `WARN` if an issuer is set but the audience is empty. |
 
 This mirrors the control plane's `AUTH_DISABLED` / `AUTH_ISSUER_URL` /
 `AUTH_JWT_AUDIENCE` variables (see
@@ -79,6 +79,13 @@ configured independently, even when pointed at the same Keycloak realm.
 > development while configuring those mappers.
 
 ### Calling the agent API with a bearer token
+
+Start the agent through the utilities deployment script with
+`--with-environment-agent` and the required `--agent-embedded-sps` list; see the
+[environment-agent deployment instructions](https://github.com/dcm-project/utilities/blob/main/README.md#environment-agent-embedded-sps).
+The host API port defaults to `8081`; set `--agent-port` or `AGENT_PORT` to use
+another port. The standalone KubeVirt SP also uses `8081`, so choose a different
+agent port when using both.
 
 Set `SP_TOKEN` to an access token issued by the same issuer configured in
 `AGENT_AUTH_ISSUER_URL`, using the flow provisioned for the calling SP. For
@@ -166,9 +173,12 @@ an absolute, host-qualified `http(s)://` URL.
   by `AGENT_HEARTBEAT_INTERVAL` (30 seconds by default); heartbeat failures do
   not use the registration backoff.
 - **Static tokens do not refresh.** Once the token expires, the control plane
-  returns `401`, which the agent treats as non-retryable — registration halts
-  until the agent is restarted with a fresh token. Use static tokens only where
-  the token's lifetime safely exceeds the agent's expected uptime.
+  returns `401`. The agent treats that response as non-retryable, so initial
+  registration or re-registration stops retrying. If the agent has already
+  registered, its heartbeat loop continues sending requests at each
+  `AGENT_HEARTBEAT_INTERVAL`, but each request fails until the agent is
+  restarted with a fresh token. Use static tokens only where the token's
+  lifetime safely exceeds the agent's expected uptime.
 
 ### Keycloak setup
 
@@ -216,8 +226,8 @@ envFrom:
 | Agent registration/heartbeat to the control plane returns `401`            | Check the `DCM_AUTH_*` client credentials and token endpoint, then verify that the token issuer and (when enabled) audience match the control plane's `AUTH_*` settings. Add a `dcm-api` mapper for a custom client if required; the reference `dcm-proxy` client already has one. |
 | Agent fails to start with `AGENT_AUTH_ISSUER_URL: required...`             | `AGENT_AUTH_DISABLED=false` but no issuer was set — set `AGENT_AUTH_ISSUER_URL` or leave auth disabled.                                                                                                                                                                            |
 | Agent fails to start with a "partial client-credentials auth config" error | Only some of `DCM_AUTH_TOKEN_ENDPOINT` / `DCM_AUTH_CLIENT_ID` / `DCM_AUTH_CLIENT_SECRET` are set — set all three or none.                                                                                                                                                          |
-| Registration halts permanently after working for a while                   | Static `DCM_AUTH_TOKEN` expired (no refresh) — switch to client credentials, or restart the agent with a fresh token.                                                                                                                                                              |
-| `AGENT_AUTH_JWT_AUDIENCE` startup warning                                  | Expected when an issuer is set without an audience — informational unless you intended to enforce `aud`.                                                                                                                                                                           |
+| Agent heartbeats return `401` after the static token expires               | Heartbeat attempts continue but fail because static tokens do not refresh. Restart with a fresh token or use client credentials.                                                                                                                                                   |
+| `AGENT_AUTH_JWT_AUDIENCE` startup warning                                  | Expected when an issuer is set without an audience — informational unless you intended to enforce the token audience claim.                                                                                                                                                        |
 
 For control-plane-side issuer, JWKS, and Keycloak troubleshooting, see
 [Authentication troubleshooting](../authentication/#troubleshooting).
