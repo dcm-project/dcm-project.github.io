@@ -37,25 +37,29 @@ display_name: "My Dev VM"
 spec:
   catalog_item_id: small-vm
   user_values:
-    - path: metadata
+    - resource: main
+      path: metadata
       value:
         name: "demo"
         labels:
           env: "dev"
-    - path: vcpu.count
+    - resource: main
+      path: vcpu.count
       value: 1
-    - path: guest_os.type
+    - resource: main
+      path: guest_os.type
       value: fedora
 ```
 
 ### Key Fields
 
-| Field                     | Purpose                                                                                                                              |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `display_name`            | An optional human-readable name shown in listings and the UI.                                                                        |
-| `spec.catalog_item_id`    | References the UID of an existing catalog item to deploy from.                                                                       |
-| `spec.user_values`        | Sets of overrides for fields allowed by the catalog item's `fields` array. Only fields with `editable: true` can be customized here. |
-| `spec.user_values[].path` | Path corresponding to the `path` key in the `catalog_item`'s `fields` item                                                           |
+| Field                         | Purpose                                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `display_name`                | An optional human-readable name shown in listings and the UI.                                                                        |
+| `spec.catalog_item_id`        | References the UID of an existing catalog item to deploy from.                                                                       |
+| `spec.user_values`            | Sets of overrides for fields allowed by the catalog item's `fields` array. Only fields with `editable: true` can be customized here. |
+| `spec.user_values[].resource` | Name of the resource within the catalog item this override applies to (e.g., `main`).                                                |
+| `spec.user_values[].path`     | Path corresponding to the `path` key in the catalog item resource's `fields` item.                                                   |
 
 > **Note:** Each value provided in `user_values` will be validated against its
 > corresponding item in the catalog item's `fields` list. If the `field` is not
@@ -147,6 +151,7 @@ Example JSON output:
     "catalog_item_id": "small-vm",
     "user_values": [
       {
+        "resource": "main",
         "path": "metadata",
         "value": {
           "labels": {
@@ -156,10 +161,12 @@ Example JSON output:
         }
       },
       {
+        "resource": "main",
         "path": "vcpu.count",
         "value": 1
       },
       {
+        "resource": "main",
         "path": "guest_os.type",
         "value": "fedora"
       }
