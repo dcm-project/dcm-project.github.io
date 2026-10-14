@@ -6,10 +6,10 @@ weight: 5
 
 Policies are
 [Rego](https://www.openpolicyagent.org/docs/latest/policy-language/) rules (the
-OPA policy language) that validate service provider resources and control where
-they are placed. During the placement flow, DCM evaluates all enabled policies
-in priority order (lower number = evaluated first). A policy can reject a
-request or select a specific provider for it. It may also alter or set values.
+OPA policy language) that validate resources and control where they are placed.
+During the placement flow, DCM evaluates all enabled policies in priority order
+(lower number = evaluated first). A policy can reject a request or select a
+specific environment agent for it. It may also alter or set values.
 
 ## Creating a Policy
 
@@ -19,15 +19,15 @@ Here is an example policy file:
 
 ```yaml
 # policy.yaml
-display_name: Provider
+display_name: Agent Selector
 policy_type: GLOBAL
 priority: 1
 rego_code: |
-  package provider.selector
+  package agent.selector
 
   import rego.v1
 
-  spm_url := "http://control-plane:8080/api/v1alpha1/providers"
+  agents_url := "http://control-plane:8080/api/v1alpha1/agents"
 
   main := {"rejected": true, "rejection_reason": "spec.service_type is required"} if {
       not input.spec.service_type
@@ -37,40 +37,44 @@ rego_code: |
       service_type := input.spec.service_type
       response := http.send({
           "method": "GET",
-          "url": sprintf("%s?type=%s", [spm_url, service_type]),
+          "url": agents_url,
           "headers": {"Accept": "application/json"},
       })
-      providers := response.body.providers
-      ready_providers := [p | some p in providers; p.health_status == "ready"]
-      result := _providers_result(ready_providers, service_type)
+      agents := response.body.agents
+      ready_agents := [a |
+          some a in agents
+          a.health_status == "ready"
+          service_type in a.service_types
+      ]
+      result := _agents_result(ready_agents, service_type)
   }
 
-  _providers_result(providers, service_type) := {"rejected": true, "rejection_reason": msg} if {
-      count(providers) == 0
-      msg := sprintf("no ready providers found for service type '%s'", [service_type])
+  _agents_result(agents, service_type) := {"rejected": true, "rejection_reason": msg} if {
+      count(agents) == 0
+      msg := sprintf("no ready agents found for service type '%s'", [service_type])
   }
 
-  _providers_result(providers, _) := {"rejected": false, "selected_provider": provider} if {
-      count(providers) > 0
-      sorted_names := sort([p.name | some p in providers])
-      provider := sorted_names[0]
+  _agents_result(agents, _) := {"rejected": false, "selected_agent": agent} if {
+      count(agents) > 0
+      sorted_names := sort([a.name | some a in agents])
+      agent := sorted_names[0]
   }
 ```
 
-> **Note:** This Rego code assumes it can access the control-plane provider API
-> to get the list of providers. Then, it filters only the `ready` ones, sorts
-> alphabetically and returns the first one
+> **Note:** This Rego code calls the control-plane agent API, filters for agents
+> that are `ready` and support the requested service type, sorts alphabetically,
+> and returns the first one
 
 ### Field Reference
 
-| Field            | Description                                                                                                                   |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `display_name`   | A human-readable name for the policy.                                                                                         |
-| `policy_type`    | The scope of policy (e.g., `GLOBAL`).                                                                                         |
-| `priority`       | Evaluation order. Lower numbers are evaluated first.                                                                          |
-| `enabled`        | Whether the policy is active (`true` or `false`).                                                                             |
-| `rego_code`      | The Rego source code. Must define a `main` rule with `rejected`, and either `rejection_reason` or `selected_provider` fields. |
-| `label_selector` | `key:value` pairs used to match between the policy and the `metadata.labels` field of the provisioned resource                |
+| Field            | Description                                                                                                                |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `display_name`   | A human-readable name for the policy.                                                                                      |
+| `policy_type`    | The scope of policy (e.g., `GLOBAL`).                                                                                      |
+| `priority`       | Evaluation order. Lower numbers are evaluated first.                                                                       |
+| `enabled`        | Whether the policy is active (`true` or `false`).                                                                          |
+| `rego_code`      | The Rego source code. Must define a `main` rule with `rejected`, and either `rejection_reason` or `selected_agent` fields. |
+| `label_selector` | `key:value` pairs used to match between the policy and the `metadata.labels` field of the provisioned resource             |
 
 > **Note:** `label_selector` may also use the `service_type` key to match based
 > on the resource's `service_type`
@@ -83,12 +87,12 @@ The `main` rule receives an `input` object and must return an output object.
 
 The `input` object includes:
 
-| Field                          | Description                                                                                                                                      |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `spec`                         | The current (patched) request payload. While policies do not have to be specific for service types, they will need to know the expected content. |
-| `constraints`                  | The accumulated constraints context from prior policies in the chain.                                                                            |
-| `provider`                     | The currently selected service provider (empty string initially, populated as policies are evaluated).                                           |
-| `service_provider_constraints` | The accumulated service-provider constraints from prior policies.                                                                                |
+| Field               | Description                                                                                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `spec`              | The current (patched) request payload. While policies do not have to be specific for service types, they will need to know the expected content. |
+| `constraints`       | The accumulated constraints context from prior policies in the chain.                                                                            |
+| `agent`             | The currently selected environment agent (empty string initially, populated as policies are evaluated).                                          |
+| `agent_constraints` | The accumulated agent constraints from prior policies.                                                                                           |
 
 ##### How `input.spec` is Constructed
 
@@ -132,7 +136,8 @@ fields:
 
 ```yaml
 user_values:
-  - path: metadata.labels.region
+  - resource: main
+    path: metadata.labels.region
     value: region-a
 ```
 
@@ -147,9 +152,9 @@ main := {"rejected": true, "rejection_reason": "region label is required"} if {
     not input.spec.metadata.labels.region
 }
 
-main := {"rejected": false, "selected_provider": provider} if {
+main := {"rejected": false, "selected_agent": agent} if {
     region := input.spec.metadata.labels.region
-    provider := sprintf("provider-%s", [region])
+    agent := sprintf("agent-%s", [region])
 }
 ```
 
@@ -161,16 +166,16 @@ main := {"rejected": false, "selected_provider": provider} if {
 
 The `main` rule must return an object with the following fields:
 
-| Field                          | Type    | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ------------------------------ | ------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rejected`                     | boolean | Yes      | Set to `true` to reject the placement request. Requests are approved by default.                                                                                                                                                                                                                                                                                                                                |
-| `rejection_reason`             | string  | No       | A human-readable reason when the request is rejected.                                                                                                                                                                                                                                                                                                                                                           |
-| `selected_provider`            | string  | No       | The name of the service provider chosen to fulfill the request.                                                                                                                                                                                                                                                                                                                                                 |
-| `service_provider_constraints` | object  | No       | Constraints on which service providers are allowed. Contains `allow_list` (list of allowed provider names) and `patterns` (list of regex patterns for matching allowed providers).                                                                                                                                                                                                                              |
-| `patch`                        | map     | No       | A dictionary of values to set or override in the request payload.                                                                                                                                                                                                                                                                                                                                               |
-| `constraints`                  | map     | No       | Field constraints for subsequent policies, following [JSON Schema (draft 2020-12)](https://json-schema.org/draft/2020-12/json-schema-validation). Supports `const` (immutable), numeric constraints (`minimum`, `maximum`, `multipleOf`), string patterns (`pattern`, `minLength`, `maxLength`), enumerations (`enum`), array constraints (`minItems`, `maxItems`), and conditional logic (`if`/`then`/`else`). |
+| Field               | Type    | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------- | ------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rejected`          | boolean | Yes      | Set to `true` to reject the placement request. Requests are approved by default.                                                                                                                                                                                                                                                                                                                                |
+| `rejection_reason`  | string  | No       | A human-readable reason when the request is rejected.                                                                                                                                                                                                                                                                                                                                                           |
+| `selected_agent`    | string  | No       | The name of the environment agent chosen to fulfill the request.                                                                                                                                                                                                                                                                                                                                                |
+| `agent_constraints` | object  | No       | Constraints on which environment agents are allowed. Contains `allow_list` (list of allowed agent names), `patterns` (list of regex patterns for matching allowed agents), and `environment_constraints` (list of environment labels).                                                                                                                                                                          |
+| `patch`             | map     | No       | A dictionary of values to set or override in the request payload.                                                                                                                                                                                                                                                                                                                                               |
+| `constraints`       | map     | No       | Field constraints for subsequent policies, following [JSON Schema (draft 2020-12)](https://json-schema.org/draft/2020-12/json-schema-validation). Supports `const` (immutable), numeric constraints (`minimum`, `maximum`, `multipleOf`), string patterns (`pattern`, `minLength`, `maxLength`), enumerations (`enum`), array constraints (`minItems`, `maxItems`), and conditional logic (`if`/`then`/`else`). |
 
-> **Note:** While no single policy is required to set the `selected_provider`
+> **Note:** While no single policy is required to set the `selected_agent`
 > field, the combination of all processed policies must set one; otherwise,
 > placement will fail.
 
@@ -255,13 +260,13 @@ dcm policy get prefer-provider-a -o json
 ```json
 {
   "create_time": "2026-04-15T18:38:13.990296Z",
-  "display_name": "Provider",
+  "display_name": "Agent Selector",
   "enabled": true,
   "id": "7eff7e73-4c14-4311-8673-e03916b00ece",
   "path": "policies/7eff7e73-4c14-4311-8673-e03916b00ece",
   "policy_type": "GLOBAL",
   "priority": 1,
-  "rego_code": "package provider.selector\n\nimport rego.v1\n\nspm_url := \"http://control-plane:8080/api/v1alpha1/providers\"\n\nmain := {\"rejected\": true, \"rejection_reason\": \"spec.service_type is required\"} if {\n    not input.spec.service_type\n}\n\nmain := result if {\n    service_type := input.spec.service_type\n    response := http.send({\n        \"method\": \"GET\",\n        \"url\": sprintf(\"%s?type=%s\", [spm_url, service_type]),\n        \"headers\": {\"Accept\": \"application/json\"},\n    })\n    providers := response.body.providers\n    ready_providers := [p | some p in providers; p.health_status == \"ready\"]\n    result := _providers_result(ready_providers, service_type)\n}\n\n_providers_result(providers, service_type) := {\"rejected\": true, \"rejection_reason\": msg} if {\n    count(providers) == 0\n    msg := sprintf(\"no ready providers found for service type '%s'\", [service_type])\n}\n\n_providers_result(providers, _) := {\"rejected\": false, \"selected_provider\": provider} if {\n    count(providers) \u003e 0\n    sorted_names := sort([p.name | some p in providers])\n    provider := sorted_names[0]\n}\n",
+  "rego_code": "package agent.selector\n\nimport rego.v1\n\nagents_url := \"http://control-plane:8080/api/v1alpha1/agents\"\n\nmain := {\"rejected\": true, \"rejection_reason\": \"spec.service_type is required\"} if {\n    not input.spec.service_type\n}\n\nmain := result if {\n    service_type := input.spec.service_type\n    response := http.send({\n        \"method\": \"GET\",\n        \"url\": agents_url,\n        \"headers\": {\"Accept\": \"application/json\"},\n    })\n    agents := response.body.agents\n    ready_agents := [a | some a in agents; a.health_status == \"ready\"; service_type in a.service_types]\n    result := _agents_result(ready_agents, service_type)\n}\n\n_agents_result(agents, service_type) := {\"rejected\": true, \"rejection_reason\": msg} if {\n    count(agents) == 0\n    msg := sprintf(\"no ready agents found for service type '%s'\", [service_type])\n}\n\n_agents_result(agents, _) := {\"rejected\": false, \"selected_agent\": agent} if {\n    count(agents) \u003e 0\n    sorted_names := sort([a.name | some a in agents])\n    agent := sorted_names[0]\n}\n",
   "update_time": "2026-04-15T18:38:13.990296Z"
 }
 ```
@@ -328,9 +333,8 @@ number = evaluated first).
 For each policy in order, the engine performs the following steps:
 
 1. **Evaluate** the policy's Rego code. The `input` object includes the current
-   patched `spec`, the accumulated `constraints`, the currently
-   `selected_provider` (empty string initially), and the accumulated
-   `service_provider_constraints`.
+   patched `spec`, the accumulated `constraints`, the currently selected `agent`
+   (empty string initially), and the accumulated `agent_constraints`.
 2. **Check rejection.** If the policy sets `rejected` to `true`, the placement
    request is denied immediately and the `rejection_reason` is returned to the
    caller. No further policies are evaluated.
@@ -344,12 +348,12 @@ For each policy in order, the engine performs the following steps:
    immutable using a `const` constraint, any attempt to patch that field causes
    a policy conflict error.
 6. **Apply patch.** Valid patches are applied to the request payload.
-7. **Validate service provider.** If the policy returned a `selected_provider`
-   and `service_provider_constraints` exist from prior policies, the selected
-   provider is validated against those constraints.
+7. **Validate agent.** If the policy returned a `selected_agent` and
+   `agent_constraints` exist from prior policies, the selected agent is
+   validated against those constraints.
 
 After all policies have been evaluated, the engine returns the final payload,
-the selected provider, and the evaluation status to the Placement Manager. The
+the selected agent, and the evaluation status to the Placement Manager. The
 status is `APPROVED` if the payload was not modified, or `MODIFIED` if any
 patches were applied.
 

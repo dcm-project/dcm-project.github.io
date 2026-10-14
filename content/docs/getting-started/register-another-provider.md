@@ -38,7 +38,7 @@ Manager.
 ## Verify Both Providers Are Registered
 
 ```bash
-curl -s http://localhost:8080/api/v1alpha1/providers | jq
+curl -s http://localhost:8080/api/v1alpha1/agents | jq
 ```
 
 You should see both `kubevirt-service-provider` and `another-kubevirt-provider`
@@ -58,14 +58,14 @@ rego_code: |
 
   import rego.v1
 
-  providers := ["kubevirt-service-provider", "another-kubevirt-provider"]
+  agents := ["kubevirt-service-provider", "another-kubevirt-provider"]
 
   main := {
     "rejected": false,
-    "selected_provider": providers[idx]
+    "selected_agent": agents[idx]
   }
 
-  idx := round(rand.intn("seed", count(providers)))
+  idx := round(rand.intn("seed", count(agents)))
 ```
 
 This Rego policy:

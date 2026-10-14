@@ -15,7 +15,7 @@ Get up and running with DCM.
 - **[Create Small VM Catalog Item](create-small-vm-catalog-item/)** — Define and
   create a catalog item for a small virtual machine.
 - **[Create Placement Policy](create-placement-policy/)** — Define a placement
-  policy to route instances to the KubeVirt service provider.
+  policy to route instances to the local environment agent.
 - **[Create Instance of Small VM Catalog Item](create-small-vm-instance/)** —
   Deploy a VM by creating an instance of the catalog item.
 - **[Register Another Provider](register-another-provider/)** — Register a
