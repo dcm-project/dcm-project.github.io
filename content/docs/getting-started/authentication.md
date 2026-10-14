@@ -26,15 +26,10 @@ The `/api/v1alpha1/health` endpoint stays **unauthenticated** whether or not
 auth is enabled.
 
 > **Service providers:** Service providers reach the control plane through the
-> environment agent, not direct HTTP calls. End-to-end authentication for the
-> agent and service providers is still in progress (for example
-> [environment-agent#38](https://github.com/dcm-project/environment-agent/pull/38)
-> and
-> [environment-agent#35](https://github.com/dcm-project/environment-agent/pull/35)).
-> Enabling auth on the control plane can still affect SP registration and
-> instance workflows until that chain is complete. Use auth for CLI, UI, and
-> direct API access first, or keep auth disabled while exercising full SP flows
-> locally.
+> environment agent, not direct HTTP calls. Authentication for service-provider
+> workflows depends on the deployed environment-agent version and its
+> authentication configuration. Verify that the deployed agent supports
+> control-plane authentication before enabling auth for full SP workflows.
 
 ## How authentication works
 
@@ -47,11 +42,10 @@ auth is enabled.
    (just-in-time provisioning). No manual database setup is required for new
    Keycloak users in the `dcm` realm.
 
-Tokens may need an `aud` claim that matches `AUTH_JWT_AUDIENCE`. The control
-plane does **not** default this variable: if it is empty, audience validation is
-**disabled** (any client token from the issuer realm can be accepted). For
-production-like setups, set `AUTH_JWT_AUDIENCE` explicitly (the reference
-Keycloak realm uses `dcm-api` in `deploy/.env.example` when auth is enabled).
+Tokens must include an `aud` claim matching `AUTH_JWT_AUDIENCE`. The reference
+Compose deployment sets `AUTH_JWT_AUDIENCE` to `dcm-api` by default. If the
+variable is explicitly empty, audience validation is **disabled**. Production-
+like deployments should always set the audience explicitly.
 
 An optional **proxy-header** path accepts `X-Forwarded-User` and
 `X-Forwarded-Preferred-Username` when `X-Auth-Proxy-Secret` matches
@@ -94,7 +88,7 @@ described in the
 | ------------------- | ----------------------------------------------------------------------------------- |
 | `AUTH_DISABLED`     | When `true`, auth middleware is bypassed (default for local dev).                   |
 | `AUTH_ISSUER_URL`   | OIDC issuer URL for JWT validation (for example `http://keycloak:8080/realms/dcm`). |
-| `AUTH_JWT_AUDIENCE` | Expected `aud` claim when set; empty disables audience checks (see above).          |
+| `AUTH_JWT_AUDIENCE` | Expected `aud` claim; defaults to `dcm-api` in the reference Compose deployment. An explicitly empty value disables audience checks. |
 | `AUTH_PROXY_SECRET` | Shared secret for the proxy-header auth path (optional).                            |
 | `AUTH_CACHE_TTL`    | How long resolved actors are cached (default `60s`).                                |
 | `DCM_ADMIN_SUBJECT` | Keycloak subject UUID for the seed admin actor (required when auth is enabled).     |
