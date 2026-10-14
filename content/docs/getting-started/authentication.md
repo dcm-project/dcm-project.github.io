@@ -84,14 +84,14 @@ described in the
 
 ### Control-plane configuration
 
-| Variable            | Purpose                                                                             |
-| ------------------- | ----------------------------------------------------------------------------------- |
-| `AUTH_DISABLED`     | When `true`, auth middleware is bypassed (default for local dev).                   |
-| `AUTH_ISSUER_URL`   | OIDC issuer URL for JWT validation (for example `http://keycloak:8080/realms/dcm`). |
+| Variable            | Purpose                                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `AUTH_DISABLED`     | When `true`, auth middleware is bypassed (default for local dev).                                                                    |
+| `AUTH_ISSUER_URL`   | OIDC issuer URL for JWT validation (for example `http://keycloak:8080/realms/dcm`).                                                  |
 | `AUTH_JWT_AUDIENCE` | Expected `aud` claim; defaults to `dcm-api` in the reference Compose deployment. An explicitly empty value disables audience checks. |
-| `AUTH_PROXY_SECRET` | Shared secret for the proxy-header auth path (optional).                            |
-| `AUTH_CACHE_TTL`    | How long resolved actors are cached (default `60s`).                                |
-| `DCM_ADMIN_SUBJECT` | Keycloak subject UUID for the seed admin actor (required when auth is enabled).     |
+| `AUTH_PROXY_SECRET` | Shared secret for the proxy-header auth path (optional).                                                                             |
+| `AUTH_CACHE_TTL`    | How long resolved actors are cached (default `60s`).                                                                                 |
+| `DCM_ADMIN_SUBJECT` | Keycloak subject UUID for the seed admin actor (required when auth is enabled).                                                      |
 
 Copy secrets and toggles from `deploy/.env.example` into `deploy/.env`.
 
