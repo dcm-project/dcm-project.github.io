@@ -16,12 +16,26 @@ Learn how to set up and run DCM on your local machine.
 ## Quick Start
 
 Clone the [control-plane](https://github.com/dcm-project/control-plane)
-repository and start the core platform (postgres, nats, control-plane, and
-dcm-ui):
+repository, prepare the environment file, and start the core platform (postgres,
+nats, control-plane, and dcm-ui):
 
 ```bash
 git clone https://github.com/dcm-project/control-plane.git
 cd control-plane/deploy
+cp .env.example .env
+```
+
+To use the m2 release images, add the following to your `.env` file:
+
+```bash
+CONTROL_PLANE_VERSION=m2
+ENVIRONMENT_AGENT_VERSION=m2
+DCM_UI_VERSION=m2
+```
+
+Then start the stack:
+
+```bash
 podman-compose up -d
 ```
 
