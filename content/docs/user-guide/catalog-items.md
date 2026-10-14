@@ -33,63 +33,68 @@ Below is a complete catalog item definition for a small virtual machine:
 api_version: v1alpha1
 display_name: "Small VM"
 spec:
-  service_type: vm
-  fields:
-    - path: metadata
-      editable: true
-    - path: vcpu.count
-      display_name: "CPU Count"
-      editable: true
-      default: 2
-      validation_schema:
-        type: integer
-        minimum: 1
-        maximum: 4
-    - path: memory.size
-      display_name: "Memory (GB)"
-      editable: false
-      default: "2GB"
-    - path: storage.disks
-      display_name: "Storage (GB)"
-      editable: false
-      default:
-        - name: boot
-          capacity: "20GB"
-      validation_schema:
-        type: array
-    - path: guest_os.type
-      display_name: "Guest OS"
-      editable: true
-      validation_schema:
-        type: string
-        enum:
-          - fedora
-          - centos
-          - ubuntu
+  resources:
+    - name: main
+      service_type: vm
+      fields:
+        - path: metadata
+          editable: true
+        - path: vcpu.count
+          display_name: "CPU Count"
+          editable: true
+          default: 2
+          validation_schema:
+            type: integer
+            minimum: 1
+            maximum: 4
+        - path: memory.size
+          display_name: "Memory (GB)"
+          editable: false
+          default: "2GB"
+        - path: storage.disks
+          display_name: "Storage (GB)"
+          editable: false
+          default:
+            - name: boot
+              capacity: "20GB"
+          validation_schema:
+            type: array
+        - path: guest_os.type
+          display_name: "Guest OS"
+          editable: true
+          validation_schema:
+            type: string
+            enum:
+              - fedora
+              - centos
+              - ubuntu
 ```
 
 ### Key Sections
 
-| Section                           | Purpose                                                                               |
-| --------------------------------- | ------------------------------------------------------------------------------------- |
-| `api_version`                     | Ties the catalog item to a specific schema version (e.g., `v1alpha1`).                |
-| `display_name`                    | A human-readable name shown in listings and the UI.                                   |
-| `spec.service_type`               | Corresponding service type                                                            |
-| `spec.fields`                     | List of fields with const or user values                                              |
-| `spec.fields[].path`              | Path of the field within the `service_type` specification                             |
-| `spec.fields[].display_name`      | A human-readable name shown in listings and the UI                                    |
-| `spec.fields[].editable`          | Specify whether the user may edit the value                                           |
-| `spec.fields[].default`           | Default value for the field. When `editable` is `false` this becomes the actual value |
-| `spec.fields[].validation_schema` | JSON Schema rules to validate input. See: https://json-schema.org/                    |
+| Section                                       | Purpose                                                                                |
+| --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `api_version`                                 | Ties the catalog item to a specific schema version (e.g., `v1alpha1`).                 |
+| `display_name`                                | A human-readable name shown in listings and the UI.                                    |
+| `spec.resources`                              | List of resources the catalog item defines.                                            |
+| `spec.resources[].name`                       | Unique name for the resource within this catalog item (e.g., `main`).                  |
+| `spec.resources[].service_type`               | Corresponding service type for this resource.                                          |
+| `spec.resources[].fields`                     | List of fields with const or user values.                                              |
+| `spec.resources[].fields[].path`              | Path of the field within the `service_type` specification.                             |
+| `spec.resources[].fields[].display_name`      | A human-readable name shown in listings and the UI.                                    |
+| `spec.resources[].fields[].editable`          | Specify whether the user may edit the value.                                           |
+| `spec.resources[].fields[].default`           | Default value for the field. When `editable` is `false` this becomes the actual value. |
+| `spec.resources[].fields[].validation_schema` | JSON Schema rules to validate input. See: https://json-schema.org/                     |
 
 ### Fields and Policy Evaluation
 
 Catalog item fields define the governance boundary for placement policies. When
 DCM builds the resource spec that policies evaluate, it includes **only** two
-sources:
+sources for each resource:
 
-1. **Field defaults** declared in the catalog item
-2. **user_values** overrides provided at instance creation
+1. **Field defaults** declared in the catalog item resource
+2. **user_values** overrides provided at instance creation (scoped by resource
+   name)
 
 Anything not declared as a catalog item field is invisible to the policy engine,
 even if set elsewhere on the instance request. This means labels must be exposed
@@ -170,52 +175,57 @@ Example JSON output:
   "display_name": "Small VM",
   "path": "catalog-items/small-vm",
   "spec": {
-    "fields": [
+    "resources": [
       {
-        "editable": true,
-        "path": "metadata"
-      },
-      {
-        "default": 2,
-        "display_name": "CPU Count",
-        "editable": true,
-        "path": "vcpu.count",
-        "validation_schema": {
-          "maximum": 4,
-          "minimum": 1,
-          "type": "integer"
-        }
-      },
-      {
-        "default": "2GB",
-        "display_name": "Memory (GB)",
-        "path": "memory.size"
-      },
-      {
-        "default": [
+        "name": "main",
+        "service_type": "vm",
+        "fields": [
           {
-            "capacity": "20GB",
-            "name": "boot"
+            "editable": true,
+            "path": "metadata"
+          },
+          {
+            "default": 2,
+            "display_name": "CPU Count",
+            "editable": true,
+            "path": "vcpu.count",
+            "validation_schema": {
+              "maximum": 4,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "default": "2GB",
+            "display_name": "Memory (GB)",
+            "path": "memory.size"
+          },
+          {
+            "default": [
+              {
+                "capacity": "20GB",
+                "name": "boot"
+              }
+            ],
+            "display_name": "Storage (GB)",
+            "path": "storage.disks",
+            "validation_schema": {
+              "type": "array"
+            }
+          },
+          {
+            "default": "fedora",
+            "display_name": "Guest OS",
+            "editable": true,
+            "path": "guest_os.type",
+            "validation_schema": {
+              "enum": ["fedora", "centos", "ubuntu"],
+              "type": "string"
+            }
           }
-        ],
-        "display_name": "Storage (GB)",
-        "path": "storage.disks",
-        "validation_schema": {
-          "type": "array"
-        }
-      },
-      {
-        "default": "fedora",
-        "display_name": "Guest OS",
-        "editable": true,
-        "path": "guest_os.type",
-        "validation_schema": {
-          "enum": ["fedora", "centos", "ubuntu"],
-          "type": "string"
-        }
+        ]
       }
-    ],
-    "service_type": "vm"
+    ]
   },
   "uid": "small-vm",
   "update_time": "2026-04-15T18:06:02.434302Z"
