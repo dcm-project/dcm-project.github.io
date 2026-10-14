@@ -1,6 +1,12 @@
 {{ $url := .Get "url" }}
+{{ $browseBase := "" }}
 {{ with .Get "base" }}
-  {{ $url = printf "%s/%s" (index site.Params .) $url }}
+  {{ $rawBase := index site.Params . }}
+  {{ $url = printf "%s/%s" $rawBase $url }}
+  {{/* Derive the GitHub browse URL from the raw-content URL so relative
+       cross-references inside the fetched Markdown can be rewritten to
+       point at the source repository instead of the generated site. */}}
+  {{ $browseBase = replaceRE "raw\\.githubusercontent\\.com/([^/]+)/([^/]+)/([^/]+)" "github.com/$1/$2/blob/$3" $rawBase }}
 {{ end }}
 {{ $resource := resources.GetRemote $url }}
 {{ if $resource }}
@@ -14,6 +20,13 @@
 
   {{/* Fix card shape syntax that breaks Mermaid - only within mermaid blocks */}}
   {{ $content = replaceRE "(```mermaid[\\s\\S]*?)@\\{[^}]+\\}([\\s\\S]*?```)" "${1}${2}" $content }}
+
+  {{/* Rewrite relative parent-directory links (../path) to point to the
+       source repository.  Enhancement files sit one directory deep, so
+       ../ always resolves to the enhancements root. */}}
+  {{ if $browseBase }}
+    {{ $content = replaceRE "\\]\\(\\.\\./" (printf "](%s/" $browseBase) $content }}
+  {{ end }}
 
   {{/* Use RenderString instead of markdownify so that render hooks (including Mermaid) are applied */}}
   {{ .Page.RenderString $content }}
