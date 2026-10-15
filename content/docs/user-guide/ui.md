@@ -67,7 +67,7 @@ The Agents tab lists all infrastructure environment agents registered with DCM.
 Agents become available when they automatically register successfully with DCM
 on startup
 
-![Providers tab showing a table of registered providers with columns for display name, name, endpoint, service type, operations, status, and actions](/images/ui/providers-tab.png)
+![Agents tab showing a table of registered agents with columns for name, environment, service types, cost, topic, health, and last hearbeat](/images/ui/agents-tab.png)
 
 ### Columns
 
