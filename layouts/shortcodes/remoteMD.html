@@ -21,11 +21,13 @@
   {{/* Fix card shape syntax that breaks Mermaid - only within mermaid blocks */}}
   {{ $content = replaceRE "(```mermaid[\\s\\S]*?)@\\{[^}]+\\}([\\s\\S]*?```)" "${1}${2}" $content }}
 
-  {{/* Rewrite relative parent-directory links (../path) to point to the
-       source repository.  Enhancement files sit one directory deep, so
-       ../ always resolves to the enhancements root. */}}
+  {{/* Rewrite cross-reference links to point to the source repository.
+       Enhancement files sit one directory deep, so ../ resolves to the
+       enhancements root.  Some files also use root-absolute paths like
+       /enhancements/other/other.md — rewrite those too. */}}
   {{ if $browseBase }}
     {{ $content = replaceRE "\\]\\(\\.\\./" (printf "](%s/" $browseBase) $content }}
+    {{ $content = replaceRE "\\]\\(/enhancements/" (printf "](%s/" $browseBase) $content }}
   {{ end }}
 
   {{/* Use RenderString instead of markdownify so that render hooks (including Mermaid) are applied */}}
