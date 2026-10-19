@@ -8,3 +8,4 @@ resources/
 # OS files
 .DS_Store
 
+test-plans/*-test-results-*.md
